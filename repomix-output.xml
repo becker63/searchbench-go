@@ -1,0 +1,1467 @@
+This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching these patterns are excluded: iterative-context/
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+cmd/
+  searchbench/
+    main.go
+internal/
+  backend/
+    backend.go
+    session.go
+  codegraph/
+    builder.go
+    edge.go
+    graph.go
+    node.go
+    path.go
+    store.go
+  domain/
+    artifact.go
+    ids.go
+    pair.go
+    prediction.go
+    repo.go
+    system.go
+    task.go
+    usage.go
+  report/
+    comparison.go
+    promotion.go
+    regression.go
+    report.go
+  run/
+    phases.go
+    record.go
+    spec.go
+  score/
+    input.go
+    metric.go
+    scored_run.go
+    scorer.go
+    scoreset.go
+testdata/
+  fixtures/
+    reports/
+      .keep
+    repos/
+      .keep
+    tasks/
+      .keep
+    .keep
+.gitmodules
+flake.lock
+flake.nix
+go.mod
+init.sh
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="cmd/searchbench/main.go">
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("searchbench-go")
+}
+</file>
+
+<file path="internal/backend/backend.go">
+package backend
+</file>
+
+<file path="internal/backend/session.go">
+package backend
+</file>
+
+<file path="internal/codegraph/builder.go">
+package codegraph
+
+// Builder is the mutation interface used while constructing a graph.
+//
+// Tree-sitter ingestion should receive Builder. Scoring should receive Graph.
+type Builder interface {
+	AddNode(node Node) error
+	AddEdge(edge Edge) error
+	Build() (Graph, error)
+}
+</file>
+
+<file path="internal/codegraph/store.go">
+package codegraph
+
+import (
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/hmdsefi/gograph"
+)
+
+type Store struct {
+	graph gograph.Graph[NodeID]
+
+	nodes map[NodeID]Node
+	edges []Edge
+
+	nodesByFile     map[domain.RepoRelPath][]NodeID
+	functionsByName map[string][]NodeID
+}
+
+func NewStore() *Store {
+	return &Store{
+		graph:           gograph.New[NodeID](gograph.Directed()),
+		nodes:           make(map[NodeID]Node),
+		edges:           make([]Edge, 0),
+		nodesByFile:     make(map[domain.RepoRelPath][]NodeID),
+		functionsByName: make(map[string][]NodeID),
+	}
+}
+
+func (s *Store) AddNode(node Node) error {
+	if node.ID == "" {
+		return fmt.Errorf("codegraph: node id is required")
+	}
+
+	if _, exists := s.nodes[node.ID]; exists {
+		return fmt.Errorf("codegraph: duplicate node id %q", node.ID)
+	}
+
+	s.nodes[node.ID] = node
+	s.graph.AddVertexByLabel(node.ID)
+
+	if file, ok := node.RepoFile(); ok {
+		s.nodesByFile[file] = append(s.nodesByFile[file], node.ID)
+	}
+
+	if node.Kind == NodeFunction && node.Function != nil {
+		s.functionsByName[node.Function.Name] = append(s.functionsByName[node.Function.Name], node.ID)
+	}
+
+	return nil
+}
+
+func (s *Store) AddEdge(edge Edge) error {
+	if edge.From == "" || edge.To == "" {
+		return fmt.Errorf("codegraph: edge endpoints are required")
+	}
+	if _, ok := s.nodes[edge.From]; !ok {
+		return fmt.Errorf("codegraph: missing from node %q", edge.From)
+	}
+	if _, ok := s.nodes[edge.To]; !ok {
+		return fmt.Errorf("codegraph: missing to node %q", edge.To)
+	}
+	if edge.Weight == 0 {
+		edge.Weight = 1
+	}
+
+	from := s.graph.GetVertexByID(edge.From)
+	to := s.graph.GetVertexByID(edge.To)
+	if from == nil || to == nil {
+		return fmt.Errorf("codegraph: missing graph vertex for edge %q -> %q", edge.From, edge.To)
+	}
+
+	_, err := s.graph.AddEdge(from, to, gograph.WithEdgeWeight(edge.Weight))
+	if err != nil {
+		return err
+	}
+
+	s.edges = append(s.edges, edge)
+	return nil
+}
+
+func (s *Store) Build() (Graph, error) {
+	return s, nil
+}
+
+func (s *Store) Node(id NodeID) (Node, bool) {
+	node, ok := s.nodes[id]
+	return node, ok
+}
+
+func (s *Store) Nodes() []Node {
+	out := make([]Node, 0, len(s.nodes))
+	for _, node := range s.nodes {
+		out = append(out, node)
+	}
+	return out
+}
+
+func (s *Store) Edges() []Edge {
+	out := make([]Edge, len(s.edges))
+	copy(out, s.edges)
+	return out
+}
+
+func (s *Store) Neighbors(id NodeID, filter EdgeFilter) []NodeID {
+	out := make([]NodeID, 0)
+	for _, edge := range s.edges {
+		if edge.From == id && filter.Allows(edge.Kind) {
+			out = append(out, edge.To)
+		}
+	}
+	return out
+}
+
+func (s *Store) ShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool) {
+	if _, ok := s.nodes[from]; !ok {
+		return Path{}, false
+	}
+	if _, ok := s.nodes[to]; !ok {
+		return Path{}, false
+	}
+
+	return s.filteredShortestPath(from, to, filter)
+}
+
+func (s *Store) NodesByFile(file domain.RepoRelPath) []NodeID {
+	ids := s.nodesByFile[file]
+	out := make([]NodeID, len(ids))
+	copy(out, ids)
+	return out
+}
+
+func (s *Store) FunctionsByName(name string) []NodeID {
+	ids := s.functionsByName[name]
+	out := make([]NodeID, len(ids))
+	copy(out, ids)
+	return out
+}
+
+func (s *Store) filteredShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool) {
+	type item struct {
+		ID   NodeID
+		Path []NodeID
+	}
+
+	seen := map[NodeID]bool{from: true}
+	queue := []item{{ID: from, Path: []NodeID{from}}}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		if cur.ID == to {
+			return Path{
+				Nodes: cur.Path,
+				Edges: s.pathEdges(cur.Path),
+				Cost:  float64(max(0, len(cur.Path)-1)),
+			}, true
+		}
+
+		for _, next := range s.Neighbors(cur.ID, filter) {
+			if seen[next] {
+				continue
+			}
+
+			seen[next] = true
+
+			nextPath := make([]NodeID, 0, len(cur.Path)+1)
+			nextPath = append(nextPath, cur.Path...)
+			nextPath = append(nextPath, next)
+
+			queue = append(queue, item{
+				ID:   next,
+				Path: nextPath,
+			})
+		}
+	}
+
+	return Path{}, false
+}
+
+func (s *Store) pathEdges(nodes []NodeID) []Edge {
+	if len(nodes) < 2 {
+		return nil
+	}
+
+	out := make([]Edge, 0, len(nodes)-1)
+	for i := 0; i < len(nodes)-1; i++ {
+		from := nodes[i]
+		to := nodes[i+1]
+		for _, edge := range s.edges {
+			if edge.From == from && edge.To == to {
+				out = append(out, edge)
+				break
+			}
+		}
+	}
+
+	return out
+}
+</file>
+
+<file path="internal/domain/artifact.go">
+package domain
+
+// ArtifactRef is a typed reference to an emitted or consumed artifact.
+//
+// The type parameter is a phantom tag used to prevent mixing artifact kinds.
+type ArtifactRef[T any] struct {
+	ID     ArtifactID `json:"id"`
+	Path   HostPath   `json:"path,omitempty"`
+	SHA256 string     `json:"sha256,omitempty"`
+}
+
+type reportArtifactTag struct{}
+type traceArtifactTag struct{}
+type graphArtifactTag struct{}
+type policyArtifactTag struct{}
+type datasetArtifactTag struct{}
+
+type ReportArtifactRef = ArtifactRef[reportArtifactTag]
+type TraceArtifactRef = ArtifactRef[traceArtifactTag]
+type GraphArtifactRef = ArtifactRef[graphArtifactTag]
+type PolicyArtifactRef = ArtifactRef[policyArtifactTag]
+type DatasetArtifactRef = ArtifactRef[datasetArtifactTag]
+</file>
+
+<file path="internal/domain/ids.go">
+package domain
+
+// ID is a strongly typed identifier.
+//
+// The type parameter is a phantom tag used to prevent accidentally mixing
+// IDs from different domains, such as TaskID and RunID.
+type ID[T any] string
+
+func (id ID[T]) String() string {
+	return string(id)
+}
+
+func (id ID[T]) Empty() bool {
+	return id == ""
+}
+
+type taskTag struct{}
+type runTag struct{}
+type systemTag struct{}
+type sessionTag struct{}
+type policyTag struct{}
+type traceTag struct{}
+type artifactTag struct{}
+type reportTag struct{}
+type nodeTag struct{}
+
+type TaskID = ID[taskTag]
+type RunID = ID[runTag]
+type SystemID = ID[systemTag]
+type SessionID = ID[sessionTag]
+type PolicyID = ID[policyTag]
+type TraceID = ID[traceTag]
+type ArtifactID = ID[artifactTag]
+type ReportID = ID[reportTag]
+type NodeID = ID[nodeTag]
+</file>
+
+<file path="internal/domain/pair.go">
+package domain
+
+// Role names the two sides of a Searchbench comparison.
+type Role string
+
+const (
+	RoleBaseline  Role = "baseline"
+	RoleCandidate Role = "candidate"
+)
+
+// Pair stores the baseline and candidate versions of the same kind of value.
+//
+// Searchbench is fundamentally comparative, so this type should appear often:
+// Pair[SystemSpec], Pair[[]ScoredRun], Pair[ScoreSummary], etc.
+type Pair[T any] struct {
+	Baseline  T `json:"baseline"`
+	Candidate T `json:"candidate"`
+}
+
+func NewPair[T any](baseline T, candidate T) Pair[T] {
+	return Pair[T]{
+		Baseline:  baseline,
+		Candidate: candidate,
+	}
+}
+
+func (p Pair[T]) ByRole(role Role) T {
+	switch role {
+	case RoleBaseline:
+		return p.Baseline
+	case RoleCandidate:
+		return p.Candidate
+	default:
+		var zero T
+		return zero
+	}
+}
+</file>
+
+<file path="internal/domain/prediction.go">
+package domain
+
+// Prediction is the normalized answer produced by a system run.
+//
+// For now Searchbench is file-localization first. Function/symbol prediction
+// can be added later without putting raw model output into this type.
+type Prediction struct {
+	Files     []RepoRelPath `json:"files"`
+	Reasoning string        `json:"reasoning,omitempty"`
+}
+</file>
+
+<file path="internal/domain/repo.go">
+package domain
+
+// RepoName identifies a repository in benchmark/task space.
+//
+// Examples:
+//   - "accenture/ampligraph"
+//   - "django/django"
+//   - "JetBrains-Research/lca-bug-localization:py:dev:..."
+type RepoName string
+
+// RepoSHA identifies the exact commit under evaluation.
+type RepoSHA string
+
+// RepoRelPath is a path relative to the repository root.
+//
+// Use this for files returned by agents, gold labels, graph nodes, etc.
+type RepoRelPath string
+
+// HostPath is a local filesystem path on the machine running Searchbench.
+//
+// Keep this distinct from RepoRelPath so agents/tests do not casually mix
+// benchmark-relative paths with local paths.
+type HostPath string
+
+// RepoSnapshot identifies the exact code universe for a task.
+//
+// The same RepoSnapshot should be shared by baseline and candidate runs.
+type RepoSnapshot struct {
+	Name RepoName `json:"name"`
+	SHA  RepoSHA  `json:"sha"`
+	Path HostPath `json:"path"`
+}
+</file>
+
+<file path="internal/domain/system.go">
+package domain
+
+// BackendKind identifies the execution backend used by a system.
+//
+// A backend is not the whole system. It is only the runtime/tool adapter.
+// The full system also includes model, prompt bundle, policy, and runtime config.
+type BackendKind string
+
+const (
+	BackendIterativeContext BackendKind = "iterative-context"
+	BackendJCodeMunch       BackendKind = "jcodemunch"
+	BackendFake             BackendKind = "fake"
+)
+
+// ModelSpec identifies the model used by a system.
+type ModelSpec struct {
+	Provider string `json:"provider"`
+	Name     string `json:"name"`
+}
+
+// PromptBundleRef identifies the prompt bundle used by a system.
+//
+// Keep this as a reference rather than inline prompt text. Prompt text can live
+// in files/artifacts later.
+type PromptBundleRef struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// PolicyLanguage identifies the language/runtime for a policy artifact.
+type PolicyLanguage string
+
+const (
+	PolicyLanguagePython PolicyLanguage = "python"
+)
+
+// PolicyHash is the stable content hash for a policy source.
+type PolicyHash string
+
+// PolicyArtifact is a replaceable policy used by a system.
+//
+// In the Go harness, policy source is data. For iterative-context, this can be
+// passed into the Python backend through the MCP/session API instead of being
+// written into a worktree.
+type PolicyArtifact struct {
+	ID         PolicyID       `json:"id"`
+	Language   PolicyLanguage `json:"language"`
+	SHA256     PolicyHash     `json:"sha256"`
+	Entrypoint string         `json:"entrypoint"`
+	Source     string         `json:"source,omitempty"`
+}
+
+// RuntimeConfig captures behavior-affecting runtime limits.
+//
+// If changing a field could change the system's output, it belongs somewhere
+// under SystemSpec.
+type RuntimeConfig struct {
+	MaxSteps           int `json:"max_steps,omitempty"`
+	MaxToolCalls       int `json:"max_tool_calls,omitempty"`
+	MaxInputTokens     int `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens    int `json:"max_output_tokens,omitempty"`
+	MaxContextTokens   int `json:"max_context_tokens,omitempty"`
+	ToolResultMaxBytes int `json:"tool_result_max_bytes,omitempty"`
+}
+
+// SystemSpec is the complete recipe for an agentic code-search system.
+//
+// Baseline and candidate are not different types. They are roles that a
+// SystemSpec can occupy inside a comparison.
+type SystemSpec struct {
+	ID           SystemID        `json:"id"`
+	Name         string          `json:"name"`
+	Backend      BackendKind     `json:"backend"`
+	Model        ModelSpec       `json:"model"`
+	PromptBundle PromptBundleRef `json:"prompt_bundle"`
+	Policy       *PolicyArtifact `json:"policy,omitempty"`
+	Runtime      RuntimeConfig   `json:"runtime,omitempty"`
+}
+</file>
+
+<file path="internal/domain/task.go">
+package domain
+
+// BenchmarkName identifies the source benchmark/task family.
+type BenchmarkName string
+
+const (
+	BenchmarkLCA BenchmarkName = "jetbrains-lca"
+)
+
+// TaskInput is the portion of a task that may be shown to the agent.
+//
+// Gold labels and scoring-only fields must not live here.
+type TaskInput struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
+// TaskOracle is the scoring-only portion of a task.
+//
+// This must never be included in prompts.
+type TaskOracle struct {
+	GoldFiles []RepoRelPath `json:"gold_files"`
+}
+
+// TaskSpec is a single benchmark task over a specific repo snapshot.
+//
+// Conceptually:
+//
+//	TaskSpec = RepoSnapshot + agent-visible input + scorer-visible oracle.
+type TaskSpec struct {
+	ID        TaskID        `json:"id"`
+	Benchmark BenchmarkName `json:"benchmark"`
+	Repo      RepoSnapshot  `json:"repo"`
+	Input     TaskInput     `json:"input"`
+	Oracle    TaskOracle    `json:"oracle"`
+}
+
+// AgentInput returns the prompt-safe portion of the task.
+func (t TaskSpec) AgentInput() TaskInput {
+	return t.Input
+}
+</file>
+
+<file path="internal/domain/usage.go">
+package domain
+
+// TokenCount is a normalized token count.
+//
+// Keep it separate from int so token/cost code is explicit.
+type TokenCount int64
+
+// UsageSummary is normalized run-level usage.
+//
+// Provider-specific usage details can exist elsewhere. This type is the stable
+// Searchbench shape used by scoring and reports.
+type UsageSummary struct {
+	InputTokens  TokenCount `json:"input_tokens"`
+	OutputTokens TokenCount `json:"output_tokens"`
+	TotalTokens  TokenCount `json:"total_tokens"`
+	CostUSD      float64    `json:"cost_usd,omitempty"`
+}
+
+// Empty reports whether no usage was recorded.
+func (u UsageSummary) Empty() bool {
+	return u.InputTokens == 0 &&
+		u.OutputTokens == 0 &&
+		u.TotalTokens == 0 &&
+		u.CostUSD == 0
+}
+</file>
+
+<file path="internal/report/comparison.go">
+package report
+</file>
+
+<file path="internal/report/promotion.go">
+package report
+</file>
+
+<file path="internal/report/regression.go">
+package report
+</file>
+
+<file path="internal/report/report.go">
+package report
+</file>
+
+<file path="testdata/fixtures/reports/.keep">
+
+</file>
+
+<file path="testdata/fixtures/repos/.keep">
+
+</file>
+
+<file path="testdata/fixtures/tasks/.keep">
+
+</file>
+
+<file path="testdata/fixtures/.keep">
+
+</file>
+
+<file path=".gitmodules">
+[submodule "iterative-context"]
+	path = iterative-context
+	url = https://github.com/becker63/iterative-context
+</file>
+
+<file path="flake.lock">
+{
+  "nodes": {
+    "flake-utils": {
+      "inputs": {
+        "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1776877367,
+        "narHash": "sha256-EHq1/OX139R1RvBzOJ0aMRT3xnWyqtHBRUBuO1gFzjI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "0726a0ecb6d4e08f6adced58726b95db924cef57",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nixpkgs": "nixpkgs"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
+</file>
+
+<file path="flake.nix">
+{
+  description = "Go development shell";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+
+  outputs =
+    { nixpkgs, flake-utils, ... }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+        };
+      in
+      {
+        devShells.default = pkgs.mkShell {
+          packages = with pkgs; [
+            go
+            gopls
+            gotools
+            go-tools
+          ];
+
+          shellHook = ''
+            echo "Go dev shell"
+            go version
+          '';
+        };
+      }
+    );
+}
+</file>
+
+<file path="init.sh">
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODULE="github.com/becker63/searchbench-go"
+
+mkdir -p \
+  cmd/searchbench \
+  internal/domain \
+  internal/backend \
+  internal/codegraph \
+  internal/run \
+  internal/score \
+  internal/report \
+  testdata/fixtures/{tasks,repos,reports} \
+  scripts
+
+write_go_file() {
+  local path="$1"
+  local package="$2"
+
+  if [[ -f "$path" ]]; then
+    echo "skip existing $path"
+    return
+  fi
+
+  cat > "$path" <<EOF
+package $package
+
+EOF
+
+  echo "created $path"
+}
+
+# CLI
+write_go_file "cmd/searchbench/main.go" "main"
+
+# Domain: stable nouns
+write_go_file "internal/domain/ids.go" "domain"
+write_go_file "internal/domain/pair.go" "domain"
+write_go_file "internal/domain/repo.go" "domain"
+write_go_file "internal/domain/task.go" "domain"
+write_go_file "internal/domain/system.go" "domain"
+write_go_file "internal/domain/prediction.go" "domain"
+write_go_file "internal/domain/usage.go" "domain"
+write_go_file "internal/domain/artifact.go" "domain"
+
+# Backend/session boundary
+write_go_file "internal/backend/backend.go" "backend"
+write_go_file "internal/backend/session.go" "backend"
+
+# Code graph domain interface
+write_go_file "internal/codegraph/node.go" "codegraph"
+write_go_file "internal/codegraph/edge.go" "codegraph"
+write_go_file "internal/codegraph/path.go" "codegraph"
+write_go_file "internal/codegraph/graph.go" "codegraph"
+
+# Run lifecycle
+write_go_file "internal/run/phases.go" "run"
+write_go_file "internal/run/spec.go" "run"
+write_go_file "internal/run/record.go" "run"
+
+# Scoring
+write_go_file "internal/score/metric.go" "score"
+write_go_file "internal/score/scoreset.go" "score"
+write_go_file "internal/score/input.go" "score"
+write_go_file "internal/score/scorer.go" "score"
+write_go_file "internal/score/scored_run.go" "score"
+
+# Report/release boundary
+write_go_file "internal/report/comparison.go" "report"
+write_go_file "internal/report/regression.go" "report"
+write_go_file "internal/report/promotion.go" "report"
+write_go_file "internal/report/report.go" "report"
+
+# Minimal compiling main.
+cat > cmd/searchbench/main.go <<'EOF'
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("searchbench-go")
+}
+EOF
+
+gofmt -w cmd internal || true
+
+echo
+echo "Type spine initialized."
+echo "Next:"
+echo "  go test ./..."
+echo "  go run ./cmd/searchbench"
+</file>
+
+<file path="internal/codegraph/edge.go">
+package codegraph
+
+// EdgeKind identifies the semantic relationship between two code graph nodes.
+type EdgeKind string
+
+const (
+	EdgeContains   EdgeKind = "contains"
+	EdgeDefines    EdgeKind = "defines"
+	EdgeCalls      EdgeKind = "calls"
+	EdgeImports    EdgeKind = "imports"
+	EdgeReferences EdgeKind = "references"
+)
+
+// Edge is a directed semantic edge in the code graph.
+type Edge struct {
+	From   NodeID   `json:"from"`
+	To     NodeID   `json:"to"`
+	Kind   EdgeKind `json:"kind"`
+	Weight float64  `json:"weight,omitempty"`
+}
+
+func NewEdge(from, to NodeID, kind EdgeKind) Edge {
+	return Edge{
+		From:   from,
+		To:     to,
+		Kind:   kind,
+		Weight: 1,
+	}
+}
+
+func NewWeightedEdge(from, to NodeID, kind EdgeKind, weight float64) Edge {
+	if weight == 0 {
+		weight = 1
+	}
+	return Edge{
+		From:   from,
+		To:     to,
+		Kind:   kind,
+		Weight: weight,
+	}
+}
+</file>
+
+<file path="internal/codegraph/graph.go">
+package codegraph
+
+import "github.com/becker63/searchbench-go/internal/domain"
+
+// EdgeFilter limits graph traversal to a subset of edge kinds.
+//
+// An empty filter means all edge kinds are allowed.
+type EdgeFilter struct {
+	Kinds []EdgeKind `json:"kinds,omitempty"`
+}
+
+func (f EdgeFilter) Allows(kind EdgeKind) bool {
+	if len(f.Kinds) == 0 {
+		return true
+	}
+	for _, allowed := range f.Kinds {
+		if allowed == kind {
+			return true
+		}
+	}
+	return false
+}
+
+// Graph is the read-only Searchbench code graph interface.
+//
+// Scoring depends on this interface, not on gograph directly.
+type Graph interface {
+	Node(id NodeID) (Node, bool)
+	Nodes() []Node
+	Edges() []Edge
+
+	Neighbors(id NodeID, filter EdgeFilter) []NodeID
+	ShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool)
+
+	NodesByFile(path domain.RepoRelPath) []NodeID
+	FunctionsByName(name string) []NodeID
+}
+</file>
+
+<file path="internal/codegraph/node.go">
+package codegraph
+
+import "github.com/becker63/searchbench-go/internal/domain"
+
+// NodeID identifies a node in the Searchbench evaluation graph.
+//
+// It is intentionally local to codegraph instead of reusing domain.NodeID so
+// graph concepts do not leak into the broader domain package too early.
+type NodeID string
+
+func (id NodeID) String() string {
+	return string(id)
+}
+
+// NodeKind identifies the semantic kind of a code graph node.
+type NodeKind string
+
+const (
+	NodeFile     NodeKind = "file"
+	NodeFunction NodeKind = "function"
+	NodeSymbol   NodeKind = "symbol"
+	NodeImport   NodeKind = "import"
+)
+
+// FileNode represents a repo-relative source file.
+type FileNode struct {
+	Path domain.RepoRelPath `json:"path"`
+}
+
+// FunctionNode represents a function/method definition.
+type FunctionNode struct {
+	File      domain.RepoRelPath `json:"file"`
+	Name      string             `json:"name"`
+	StartLine int                `json:"start_line"`
+	EndLine   int                `json:"end_line"`
+}
+
+// SymbolNode represents a named symbol that is not necessarily a function.
+type SymbolNode struct {
+	File domain.RepoRelPath `json:"file"`
+	Name string             `json:"name"`
+}
+
+// ImportNode represents an import/module dependency observed in a file.
+type ImportNode struct {
+	File   domain.RepoRelPath `json:"file"`
+	Module string             `json:"module"`
+}
+
+// Node is a tagged-union-ish representation of code graph nodes.
+//
+// Exactly one payload should be non-nil and should match Kind. Constructors
+// below enforce that convention for normal code paths.
+type Node struct {
+	ID       NodeID        `json:"id"`
+	Kind     NodeKind      `json:"kind"`
+	File     *FileNode     `json:"file,omitempty"`
+	Function *FunctionNode `json:"function,omitempty"`
+	Symbol   *SymbolNode   `json:"symbol,omitempty"`
+	Import   *ImportNode   `json:"import,omitempty"`
+}
+
+func NewFileNode(id NodeID, path domain.RepoRelPath) Node {
+	return Node{
+		ID:   id,
+		Kind: NodeFile,
+		File: &FileNode{Path: path},
+	}
+}
+
+func NewFunctionNode(id NodeID, file domain.RepoRelPath, name string, startLine, endLine int) Node {
+	return Node{
+		ID:   id,
+		Kind: NodeFunction,
+		Function: &FunctionNode{
+			File:      file,
+			Name:      name,
+			StartLine: startLine,
+			EndLine:   endLine,
+		},
+	}
+}
+
+func NewSymbolNode(id NodeID, file domain.RepoRelPath, name string) Node {
+	return Node{
+		ID:   id,
+		Kind: NodeSymbol,
+		Symbol: &SymbolNode{
+			File: file,
+			Name: name,
+		},
+	}
+}
+
+func NewImportNode(id NodeID, file domain.RepoRelPath, module string) Node {
+	return Node{
+		ID:   id,
+		Kind: NodeImport,
+		Import: &ImportNode{
+			File:   file,
+			Module: module,
+		},
+	}
+}
+
+// RepoFile returns the file associated with the node when one exists.
+func (n Node) RepoFile() (domain.RepoRelPath, bool) {
+	switch n.Kind {
+	case NodeFile:
+		if n.File == nil {
+			return "", false
+		}
+		return n.File.Path, true
+	case NodeFunction:
+		if n.Function == nil {
+			return "", false
+		}
+		return n.Function.File, true
+	case NodeSymbol:
+		if n.Symbol == nil {
+			return "", false
+		}
+		return n.Symbol.File, true
+	case NodeImport:
+		if n.Import == nil {
+			return "", false
+		}
+		return n.Import.File, true
+	default:
+		return "", false
+	}
+}
+</file>
+
+<file path="internal/codegraph/path.go">
+package codegraph
+
+// Path is a graph path between two nodes.
+type Path struct {
+	Nodes []NodeID `json:"nodes"`
+	Edges []Edge   `json:"edges"`
+	Cost  float64  `json:"cost"`
+}
+
+func (p Path) Found() bool {
+	return len(p.Nodes) > 0
+}
+
+func (p Path) Hops() int {
+	if len(p.Nodes) == 0 {
+		return 0
+	}
+	return len(p.Nodes) - 1
+}
+</file>
+
+<file path="internal/run/phases.go">
+package run
+
+// Phase is a sealed marker interface for run lifecycle phases.
+//
+// Only this package should define phases. External packages should consume
+// Run[Planned], PreparedRun, and ExecutedRun rather than inventing new phases.
+type Phase interface {
+	phase()
+}
+
+type Planned struct{}
+type Prepared struct{}
+type Executed struct{}
+
+func (Planned) phase()  {}
+func (Prepared) phase() {}
+func (Executed) phase() {}
+
+type PhaseName string
+
+const (
+	PhasePlanned  PhaseName = "planned"
+	PhasePrepared PhaseName = "prepared"
+	PhaseExecuted PhaseName = "executed"
+)
+
+func (Planned) Name() PhaseName {
+	return PhasePlanned
+}
+
+func (Prepared) Name() PhaseName {
+	return PhasePrepared
+}
+
+func (Executed) Name() PhaseName {
+	return PhaseExecuted
+}
+</file>
+
+<file path="internal/run/record.go">
+package run
+
+import (
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+// Run is the phase-typed core run record.
+//
+// The phase type parameter prevents lifecycle mistakes such as scoring a
+// planned run or executing something that has not been prepared.
+type Run[P Phase] struct {
+	id        domain.RunID
+	spec      Spec
+	phase     P
+	createdAt time.Time
+}
+
+// NewPlanned creates the initial run state.
+func NewPlanned(spec Spec) Run[Planned] {
+	return Run[Planned]{
+		id:        spec.ID,
+		spec:      spec,
+		phase:     Planned{},
+		createdAt: time.Now().UTC(),
+	}
+}
+
+func (r Run[P]) ID() domain.RunID {
+	return r.id
+}
+
+func (r Run[P]) Spec() Spec {
+	return r.spec
+}
+
+func (r Run[P]) CreatedAt() time.Time {
+	return r.createdAt
+}
+
+func (r Run[P]) Phase() P {
+	return r.phase
+}
+
+// PreparedRun means the backend session has been initialized.
+//
+// For iterative-context, this means repo/session/policy setup has happened and
+// tools are ready to call.
+type PreparedRun struct {
+	Run[Prepared]
+
+	SessionID  domain.SessionID `json:"session_id"`
+	PreparedAt time.Time        `json:"prepared_at"`
+}
+
+// NewPrepared advances a planned run into prepared state.
+func NewPrepared(planned Run[Planned], sessionID domain.SessionID) PreparedRun {
+	return PreparedRun{
+		Run: Run[Prepared]{
+			id:        planned.id,
+			spec:      planned.spec,
+			phase:     Prepared{},
+			createdAt: planned.createdAt,
+		},
+		SessionID:  sessionID,
+		PreparedAt: time.Now().UTC(),
+	}
+}
+
+// ExecutedRun is the successful result of running a prepared backend session.
+//
+// Failed executions should return an error instead of constructing ExecutedRun.
+// If this type exists, Searchbench has a prediction and usage summary.
+type ExecutedRun struct {
+	Run[Executed]
+
+	SessionID  domain.SessionID    `json:"session_id"`
+	Prediction domain.Prediction   `json:"prediction"`
+	Usage      domain.UsageSummary `json:"usage"`
+	TraceID    domain.TraceID      `json:"trace_id,omitempty"`
+	StartedAt  time.Time           `json:"started_at"`
+	FinishedAt time.Time           `json:"finished_at"`
+}
+
+// NewExecuted advances a prepared run into executed state.
+func NewExecuted(
+	prepared PreparedRun,
+	prediction domain.Prediction,
+	usage domain.UsageSummary,
+	traceID domain.TraceID,
+	startedAt time.Time,
+	finishedAt time.Time,
+) ExecutedRun {
+	return ExecutedRun{
+		Run: Run[Executed]{
+			id:        prepared.id,
+			spec:      prepared.spec,
+			phase:     Executed{},
+			createdAt: prepared.createdAt,
+		},
+		SessionID:  prepared.SessionID,
+		Prediction: prediction,
+		Usage:      usage,
+		TraceID:    traceID,
+		StartedAt:  startedAt.UTC(),
+		FinishedAt: finishedAt.UTC(),
+	}
+}
+</file>
+
+<file path="internal/run/spec.go">
+package run
+
+import "github.com/becker63/searchbench-go/internal/domain"
+
+// Spec is a planned request to run one system on one task.
+//
+// Conceptually:
+//
+//	RunSpec = TaskSpec + SystemSpec
+//
+// It should be deterministic and serializable. Runtime state belongs in
+// PreparedRun or ExecutedRun, not here.
+type Spec struct {
+	ID     domain.RunID      `json:"id"`
+	Task   domain.TaskSpec   `json:"task"`
+	System domain.SystemSpec `json:"system"`
+}
+
+func NewSpec(id domain.RunID, task domain.TaskSpec, system domain.SystemSpec) Spec {
+	return Spec{
+		ID:     id,
+		Task:   task,
+		System: system,
+	}
+}
+</file>
+
+<file path="internal/score/input.go">
+package score
+
+import (
+	"github.com/becker63/searchbench-go/internal/codegraph"
+	"github.com/becker63/searchbench-go/internal/run"
+)
+
+// Input is the canonical input to the scoring engine.
+//
+// Scorers should not reach into backend sessions, raw traces, model messages,
+// or filesystem state. Everything needed for required metrics should be here.
+type Input struct {
+	Run   run.ExecutedRun
+	Graph codegraph.Graph
+}
+</file>
+
+<file path="internal/score/metric.go">
+package score
+
+// MetricName identifies a required Searchbench metric.
+type MetricName string
+
+const (
+	MetricGoldHop         MetricName = "gold_hop"
+	MetricIssueHop        MetricName = "issue_hop"
+	MetricTokenEfficiency MetricName = "token_efficiency"
+	MetricCost            MetricName = "cost"
+	MetricComposite       MetricName = "composite"
+)
+
+// HopDistance is a graph distance measured in hops.
+//
+// Lower is usually better.
+type HopDistance int
+
+// EfficiencyScore represents token/cost efficiency.
+//
+// The exact formula can evolve, but the type keeps it distinct from hop distance.
+type EfficiencyScore float64
+
+// CostScore represents normalized cost performance.
+type CostScore float64
+
+// CompositeScore is the final reduced score used for comparison/promotion.
+type CompositeScore float64
+
+// EvidenceRef points to evidence used to compute or explain a metric.
+type EvidenceRef struct {
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
+}
+
+// Metric is a typed metric value.
+//
+// The type parameter prevents mixing incompatible metric value kinds, such as
+// using a token-efficiency value where a hop distance is expected.
+type Metric[T any] struct {
+	Name        MetricName    `json:"name"`
+	Value       T             `json:"value"`
+	Explanation string        `json:"explanation,omitempty"`
+	Evidence    []EvidenceRef `json:"evidence,omitempty"`
+}
+</file>
+
+<file path="internal/score/scored_run.go">
+package score
+
+import "github.com/becker63/searchbench-go/internal/run"
+
+// ScoredRun is the minimum unit that can participate in a candidate report.
+//
+// It wraps a successful ExecutedRun with a complete ScoreSet.
+type ScoredRun struct {
+	Execution run.ExecutedRun `json:"execution"`
+	Scores    ScoreSet        `json:"scores"`
+}
+
+// NewScoredRun constructs a scored run from an executed run and complete scores.
+func NewScoredRun(execution run.ExecutedRun, scores ScoreSet) ScoredRun {
+	return ScoredRun{
+		Execution: execution,
+		Scores:    scores,
+	}
+}
+</file>
+
+<file path="internal/score/scorer.go">
+package score
+
+import "context"
+
+// Engine computes the complete required ScoreSet for one executed run.
+type Engine interface {
+	Score(ctx context.Context, input Input) (ScoreSet, error)
+}
+</file>
+
+<file path="internal/score/scoreset.go">
+package score
+
+// ScoreSet is the complete required metric set for one executed run.
+//
+// If a ScoreSet exists, every required metric exists. If any metric cannot be
+// computed, scoring should fail instead of constructing a partial ScoreSet.
+type ScoreSet struct {
+	GoldHop         Metric[HopDistance]     `json:"gold_hop"`
+	IssueHop        Metric[HopDistance]     `json:"issue_hop"`
+	TokenEfficiency Metric[EfficiencyScore] `json:"token_efficiency"`
+	Cost            Metric[CostScore]       `json:"cost"`
+	Composite       Metric[CompositeScore]  `json:"composite"`
+}
+
+// Metrics returns the score set as a flat list for reporting/iteration.
+//
+// This is intentionally read-only-ish: callers can inspect metrics uniformly,
+// but the canonical complete representation is still the struct above.
+func (s ScoreSet) Metrics() []AnyMetric {
+	return []AnyMetric{
+		{
+			Name:        s.GoldHop.Name,
+			Value:       float64(s.GoldHop.Value),
+			Explanation: s.GoldHop.Explanation,
+			Evidence:    s.GoldHop.Evidence,
+		},
+		{
+			Name:        s.IssueHop.Name,
+			Value:       float64(s.IssueHop.Value),
+			Explanation: s.IssueHop.Explanation,
+			Evidence:    s.IssueHop.Evidence,
+		},
+		{
+			Name:        s.TokenEfficiency.Name,
+			Value:       float64(s.TokenEfficiency.Value),
+			Explanation: s.TokenEfficiency.Explanation,
+			Evidence:    s.TokenEfficiency.Evidence,
+		},
+		{
+			Name:        s.Cost.Name,
+			Value:       float64(s.Cost.Value),
+			Explanation: s.Cost.Explanation,
+			Evidence:    s.Cost.Evidence,
+		},
+		{
+			Name:        s.Composite.Name,
+			Value:       float64(s.Composite.Value),
+			Explanation: s.Composite.Explanation,
+			Evidence:    s.Composite.Evidence,
+		},
+	}
+}
+
+// AnyMetric is a normalized report-facing metric value.
+//
+// Keep this as an output/read model. Do not use it as the authoritative scoring
+// model, because that would reintroduce partial/dynamic metric behavior.
+type AnyMetric struct {
+	Name        MetricName    `json:"name"`
+	Value       float64       `json:"value"`
+	Explanation string        `json:"explanation,omitempty"`
+	Evidence    []EvidenceRef `json:"evidence,omitempty"`
+}
+</file>
+
+<file path="go.mod">
+module github.com/becker63/searchbench-go
+
+go 1.26.2
+
+require github.com/hmdsefi/gograph v0.7.0 // indirect
+</file>
+
+</files>
