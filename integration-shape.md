@@ -1,14 +1,15 @@
 # Future integrations
 
-Searchbench-Go should keep a strict separation between the pure Searchbench model, Searchbench-native implementation packages, and external-system adapters.
+Searchbench-Go should keep a strict separation between the pure Searchbench model, Searchbench-native implementation packages, narrow external adapters, and user/developer-facing surfaces.
 
-The goal is not maximum theoretical pluggability. The goal is to keep the core model pure while making it obvious where real external work happens.
+The goal is not maximum theoretical pluggability. The goal is to keep the core model pure while making it obvious where real work happens.
 
 ```text
 Core is pure.
-Implementations do Searchbench work.
-Adapters touch the outside world.
-App wiring composes them.
+Implementation does Searchbench work.
+Adapters isolate backend/storage integrations.
+Surface exposes the system.
+App wiring composes everything.
 ```
 
 ## Current core
@@ -41,9 +42,9 @@ filesystem artifact stores
 
 The core model should remain boring, typed, deterministic, and difficult to misuse.
 
-## Three layers
+## Four layers
 
-Future work should be organized around three layers.
+Future work should be organized around four layers.
 
 ### 1. Pure core
 
@@ -71,22 +72,21 @@ internal/backend
 
 means the backend/session protocol, not all backend implementations.
 
-### 2. Searchbench-native implementations
+### 2. Searchbench-native implementation
 
 Implementation packages do real Searchbench work, but still primarily speak Searchbench types.
 
 Examples:
 
 ```text
-internal/executor
-internal/scoring
-internal/graphing
-internal/prompt
-internal/finalizer
-internal/promotion
-internal/writerfeedback
-internal/dataset
-internal/artifact
+internal/implementation/executor
+internal/implementation/scoring
+internal/implementation/graphing
+internal/implementation/prompt
+internal/implementation/finalizer
+internal/implementation/promotion
+internal/implementation/writerfeedback
+internal/implementation/dataset
 ```
 
 These packages may implement real algorithms or workflows:
@@ -100,14 +100,13 @@ finalizer      model/tool observations -> domain.Prediction
 promotion      comparisons/regressions -> report.PromotionDecision
 writerfeedback CandidateReport -> writer steering input
 dataset        external/internal rows -> domain.TaskSpec
-artifact       reports/policies/graphs -> persisted artifacts
 ```
 
-These packages are allowed to do real work, but should not become dumping grounds for SDK-specific details.
+These packages are allowed to do real Searchbench work, but they should not become dumping grounds for backend SDKs, storage details, or external platform types.
 
-### 3. External adapters
+### 3. Narrow adapters
 
-Adapters touch external systems.
+Adapters isolate external runtime/storage boundaries that we intentionally want visually quarantined.
 
 Adapters should live under:
 
@@ -115,24 +114,45 @@ Adapters should live under:
 internal/adapters
 ```
 
-Examples:
+Current intended adapters:
 
 ```text
 internal/adapters/backend/iterativecontext
 internal/adapters/backend/jcodemunch
-internal/adapters/executor/eino
-internal/adapters/telemetry/langsmith
-internal/adapters/dataset/langsmith
-internal/adapters/dataset/lca
-internal/adapters/graphing/treesitter
 internal/adapters/artifact/filesystem
 ```
 
-Adapters may be messy. Their job is to translate external APIs, SDKs, protocols, subprocesses, and file formats into typed Searchbench values.
+Adapters may be messy. Their job is to translate external APIs, subprocesses, protocols, and persistence mechanisms into typed Searchbench values.
 
 Adapters may import core packages.
 
 Core packages must not import adapters.
+
+Do not put every external library under adapters by default. Only use adapters when the package’s main job is to isolate an external system boundary.
+
+### 4. Surface
+
+Surface packages expose Searchbench to humans and developers.
+
+Examples:
+
+```text
+internal/surface/logging
+internal/surface/console
+internal/surface/cli
+```
+
+Surface packages should not define the model. They should present, render, log, or command the system.
+
+Examples:
+
+```text
+logging  structured/development event output
+console  human terminal rendering for CandidateReport
+cli      small command-line interface
+```
+
+Surface code may consume core/report values, but it should not become the owner of orchestration, scoring, backend execution, or artifact structure.
 
 ## App wiring
 
@@ -156,14 +176,13 @@ The app layer wires together:
 ```text
 compare.Runner
 executor implementation
-backend implementations
+backend adapters
 scoring implementation
 promotion decider
 dataset loader
 artifact store
 logging
 console/CLI options
-LangSmith adapter
 ```
 
 The CLI should call the app layer rather than manually constructing every concrete implementation.
@@ -171,11 +190,13 @@ The CLI should call the app layer rather than manually constructing every concre
 The import direction should look like:
 
 ```text
-cmd/searchbench -> internal/cli
-internal/cli    -> internal/app, internal/console, internal/logging
-internal/app    -> core packages + implementation packages + adapters
+cmd/searchbench -> internal/surface/cli
+surface/cli     -> internal/app, internal/surface/console, internal/surface/logging
+internal/app    -> core packages + implementation packages + adapters + surface dependencies
+implementation  -> core packages
 adapters        -> core packages
-core packages   -> never adapters
+surface         -> core/report values
+core packages   -> never adapters, never app
 ```
 
 ## Recommended future tree
@@ -220,7 +241,7 @@ internal/
     demo.go
 ```
 
-This structure should make it visually obvious which code is pure model code and which code talks to the external world.
+This structure should make it visually obvious which code is pure model code, which code performs Searchbench-native work, which code isolates external systems, and which code exposes the system.
 
 ## Backend integrations
 
@@ -243,20 +264,6 @@ internal/adapters/backend/iterativecontext
 internal/adapters/backend/jcodemunch
 ```
 
-Backend adapters implement:
-
-```go
-type Backend interface {
-    StartSession(ctx context.Context, spec SessionSpec) (Session, error)
-}
-
-type Session interface {
-    Tools(ctx context.Context) ([]ToolSpec, error)
-    CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)
-    Close(ctx context.Context) error
-}
-```
-
 Rules:
 
 ```text
@@ -269,29 +276,15 @@ Concrete SDK/runtime/subprocess details stay inside adapters.
 
 `compare` should never import `internal/adapters/backend/...`.
 
-## Executor integration
+## Executor implementation
 
 The executor layer should implement `compare.Executor`.
 
 Suggested package:
 
 ```text
-internal/executor
+internal/implementation/executor
 ```
-
-If Eino becomes the dominant execution runtime, Eino-specific code can live under:
-
-```text
-internal/adapters/executor/eino
-```
-
-or, if it is tightly bound to the executor implementation:
-
-```text
-internal/executor/eino
-```
-
-Prefer the adapter path when Eino-specific types, callbacks, graph compilation, or SDK details are prominent.
 
 Executor responsibility:
 
@@ -311,8 +304,11 @@ promotion decisions
 report rendering
 dataset loading
 artifact storage
-telemetry platform semantics
 ```
+
+If Eino is used, keep Eino-specific details inside the executor implementation unless they become large enough to justify a subpackage.
+
+Do not create a generic executor plugin system.
 
 ## OpenAI usage
 
@@ -330,7 +326,7 @@ internal/model/ollama
 
 unless the code genuinely needs an independently reusable model client layer.
 
-If OpenAI is only used through Eino, keep OpenAI configuration near the Eino executor adapter.
+If OpenAI is only used through Eino, keep OpenAI configuration near the executor implementation.
 
 The rule:
 
@@ -340,13 +336,29 @@ Do not abstract over systems we are not using.
 
 ## LangSmith integration
 
-LangSmith is an adapter concern.
+LangSmith is a tracing/experiment integration, but do not create a generic telemetry framework unless there is a second real telemetry implementation.
 
-Recommended location:
+If LangSmith integration becomes substantial, place it where it best reflects its role.
+
+Preferred options:
 
 ```text
-internal/adapters/telemetry/langsmith
+internal/implementation/observability/langsmith
 ```
+
+or, if it is mostly artifact/report export:
+
+```text
+internal/implementation/dataset/langsmith
+```
+
+or, if you intentionally want to quarantine it as an external platform boundary:
+
+```text
+internal/adapters/observability/langsmith
+```
+
+Do not add it under adapters automatically just because it uses an SDK. Use adapters only if the package is mainly isolating external platform behavior.
 
 LangSmith should consume Searchbench artifacts. It should not define them.
 
@@ -391,50 +403,23 @@ writer feedback
 
 Those remain Searchbench-owned.
 
-## LangSmith datasets
+## Dataset integration
 
-Dataset mirroring can live under:
+Dataset loading should usually be Searchbench-native implementation work.
 
-```text
-internal/adapters/dataset/langsmith
-```
-
-It should map between:
+Use:
 
 ```text
-domain.TaskSpec
+internal/implementation/dataset
 ```
-
-and LangSmith dataset examples.
-
-Rules:
-
-```text
-LangSmith dataset/example IDs are external refs.
-They are not core Searchbench identity.
-Dataset DTOs stay inside the adapter.
-Core packages should only see domain.TaskSpec.
-```
-
-## LCA dataset integration
 
 LCA-specific loading can live under:
 
 ```text
-internal/adapters/dataset/lca
+internal/implementation/dataset/lca
 ```
 
-or if it becomes Searchbench-native enough:
-
-```text
-internal/dataset/lca
-```
-
-Use the adapter path if the package mostly talks to Hugging Face, JSONL, remote APIs, or external file formats.
-
-Use the native dataset path if it mainly transforms already-local data into `domain.TaskSpec`.
-
-In either case, the output should be typed Searchbench tasks:
+The output should be typed Searchbench tasks:
 
 ```text
 []domain.TaskSpec
@@ -448,6 +433,8 @@ domain.NonEmpty[domain.TaskSpec]
 
 Do not let external dataset row structs flow into `compare`, `run`, `score`, or `report`.
 
+If a dataset integration is mostly remote-platform synchronization rather than local Searchbench task construction, then consider an adapter package.
+
 ## Tree-sitter graphing
 
 The core graph package remains:
@@ -458,30 +445,20 @@ internal/codegraph
 
 Tree-sitter-specific ingestion should not live directly in `codegraph`.
 
-Use:
-
-```text
-internal/adapters/graphing/treesitter
-```
-
-or:
-
-```text
-internal/graphing/treesitter
-```
-
 Preferred split:
 
 ```text
 internal/codegraph
   graph abstraction and store
 
-internal/graphing
+internal/implementation/graphing
   Searchbench-native ingestion orchestration
 
-internal/adapters/graphing/treesitter
-  tree-sitter-specific parser integration
+internal/implementation/graphing/treesitter
+  tree-sitter parser integration
 ```
+
+Tree-sitter is a library used by Searchbench-native graphing. It does not need to be under adapters unless the integration becomes a large external boundary.
 
 Rules:
 
@@ -499,10 +476,10 @@ Artifact storage should not live in `report`.
 Use:
 
 ```text
-internal/artifact
+internal/implementation/artifact
 ```
 
-for Searchbench artifact concepts, and:
+for Searchbench artifact concepts if needed, and:
 
 ```text
 internal/adapters/artifact/filesystem
@@ -530,7 +507,7 @@ Promotion logic should be Searchbench-native, not an adapter.
 Use:
 
 ```text
-internal/promotion
+internal/implementation/promotion
 ```
 
 It should implement `compare.Decider` and return `report.PromotionDecision`.
@@ -556,7 +533,7 @@ Writer feedback should be a projection of `report.CandidateReport`.
 Use:
 
 ```text
-internal/writerfeedback
+internal/implementation/writerfeedback
 ```
 
 It should produce a compact steering object for the writer agent:
@@ -574,6 +551,36 @@ guidance
 Writer feedback should not re-run scoring.
 
 Writer feedback should not depend on score history by default.
+
+## Surface packages
+
+Surface packages should move under:
+
+```text
+internal/surface
+```
+
+Recommended locations:
+
+```text
+internal/surface/logging
+internal/surface/console
+internal/surface/cli
+```
+
+Responsibilities:
+
+```text
+logging  structured/development event output
+console  human CandidateReport rendering
+cli      small command-line command surface
+```
+
+Surface packages may depend on core/report values.
+
+Surface packages must not define core model types.
+
+Surface packages must not own concrete backend execution, scoring algorithms, promotion policies, graph ingestion, or artifact storage.
 
 ## Dynamic data rules
 
@@ -603,16 +610,18 @@ Do not let dynamic payloads flow inward.
 Allowed:
 
 ```text
+implementation -> core
 adapters -> core
-implementations -> core
-app -> adapters + implementations + core
-cli -> app + console + logging
+app -> core + implementation + adapters + surface
+surface -> core/report values
+cli surface -> app
 ```
 
 Forbidden:
 
 ```text
 core -> adapters
+core -> app
 domain -> high-level packages
 report -> console/logging/adapters
 score -> adapters
@@ -634,7 +643,9 @@ Do not let `compare` become the new mega-localizer.
 
 Do not let adapter DTOs become Searchbench model types.
 
-Do not create parallel report, score, task, or run models inside adapters.
+Do not create parallel report, score, task, or run models inside adapters or implementation packages.
+
+Do not put every package that imports a third-party dependency under adapters.
 
 ## Guiding principle
 
