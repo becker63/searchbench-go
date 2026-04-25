@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/becker63/searchbench-go/internal/cli"
+	"github.com/becker63/searchbench-go/internal/surface/cli"
 )
 
 func main() {

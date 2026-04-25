@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"github.com/becker63/searchbench-go/internal/compare"
-	"github.com/becker63/searchbench-go/internal/console"
+	"github.com/becker63/searchbench-go/internal/surface/console"
 )
 
 // DemoReportCmd runs the fake end-to-end Searchbench demo comparison.

@@ -8,10 +8,10 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/codegraph"
 	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/logging"
 	"github.com/becker63/searchbench-go/internal/report"
 	"github.com/becker63/searchbench-go/internal/run"
 	"github.com/becker63/searchbench-go/internal/score"
+	"github.com/becker63/searchbench-go/internal/surface/logging"
 )
 
 // Executor is the orchestration seam for turning one planned run spec into a

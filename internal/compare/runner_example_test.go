@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/logging"
 	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/surface/logging"
 )
 
 func TestRunnerExampleComparison(t *testing.T) {

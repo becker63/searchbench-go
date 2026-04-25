@@ -144,14 +144,676 @@ testdata/
     .keep
 .gitignore
 .gitmodules
+agents.md
 flake.lock
 flake.nix
 go.mod
 init.sh
+langsmith-integration.md
+pluggable.md
+todo.md
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="langsmith-integration.md">
+I think your instinct is right: **Searchbench is already the evaluator**.
+
+LangSmith’s evaluator API is valuable, but I would not make it the source of truth for your deterministic scoring. I would use LangSmith primarily for:
+
+```text
+datasets
+experiments
+trace storage
+run/example linkage
+human review
+maybe score/feedback display
+```
+
+And keep Searchbench as the thing that owns:
+
+```text
+gold_hop
+issue_hop
+token_efficiency
+cost
+composite
+regressions
+promotion decisions
+CandidateReport
+writer feedback
+```
+
+LangSmith’s evaluation workflow is basically: create a dataset, define evaluators, run an experiment. Its docs describe evaluators as human review, code rules, LLM-as-judge, and pairwise comparison. ([LangChain Docs][1]) That overlaps with Searchbench, but your codebase already has a stronger domain-specific evaluator model: `compare.Runner`, `score.ScoreSet`, `report.CandidateReport`, task-level regressions, and promotion decisions. 
+
+## My recommendation
+
+Use LangSmith as the **experiment platform**, not the evaluator engine.
+
+```text
+Searchbench-Go:
+  authoritative evaluator
+
+LangSmith:
+  dataset registry
+  trace viewer
+  experiment UI
+  feedback/score sink
+  human review surface
+```
+
+That means:
+
+```text
+domain.TaskSpec      -> LangSmith dataset example
+run.ExecutedRun      -> LangSmith traced run
+score.ScoreSet       -> LangSmith feedback/scores
+CandidateReport      -> Searchbench artifact, maybe linked in LangSmith metadata
+PromotionDecision    -> Searchbench-owned release decision
+```
+
+The uploaded LangSmith Go repo snapshot looks actively maintained and includes instrumentation packages, which is a good sign for tracing and client integration in Go.  But LangSmith’s most mature evaluator SDK ergonomics still appear centered around Python/TypeScript examples; its evaluator docs show custom evaluator patterns returning keys/scores/comments. ([Mintlify][2]) So I would not shove your core Go scoring engine into LangSmith’s evaluator abstraction first.
+
+## Why not use LangSmith evaluators as the core?
+
+Because Searchbench scoring is not just “given run output and reference output, return score.”
+
+Your evaluator needs domain context:
+
+```text
+repo snapshot
+static code graph
+issue/gold projection
+candidate/baseline pairing
+token/cost accounting
+metric direction
+regression policy
+promotion rules
+writer feedback
+```
+
+LangSmith evaluators are great for local per-example scoring, LLM-as-judge, pairwise preference, and human review. But your system is more like a **release evaluator**:
+
+```text
+baseline system
+vs
+candidate system
+over a fixed task set
+with deterministic graph metrics
+and a promotion decision
+```
+
+That maps better to `CandidateReport` than to a set of independent LangSmith evaluator callbacks.
+
+## The architecture I’d use
+
+### 1. Dataset mirroring
+
+Add later:
+
+```text
+internal/dataset/langsmith/
+  client.go
+  examples.go
+  sync.go
+  mapping.go
+```
+
+It should map:
+
+```text
+domain.TaskSpec <-> LangSmith dataset example
+```
+
+Store the LangSmith dataset/example IDs as external refs, not core identity.
+
+### 2. Trace execution with Eino callbacks
+
+Use Eino/LangSmith callbacks for the inner execution trace:
+
+```text
+Executor
+  -> Eino graph
+     -> LangSmith trace
+     -> model/tool spans
+```
+
+This is where LangSmith shines. Eino already has callback support, and the Eino LangSmith callback implementation is specifically built to trace Eino applications. Your pasted callback example lines up well with this.
+
+### 3. Searchbench scores become LangSmith feedback
+
+After Searchbench computes the `CandidateReport`, upload score values into LangSmith as feedback/metadata:
+
+```text
+gold_hop
+issue_hop
+token_efficiency
+cost
+composite
+decision
+regression_count
+failure_count
+report_id
+candidate_fingerprint
+baseline_fingerprint
+```
+
+So LangSmith can graph/filter/sort the experiment, but Searchbench still owns the scoring semantics.
+
+### 4. Optional thin evaluator adapter later
+
+If LangSmith’s Go evaluator API is good enough for your workflow, create an adapter that calls your existing scorer.
+
+Something like:
+
+```text
+internal/telemetry/langsmith/evaluator.go
+```
+
+But the direction should be:
+
+```text
+LangSmith evaluator wrapper -> Searchbench scoring engine
+```
+
+Not:
+
+```text
+Searchbench scoring model -> rewritten as LangSmith evaluator functions
+```
+
+## Where LangSmith evaluators are useful
+
+I would use LangSmith evaluators for things Searchbench does **not** want to own deeply:
+
+```text
+human review labels
+pairwise preference over final answers
+LLM-as-judge for qualitative explanation quality
+lightweight sanity checks
+production trace monitoring rules
+annotation queues
+```
+
+LangSmith supports online/offline evaluation workflows and includes online evaluation / annotation workflows in its observability ecosystem. ([LangChain Docs][1])
+
+But for deterministic code-search scoring, keep it in Go.
+
+## The clean split
+
+```text
+Searchbench evaluator:
+  deterministic
+  graph-aware
+  baseline/candidate-aware
+  report-producing
+  writer-feedback-aware
+
+LangSmith evaluator:
+  UI-visible
+  human/LLM/pairwise friendly
+  experiment/dashboard friendly
+  optional external feedback layer
+```
+
+That is the best of both.
+
+## Implementation order
+
+I would do this in stages:
+
+```text
+1. Add LangSmith trace integration through Eino callbacks.
+2. Push/mirror datasets to LangSmith.
+3. Link each Searchbench run to LangSmith dataset examples/traces.
+4. Upload Searchbench ScoreSet values as LangSmith feedback/scores.
+5. Attach CandidateReport ID / artifact URL to LangSmith metadata.
+6. Only then consider LangSmith evaluators for human/LLM/pairwise checks.
+```
+
+Do **not** start by porting Searchbench scoring into LangSmith evaluators.
+
+## Final take
+
+Use LangSmith for the platform layer.
+
+Keep Searchbench as the evaluator.
+
+That preserves your biggest architectural win:
+
+```text
+A trace tells you what happened.
+A score tells you one dimension.
+A CandidateReport tells you whether the candidate should ship.
+```
+
+LangSmith can host the traces and experiment views. Searchbench should continue producing the release decision.
+
+[1]: https://docs.langchain.com/langsmith/evaluation?utm_source=chatgpt.com "LangSmith Evaluation - Docs by LangChain"
+[2]: https://mintlify.com/langchain-ai/langsmith-sdk/typescript/evaluators?utm_source=chatgpt.com "Evaluator types - LangSmith SDK"
+</file>
+
+<file path="pluggable.md">
+Yes. I’d think of this as a **core vs adapters** split.
+
+Your current tree is good as a core model: `domain`, `run`, `score`, `report`, `compare`, `backend`, `codegraph`, `logging`, `console`, and `cli` already form a clean internal spine.  The backend implementations should not be mixed into that spine as peers that feel equally “core.”
+
+## The key idea
+
+Keep this distinction:
+
+```text
+core model / ports:
+  define Searchbench concepts and interfaces
+
+adapters / integrations:
+  talk to messy external systems
+```
+
+So:
+
+```text
+internal/backend
+```
+
+should mean:
+
+```text
+the backend port / protocol
+```
+
+not:
+
+```text
+all backend implementations
+```
+
+Concrete implementations should live somewhere visually separate.
+
+## My preferred structure
+
+I would use:
+
+```text
+internal/
+  domain/
+  run/
+  score/
+  report/
+  compare/
+  backend/
+  codegraph/
+  logging/
+  console/
+  cli/
+
+  executor/
+
+  adapters/
+    backend/
+      iterativecontext/
+      jcodemunch/
+    model/
+      openai/
+      cerebras/
+    dataset/
+      lca/
+      langsmith/
+    telemetry/
+      langsmith/
+    graph/
+      treesitter/
+
+  app/
+    wiring.go
+    registry.go
+```
+
+This gives you a very clear mental map:
+
+```text
+internal/domain, run, score, report, compare, backend, codegraph
+  = Searchbench core
+
+internal/adapters/...
+  = messy external-world implementations
+
+internal/app
+  = wiring/composition layer
+```
+
+The import direction should be:
+
+```text
+cli/app -> adapters -> core
+cli/app -> core
+
+core -> never imports adapters
+```
+
+That is the most important rule.
+
+## Why not a separate Go module?
+
+I would not create a second Go module.
+
+Something like this is probably bad:
+
+```text
+searchbench-go/
+  go.mod
+  internal/
+  implementations/
+    go.mod
+```
+
+It creates more friction than value. Also, Go’s `internal/` import rule means separate modules and external packages can easily run into import visibility issues. You want backend implementations to consume your internal core types directly, so keep them inside the same module.
+
+A separate module makes sense only if you want a public plugin ecosystem later. You do not want that yet.
+
+## What goes where
+
+### Core port
+
+Keep:
+
+```text
+internal/backend/
+  backend.go
+  session.go
+  errors.go
+```
+
+This package defines the stable backend protocol:
+
+```go
+type Backend interface {
+    StartSession(ctx context.Context, spec SessionSpec) (Session, error)
+}
+
+type Session interface {
+    Tools(ctx context.Context) ([]ToolSpec, error)
+    CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)
+    Close(ctx context.Context) error
+}
+```
+
+This is not an implementation package. It is a port.
+
+### Backend implementations
+
+Add:
+
+```text
+internal/adapters/backend/iterativecontext/
+internal/adapters/backend/jcodemunch/
+```
+
+Those packages import `internal/backend`, `internal/domain`, maybe `internal/run`, etc., and implement the interfaces.
+
+For example:
+
+```go
+package iterativecontext
+
+type Backend struct {
+    // config, process runner, paths, etc.
+}
+
+func (b *Backend) StartSession(ctx context.Context, spec backend.SessionSpec) (backend.Session, error) {
+    ...
+}
+```
+
+Then app wiring can say:
+
+```go
+icBackend := iterativecontext.New(...)
+jcBackend := jcodemunch.New(...)
+```
+
+But `compare` never sees those concrete types.
+
+## Where `executor` fits
+
+I would make `executor` a core-ish implementation package, but still not part of the pure model.
+
+```text
+internal/executor/
+```
+
+It consumes:
+
+```text
+run.Spec
+backend.Backend / backend.Session
+model client
+prompt builder
+finalizer
+```
+
+and implements:
+
+```go
+compare.Executor
+```
+
+So the dependency is:
+
+```text
+compare.Runner -> compare.Executor interface
+executor.Executor -> implements compare.Executor
+executor.Executor -> uses backend.Backend
+backend impls -> implement backend.Backend
+```
+
+`compare` should not directly use `backend.Backend`.
+
+That keeps the clean orchestration boundary.
+
+## Where LangSmith fits
+
+LangSmith should be an adapter:
+
+```text
+internal/adapters/telemetry/langsmith/
+```
+
+or, if you want telemetry to have its own port:
+
+```text
+internal/telemetry/
+  observer.go
+  trace.go
+
+internal/adapters/telemetry/langsmith/
+  observer.go
+```
+
+I slightly prefer the second once telemetry becomes real:
+
+```text
+internal/telemetry      = Searchbench telemetry port/model
+internal/adapters/...   = LangSmith implementation
+```
+
+Because LangSmith should not define your telemetry model.
+
+## Where Eino fits
+
+Eino is also an adapter/runtime detail.
+
+Possible locations:
+
+```text
+internal/adapters/executor/eino/
+```
+
+or:
+
+```text
+internal/executor/eino/
+```
+
+If Eino becomes the dominant implementation of executor behavior, I’d use:
+
+```text
+internal/executor/eino/
+```
+
+If you want a strict “all third-party implementations under adapters” rule, use:
+
+```text
+internal/adapters/executor/eino/
+```
+
+My preference:
+
+```text
+internal/executor/
+  executor.go          // generic executor composition
+  eino/
+    executor.go        // Eino-backed executor implementation
+```
+
+Reason: Eino is not just a backend; it is part of execution orchestration.
+
+## The cleanest dependency graph
+
+The ideal import graph is:
+
+```text
+domain
+  no project imports
+
+run
+  -> domain
+
+score
+  -> domain, run, codegraph
+
+report
+  -> domain, run, score
+
+backend
+  -> domain
+
+codegraph
+  no high-level project imports
+
+compare
+  -> domain, run, score, report, codegraph, logging
+
+executor
+  -> compare, backend, domain, run, prompt, finalizer, model
+
+adapters/backend/iterativecontext
+  -> backend, domain
+
+adapters/model/openai
+  -> model, domain
+
+adapters/telemetry/langsmith
+  -> telemetry, report, run, score, domain
+
+app
+  -> compare, executor, adapters, scoring, promotion, logging
+
+cli
+  -> app, console, logging
+```
+
+The thing to avoid is:
+
+```text
+compare -> adapters
+report -> adapters
+score -> adapters
+domain -> anything high-level
+```
+
+## Naming: `adapters` vs `integrations`
+
+Both are fine.
+
+I prefer:
+
+```text
+internal/adapters/
+```
+
+because it implies:
+
+```text
+this package translates external-world shapes into Searchbench shapes
+```
+
+`integrations` is friendlier but less architectural. `adapters` will remind agents not to leak SDK types inward.
+
+## How to document this in `AGENTS.md`
+
+Add a short section like:
+
+````md
+## Core vs adapter packages
+
+Core packages define the Searchbench model and ports:
+
+```text
+internal/domain
+internal/run
+internal/score
+internal/report
+internal/compare
+internal/backend
+internal/codegraph
+````
+
+Concrete external implementations belong under:
+
+```text
+internal/adapters
+```
+
+Adapters may import core packages. Core packages must not import adapters.
+
+Examples:
+
+```text
+internal/backend                         = backend port
+internal/adapters/backend/iterativecontext = backend implementation
+
+internal/telemetry                       = telemetry port/model
+internal/adapters/telemetry/langsmith      = LangSmith implementation
+```
+
+Do not leak SDK-specific types from adapter packages into core packages.
+
+````
+
+## My recommendation
+
+Do this:
+
+```text
+1. Keep current core tree.
+2. Add internal/adapters/.
+3. Put backend impls under internal/adapters/backend/.
+4. Add internal/app/ for wiring.
+5. Keep compare/report/score/domain entirely adapter-free.
+````
+
+That gives you the separation you want without turning the repo into an over-engineered hexagonal architecture diagram.
+
+The old Python project had concrete concerns spread across `agents`, `backends`, `localization`, `orchestration`, `pipeline`, `scoring`, and `telemetry` in a way that made the runtime shape hard to hold.  The Go version can avoid that by making a simple rule visible in the tree:
+
+```text
+core is clean
+adapters are messy
+app wires them together
+```
+</file>
 
 <file path="internal/backend/doc.go">
 // Package backend defines the future runtime/session boundary for Searchbench.
@@ -3331,6 +3993,586 @@ func TestScoreSetValidate(t *testing.T) {
 	url = https://github.com/becker63/iterative-context
 </file>
 
+<file path="agents.md">
+# AGENTS.md
+
+This repository is `searchbench-go`.
+
+Searchbench-Go is a strongly typed evaluation harness for comparing agentic code-search systems. The core product object is a `report.CandidateReport`: a release-style artifact that records what was compared, what ran, what failed, what improved, what regressed, and whether a candidate should promote.
+
+This project is intentionally type-first, boring, and explicit. Do not add clever shims, generic frameworks, dynamic maps, or parallel data models unless specifically asked.
+
+## Core architecture
+
+Current package responsibilities:
+
+```text
+internal/domain    stable vocabulary: IDs, tasks, systems, policies, repos, predictions, usage
+internal/run       run lifecycle: specs, phases, executed runs, failures
+internal/score     metric types, score sets, metric direction, scored runs
+internal/report    candidate reports, comparison specs, regressions, promotion decisions
+internal/compare   orchestration: plans, runner, task comparison, aggregation, parallelism
+internal/backend   future backend/session/tool boundary
+internal/codegraph graph model used by ingestion/scoring
+internal/logging   safe structured/event logging
+internal/console   human terminal rendering
+internal/cli       thin command-line surface
+```
+
+The intended flow is:
+
+```text
+compare.Plan
+  -> compare.Runner.Run
+  -> compare.Runner.RunTasks
+  -> compare.Runner.CompareTask
+  -> compare.Runner.ExecuteAndScore
+  -> compare.Results
+  -> report.CandidateReport
+```
+
+Preserve this flow.
+
+## Most important model distinctions
+
+Do not blur these:
+
+```text
+compare.Plan              = executable comparison input
+report.ComparisonSpec     = report-safe comparison identity
+
+domain.SystemSpec         = executable system recipe
+domain.SystemRef          = report-safe system identity
+
+domain.PolicyArtifact     = may contain source code
+domain.PolicyRef          = source-free policy identity
+
+run.ExecutedRun           = execution succeeded
+score.ScoredRun           = execution and scoring succeeded
+run.RunFailure            = report-facing failure path
+```
+
+Reports, logs, CLI output, and console rendering must use report-safe views by default.
+
+## What agents must not do
+
+### Do not create parallel data models
+
+Do not introduce new structs that duplicate existing model concepts.
+
+Bad:
+
+```go
+type TaskResult struct {
+    TaskID string
+    Scores map[string]float64
+}
+```
+
+Use the existing model instead:
+
+```go
+run.ExecutedRun
+score.ScoreSet
+score.ScoredRun
+run.RunFailure
+report.CandidateReport
+```
+
+If the existing model feels inconvenient, improve the existing model or add a small projection type in an appropriate package. Do not invent a second model.
+
+### Avoid `map[string]any` even at adapter boundaries
+
+Massively prefer not to use:
+
+```go
+map[string]any
+interface{}
+any
+reflect
+```
+
+Even at adapter boundaries, these should be a last resort, not the default design.
+
+Preferred order:
+
+```text
+1. Typed request/response structs
+2. Small typed adapter DTOs
+3. json.RawMessage at the narrow transport edge
+4. map[string]any only when the external API truly has no stable shape
+```
+
+If an external API is dynamic, quarantine that dynamism immediately:
+
+```text
+provider SDK object
+  -> adapter-local DTO / parser
+  -> typed Searchbench value
+```
+
+Do not let dynamic payloads flow inward.
+
+Acceptable narrow uses:
+
+```text
+backend tool arguments at the raw protocol boundary
+provider SDK response parsing before typed normalization
+telemetry metadata payload construction inside a telemetry adapter
+test fixtures for malformed external payloads
+```
+
+Even then:
+
+```text
+keep it adapter-local
+convert to typed values immediately
+do not store it on core structs
+do not pass it through compare/report/score/domain
+do not use it as a convenience escape hatch
+```
+
+Bad:
+
+```go
+type ExecutedRun struct {
+    Raw map[string]any
+}
+
+type ScoreInput struct {
+    Metadata map[string]any
+}
+
+func Score(payload map[string]any) score.ScoreSet
+```
+
+Better:
+
+```go
+type ProviderUsageDTO struct {
+    InputTokens  int64 `json:"input_tokens"`
+    OutputTokens int64 `json:"output_tokens"`
+    TotalTokens  int64 `json:"total_tokens"`
+}
+
+func NormalizeUsage(dto ProviderUsageDTO) domain.UsageSummary
+```
+
+If you think you need `map[string]any`, first ask:
+
+```text
+Can this be a small typed DTO?
+Can this be json.RawMessage until parsed?
+Can this live entirely inside the adapter?
+Can this be converted before crossing a package boundary?
+```
+
+Only use dynamic maps when the answer to all of those is no.
+
+### Do not log or render unsafe values
+
+Never log, render, or JSON-dump these directly:
+
+```text
+domain.SystemSpec
+domain.PolicyArtifact
+domain.TaskSpec with oracle fields
+compare.Plan
+raw report.CandidateReport in logs
+raw model/provider responses
+```
+
+Use safe views:
+
+```go
+system.Ref()
+domain.PolicyRef
+logging.SystemSpecKV(system)
+logging.TaskKV(task)
+logging.ReportSummaryKV(report)
+console.RenderCandidateReport(report, opts)
+```
+
+Policy source and scorer-only oracle data must not leak into reports, logs, or terminal output.
+
+### Do not put rendering on report types
+
+Do not add:
+
+```go
+func (r CandidateReport) String() string
+func (r CandidateReport) Pretty() string
+```
+
+Rendering belongs in:
+
+```text
+internal/console
+```
+
+Structured report data belongs in:
+
+```text
+internal/report
+```
+
+### Do not make `compare` know concrete backends
+
+`compare.Runner` coordinates. It should not know how Iterative Context, jCodeMunch, Eino, Langfuse, OpenAI, Cerebras, tree-sitter, or filesystem materialization works.
+
+Concrete integrations must enter through interfaces:
+
+```go
+compare.Executor
+compare.GraphProvider
+compare.Scorer
+compare.Decider
+backend.Backend
+backend.Session
+codegraph.Graph
+codegraph.Builder
+```
+
+### Do not recreate the old Python mega-localizer
+
+Do not create one large file that owns all of these at once:
+
+```text
+prompt construction
+model calls
+tool dispatch
+context budget management
+backend sessions
+usage normalization
+prediction finalization
+retry logic
+telemetry
+scoring
+report generation
+```
+
+Split these into explicit packages or interfaces. Keep `compare` as orchestration only.
+
+### Do not add generic pipeline frameworks
+
+Avoid abstract pipeline machinery like:
+
+```go
+type Pipeline[A, B, C any] struct { ... }
+type Step[T any] interface { ... }
+type Reducer[A, B any] interface { ... }
+```
+
+Prefer Searchbench nouns:
+
+```text
+Plan
+Runner
+TaskComparisonResult
+Results
+CandidateReport
+ScoreSet
+RunFailure
+```
+
+Generics are welcome for simple structural helpers like `Pair[T]`, `NonEmpty[T]`, or task-aligned containers. They should not hide the domain.
+
+Sometimes I will ask you to do this in a prompt, if Im telling you to use a generic you can trust my judgement.
+
+### Do not add unnecessary interfaces
+
+Interfaces should live at consumer boundaries.
+
+Good:
+
+```go
+type Executor interface {
+    Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
+}
+```
+
+Bad:
+
+```go
+type ExecutorProvider interface {
+    Executor() Executor
+}
+
+type ReportProvider interface {
+    Report() report.CandidateReport
+}
+```
+
+Do not add an interface unless a package consumes behavior through that interface.
+
+### Do not spread concurrency everywhere
+
+Parallelism currently belongs in:
+
+```go
+compare.Runner.RunTasks
+```
+
+Do not add goroutines, channels, mutexes, worker pools, or concurrent mutation in domain/report/score packages.
+
+Current rule:
+
+```text
+parallelize over tasks only
+collect TaskWorkResult values
+restore deterministic plan order
+mutate Results only on the main goroutine
+```
+
+Do not parallelize baseline/candidate inside a task unless explicitly requested.
+
+### Do not use package globals for runtime services
+
+Avoid global loggers, global clients, global registries, global backend sessions, or global mutable state.
+
+Prefer explicit construction and injection.
+
+## Error handling rules
+
+Use existing failure concepts.
+
+Internal control/classification error:
+
+```go
+compare.StageError
+```
+
+Report-facing failure:
+
+```go
+run.RunFailure
+```
+
+Execution/scoring failures should usually become `run.RunFailure`, not top-level process errors.
+
+Top-level errors are for:
+
+```text
+invalid configuration
+invalid plan
+context cancellation
+orchestration bugs
+I/O failures at CLI/adapters
+```
+
+Wrap errors with context, but do not create huge parallel error taxonomies unless needed.
+
+## Scoring rules
+
+`score.ScoreSet` means all required metrics were computed.
+
+Do not represent missing required metrics with booleans like:
+
+```go
+Available bool
+```
+
+If a required metric cannot be computed, scoring should fail and become a `RunFailure`.
+
+Metric direction matters. Positive delta is not always good.
+
+Examples:
+
+```text
+gold_hop          lower is better
+issue_hop         lower is better
+token_efficiency  higher is better
+cost              lower is better
+composite         higher is better
+```
+
+Use existing score comparison helpers instead of hand-rolling delta logic.
+
+## Report rules
+
+`report.CandidateReport` is the product artifact.
+
+It should answer:
+
+```text
+What was compared?
+What ran successfully?
+What failed?
+Which metrics improved?
+Which metrics regressed?
+Should the candidate promote, be reviewed, or be rejected?
+```
+
+Do not put runtime-only, executable-only, or source-bearing fields into reports.
+
+## Logging rules
+
+Searchbench uses `internal/logging` with Zap sugar and event-shaped helpers.
+
+Use event helpers:
+
+```go
+logger.RunStarted(role, spec)
+logger.RunExecuted(role, executed)
+logger.RunScored(role, executed, scores)
+logger.RunFailed(role, failure)
+logger.ReportCreated(report)
+```
+
+Avoid raw calls like:
+
+```go
+logger.Sugar().Infow("thing", "system", systemSpec)
+```
+
+Development logs should be pretty and human-readable. JSON logs should remain structured and machine-readable.
+
+## Console and CLI rules
+
+`internal/console` renders structured artifacts for humans.
+
+`internal/cli` parses user intent and wires commands.
+
+The CLI should stay small and opinionated. Do not expose every internal concept as a command or flag.
+
+Prefer commands like:
+
+```text
+searchbench demo-report
+searchbench report <path>
+searchbench compare --config searchbench.yaml
+```
+
+Avoid large command trees unless requested.
+
+## Backend implementation rules
+
+The backend boundary is:
+
+```go
+type Backend interface {
+    StartSession(ctx context.Context, spec SessionSpec) (Session, error)
+}
+
+type Session interface {
+    Tools(ctx context.Context) ([]ToolSpec, error)
+    CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)
+    Close(ctx context.Context) error
+}
+```
+
+Rules:
+
+```text
+Backend starts isolated sessions.
+Session represents one isolated run/session.
+Session is not assumed safe for concurrent tool calls.
+Backend must be safe for concurrent StartSession if used with parallel Runner execution.
+Concrete SDK weirdness stays inside backend adapters.
+```
+
+Do not leak SDK-specific types into `compare`, `report`, `score`, or `domain`.
+
+## Dynamic boundary rules
+
+External APIs are allowed to be ugly. Core packages are not.
+
+When integrating external systems:
+
+```text
+provider SDK object -> adapter -> typed Searchbench object
+```
+
+Do not push raw SDK objects inward.
+
+Examples:
+
+```text
+OpenAI/Cerebras usage -> typed adapter DTO -> domain.UsageSummary
+model output          -> typed adapter DTO/finalizer -> domain.Prediction
+Langfuse span         -> telemetry adapter interface
+IC tool result        -> backend.ToolResult -> typed finalizer
+```
+
+## Testing rules
+
+Place tests near the package that owns the invariant.
+
+Examples:
+
+```text
+score invariants       -> internal/score
+report safety          -> internal/report
+console output safety  -> internal/console
+logging safety         -> internal/logging
+runner orchestration   -> internal/compare
+CLI smoke tests        -> internal/cli
+```
+
+Do not test everything through the CLI.
+
+Avoid brittle golden tests for ANSI output. Prefer substring and invariant checks:
+
+```text
+contains high-level section names
+does not contain policy source
+does not contain "source"
+contains decision
+contains expected metric keys
+```
+
+## Agent review checklist
+
+Before finishing a change, verify:
+
+```text
+1. Did I use existing Searchbench nouns instead of creating a parallel model?
+2. Did I avoid map[string]any entirely unless it is truly unavoidable and adapter-local?
+3. Did I avoid raw SystemSpec/PolicyArtifact/TaskOracle/report dumps?
+4. Did I keep compare free of concrete backend/provider logic?
+5. Did I keep report as data and console as rendering?
+6. Did I avoid package globals?
+7. Did I avoid unnecessary interfaces?
+8. Did I avoid generic pipeline abstractions?
+9. Did I preserve deterministic report ordering?
+10. Did I add tests near the invariant I changed?
+```
+
+## Required commands
+
+Before handing off, run:
+
+```bash
+gofmt -w .
+go test ./...
+go mod tidy
+```
+
+If CLI behavior changed, also run the relevant command manually, for example:
+
+```bash
+go run ./cmd/searchbench --quiet --no-color demo-report
+go run ./cmd/searchbench --quiet demo-report --output json
+```
+
+## Guiding principle
+
+This codebase exists because the Python version became too flexible.
+
+When in doubt, choose:
+
+```text
+explicit types
+small packages
+boring constructors
+clear interfaces
+safe report views
+deterministic orchestration
+```
+
+Do not be clever. Make the model hard to misuse.
+</file>
+
 <file path="flake.lock">
 {
   "nodes": {
@@ -3525,6 +4767,507 @@ echo "Type spine initialized."
 echo "Next:"
 echo "  go test ./..."
 echo "  go run ./cmd/searchbench"
+</file>
+
+<file path="todo.md">
+# Searchbench-Go implementation roadmap
+
+## Principle
+
+Keep the existing core model stable.
+
+Core packages:
+
+```text
+internal/domain
+internal/run
+internal/score
+internal/report
+internal/compare
+internal/backend
+internal/codegraph
+```
+
+Implementation packages should consume these core packages. They should not redefine their own task, run, score, report, backend, or prediction models.
+
+Do not create a second Go module. Keep implementation code under `internal/`.
+
+---
+
+## Phase 1: Concrete executor boundary
+
+Add:
+
+```text
+internal/executor/
+  doc.go
+  executor.go
+  options.go
+  result.go
+```
+
+Purpose:
+
+```text
+run.Spec
+  -> backend session
+  -> model/tool loop
+  -> domain.Prediction
+  -> domain.UsageSummary
+  -> run.ExecutedRun
+```
+
+Rules:
+
+- `executor` implements `compare.Executor`.
+- `compare` must not know concrete backend/session/model details.
+- Executor should own one run of one system on one task.
+- Executor should not own scoring, reporting, or promotion decisions.
+
+---
+
+## Phase 2: Backend implementations
+
+Keep the current abstract backend package:
+
+```text
+internal/backend/
+  backend.go
+  session.go
+  errors.go
+```
+
+Add implementation subpackages:
+
+```text
+internal/backend/iterativecontext/
+  backend.go
+  session.go
+  tools.go
+  policy.go
+
+internal/backend/jcodemunch/
+  backend.go
+  session.go
+  tools.go
+```
+
+Purpose:
+
+- Implement `backend.Backend`.
+- Implement `backend.Session`.
+- Hide concrete SDK/subprocess/Python/MCP details.
+- Expose only `Tools`, `CallTool`, and `Close`.
+
+Rules:
+
+- No concrete backend types in `compare`.
+- No SDK-specific types in `domain`, `run`, `score`, or `report`.
+- Backend sessions must be isolated per run.
+- Backend implementations must be safe for concurrent `StartSession` if used with `Runner.Parallelism`.
+
+---
+
+## Phase 3: Model/provider client
+
+Add:
+
+```text
+internal/model/
+  doc.go
+  client.go
+  message.go
+  response.go
+  usage.go
+
+internal/model/openai/
+  client.go
+  dto.go
+
+internal/model/cerebras/
+  client.go
+  dto.go
+```
+
+Purpose:
+
+- Own LLM provider calls.
+- Normalize provider responses.
+- Normalize token usage into `domain.UsageSummary`.
+
+Rules:
+
+- Prefer typed DTOs.
+- Avoid `map[string]any`.
+- Provider weirdness stays in provider packages.
+- Core packages receive typed values only.
+
+---
+
+## Phase 4: Prompt construction
+
+Add:
+
+```text
+internal/prompt/
+  doc.go
+  builder.go
+  templates.go
+  task.go
+```
+
+Purpose:
+
+- Convert `domain.TaskSpec` and `domain.SystemSpec` into model input.
+- Keep scorer-only oracle data out of prompts.
+- Load/render system prompts for IC and jCodeMunch-style runs.
+
+Rules:
+
+- Prompt builders may receive `TaskSpec`, but must only use prompt-safe fields.
+- Do not leak `TaskOracle`.
+- Do not leak policy source except where explicitly required by the backend/session setup.
+
+---
+
+## Phase 5: Finalization / prediction extraction
+
+Add:
+
+```text
+internal/finalizer/
+  doc.go
+  prediction.go
+  files.go
+  errors.go
+```
+
+Purpose:
+
+- Convert model responses/tool observations into `domain.Prediction`.
+- Normalize repo-relative file paths.
+- Reject malformed or unsafe predictions.
+
+Rules:
+
+- Finalizer returns typed `domain.Prediction`.
+- Do not store raw model output on `run.ExecutedRun`.
+- Raw/dynamic payload handling must remain adapter-local.
+
+---
+
+## Phase 6: Static graph ingestion
+
+Current graph model:
+
+```text
+internal/codegraph/
+```
+
+Add ingestion package:
+
+```text
+internal/graphing/
+  doc.go
+  ingest.go
+  treesitter.go
+  normalize.go
+  anchors.go
+```
+
+Alternative name:
+
+```text
+internal/codegraph/ingest/
+```
+
+Purpose:
+
+- Build `codegraph.Graph` from repository snapshots.
+- Use tree-sitter bindings.
+- Normalize files/functions/symbols into graph nodes/edges.
+
+Rules:
+
+- Ingestion depends on `codegraph.Builder`.
+- Scoring depends on `codegraph.Graph`.
+- Keep `gograph` hidden behind `codegraph.Store`.
+- Treat built graphs as read-only.
+
+---
+
+## Phase 7: Real scoring engine
+
+Current scoring model:
+
+```text
+internal/score/
+```
+
+Add concrete scorer package:
+
+```text
+internal/scoring/
+  doc.go
+  engine.go
+  gold_hop.go
+  issue_hop.go
+  token_efficiency.go
+  cost.go
+  composite.go
+```
+
+Purpose:
+
+- Implement `compare.Scorer`.
+- Compute required `score.ScoreSet`.
+- Use `codegraph.Graph`, `run.ExecutedRun`, and task oracle.
+
+Rules:
+
+- If any required metric cannot be computed, scoring fails.
+- Do not add `Available bool`.
+- Do not silently drop metrics.
+- Keep metric direction centralized in `score`.
+
+---
+
+## Phase 8: Promotion rules
+
+Current report output:
+
+```text
+report.PromotionDecision
+```
+
+Add:
+
+```text
+internal/promotion/
+  doc.go
+  policy.go
+  decider.go
+  rules.go
+```
+
+Purpose:
+
+- Implement `compare.Decider`.
+- Decide `PROMOTE`, `REVIEW`, or `REJECT`.
+- Encode thresholds for regressions, failures, cost, and primary score changes.
+
+Rules:
+
+- `promotion` produces `report.PromotionDecision`.
+- `report` keeps the report-facing decision type.
+- Do not put a large rule engine into `compare`.
+
+---
+
+## Phase 9: Writer feedback projection
+
+Add:
+
+```text
+internal/writerfeedback/
+  doc.go
+  feedback.go
+  builder.go
+  summary.go
+```
+
+Purpose:
+
+- Convert `report.CandidateReport` into compact writer-agent input.
+- Summarize metric deltas, regressions, failures, strong cases, weak cases, and guidance.
+
+Rules:
+
+- Writer feedback is a projection of `CandidateReport`.
+- It should not re-run scoring.
+- It should not depend on score history by default.
+- Do not resurrect old score-over-time reducers unless proven useful.
+
+---
+
+## Phase 10: Writer agent
+
+Add:
+
+```text
+internal/writer/
+  doc.go
+  writer.go
+  prompt.go
+  candidate.go
+```
+
+Purpose:
+
+- Generate a new candidate policy/system from writer feedback.
+- Produce a new `domain.PolicyArtifact` or candidate `domain.SystemSpec`.
+
+Rules:
+
+- Writer consumes `writerfeedback.Feedback`.
+- Writer does not consume raw traces/logs as its primary interface.
+- Writer output must validate as a `PolicyArtifact`.
+- Candidate identity must flow through `SystemSpec -> SystemRef`.
+
+---
+
+## Phase 11: Dataset adapters
+
+Add:
+
+```text
+internal/dataset/
+  doc.go
+  dataset.go
+  loader.go
+
+internal/dataset/lca/
+  loader.go
+  dto.go
+  normalize.go
+```
+
+Purpose:
+
+- Load benchmark tasks.
+- Convert external dataset rows into `domain.TaskSpec`.
+
+Rules:
+
+- Dataset-specific DTOs stay in dataset packages.
+- Core packages should only see `domain.TaskSpec`.
+- Preserve oracle/prompt split.
+
+---
+
+## Phase 12: Artifact storage
+
+Add:
+
+```text
+internal/artifact/
+  doc.go
+  store.go
+  filesystem.go
+```
+
+Purpose:
+
+- Write/read candidate reports, logs, policy artifacts, graph snapshots, and run outputs.
+- Support CLI output paths later.
+
+Rules:
+
+- Artifact storage should not change report structure.
+- Reports remain JSON-serializable `report.CandidateReport`.
+- Do not put filesystem behavior into `report`.
+
+---
+
+## Phase 13: Telemetry integration
+
+Add later, not first:
+
+```text
+internal/telemetry/
+  doc.go
+  observer.go
+  events.go
+
+internal/telemetry/langfuse/
+  client.go
+  dto.go
+  observer.go
+```
+
+Purpose:
+
+- Observe runs/reports.
+- Emit spans/scores/events to Langfuse or another telemetry backend.
+
+Rules:
+
+- Telemetry observes the model.
+- Telemetry must not define the model.
+- No Langfuse SDK types in `compare`, `report`, `score`, `domain`, or `run`.
+- No telemetry-driven control flow.
+
+---
+
+## Phase 14: Real CLI commands
+
+Current CLI:
+
+```text
+searchbench demo-report
+```
+
+Add later:
+
+```text
+searchbench compare --config searchbench.yaml --output report.json
+searchbench report <report.json>
+searchbench report <report.json> --output json
+```
+
+Rules:
+
+- CLI stays thin.
+- CLI parses user intent and wires dependencies.
+- CLI does not own execution, scoring, reporting, or backend logic.
+- Keep command surface small and opinionated.
+
+---
+
+## Phase 15: Config
+
+Add:
+
+```text
+internal/config/
+  doc.go
+  config.go
+  load.go
+```
+
+Purpose:
+
+- Load comparison configs.
+- Build `compare.Plan`.
+- Select backend/model/scoring/promotion implementations.
+
+Rules:
+
+- Config structs are typed.
+- Avoid dynamic maps.
+- Config should construct core values, not replace the core model.
+
+---
+
+## Do not port directly from Python
+
+Translate old Searchbench concepts into the Go model.
+
+Old Python concern -> Go destination:
+
+```text
+agents/localizer.py        -> executor + prompt + model + finalizer + backend
+backends/ic.py             -> backend/iterativecontext
+backends/jc.py             -> backend/jcodemunch
+prompts/                   -> prompt
+localization/static_graph  -> graphing + codegraph
+scoring/                   -> scoring + score + promotion
+telemetry/                 -> telemetry/langfuse
+pipeline/orchestration     -> compare + writerfeedback + writer
+datasets/HF/Langfuse       -> dataset adapters
+```
+
+Avoid recreating the Python mega-files.
 </file>
 
 <file path="cmd/searchbench/main.go">

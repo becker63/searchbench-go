@@ -7,7 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/becker63/searchbench-go/internal/logging"
+	"github.com/becker63/searchbench-go/internal/surface/logging"
 )
 
 // CLI is the root Searchbench command tree.

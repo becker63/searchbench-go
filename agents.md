@@ -281,6 +281,8 @@ RunFailure
 
 Generics are welcome for simple structural helpers like `Pair[T]`, `NonEmpty[T]`, or task-aligned containers. They should not hide the domain.
 
+Sometimes I will ask you to do this in a prompt, if Im telling you to use a generic you can trust my judgement.
+
 ### Do not add unnecessary interfaces
 
 Interfaces should live at consumer boundaries.
