@@ -153,6 +153,19 @@ init.sh
 <files>
 This section contains the contents of the repository's files.
 
+<file path="internal/backend/doc.go">
+// Package backend defines the future runtime/session boundary for Searchbench.
+//
+// It owns abstract backend and session interfaces plus small tool protocol
+// shapes that can later be implemented by integrations such as iterative
+// context or jCodeMunch adapters.
+//
+// It does not implement real backend behavior in this repository pass. The
+// package exists to make the eventual session boundary explicit and context-
+// aware without coupling orchestration to a concrete runtime.
+package backend
+</file>
+
 <file path="internal/cli/cli_test.go">
 package cli
 
@@ -660,6 +673,471 @@ func (demoDecider) Decide(_ []report.ScoreComparison, regressions []report.Regre
 	return report.PromotionDecision{
 		Decision: report.DecisionReview,
 		Reason:   "candidate has regressions",
+	}
+}
+</file>
+
+<file path="internal/codegraph/doc.go">
+// Package codegraph defines the Searchbench code graph model.
+//
+// It owns graph nodes, edges, paths, the mutable Builder interface used during
+// ingestion, and the read-only Graph interface used during scoring.
+//
+// It does not own tree-sitter ingestion logic or scoring policy. Those higher-
+// level concerns should depend on Builder or Graph rather than on the Store
+// implementation or its gograph backing.
+package codegraph
+</file>
+
+<file path="internal/compare/doc.go">
+// Package compare coordinates baseline/candidate comparisons.
+//
+// It owns orchestration only: validating executable plans, running task
+// comparisons, applying task-level parallelism policy, accumulating results,
+// and emitting candidate reports.
+//
+// It does not own concrete backend sessions, graph ingestion, metric
+// algorithms, prompt construction, or telemetry integrations. Those enter
+// through small interfaces such as Executor, GraphProvider, Scorer, and
+// Decider.
+package compare
+</file>
+
+<file path="internal/compare/errors_test.go">
+package compare
+
+import (
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/run"
+)
+
+func TestStageErrorUnwrap(t *testing.T) {
+	t.Parallel()
+
+	cause := errors.New("boom")
+	spec := run.NewSpec(
+		domain.RunID("run-1"),
+		domain.TaskSpec{ID: domain.TaskID("task-1")},
+		domain.SystemSpec{ID: domain.SystemID("system-1")},
+	)
+
+	stageErr := NewStageError(spec, run.FailureExecute, cause)
+	if !errors.Is(stageErr, cause) {
+		t.Fatal("StageError should unwrap to original cause")
+	}
+	if got := stageErr.Unwrap(); got != cause {
+		t.Fatalf("Unwrap() = %v, want %v", got, cause)
+	}
+}
+
+func TestStageErrorAsThroughWrapping(t *testing.T) {
+	t.Parallel()
+
+	spec := run.NewSpec(
+		domain.RunID("run-1"),
+		domain.TaskSpec{ID: domain.TaskID("task-1")},
+		domain.SystemSpec{ID: domain.SystemID("system-1")},
+	)
+	err := fmt.Errorf("outer: %w", NewStageError(spec, run.FailureScore, errors.New("bad score")))
+
+	var stageErr StageError
+	if !errors.As(err, &stageErr) {
+		t.Fatal("errors.As should find wrapped StageError")
+	}
+	if stageErr.Stage != run.FailureScore {
+		t.Fatalf("Stage = %q, want %q", stageErr.Stage, run.FailureScore)
+	}
+}
+
+func TestFailureFromErrorUsesStageErrorFields(t *testing.T) {
+	t.Parallel()
+
+	spec := run.NewSpec(
+		domain.RunID("run-spec"),
+		domain.TaskSpec{ID: domain.TaskID("task-spec")},
+		domain.SystemSpec{ID: domain.SystemID("system-spec")},
+	)
+	stageSpec := run.NewSpec(
+		domain.RunID("run-stage"),
+		domain.TaskSpec{ID: domain.TaskID("task-stage")},
+		domain.SystemSpec{ID: domain.SystemID("system-stage")},
+	)
+	err := fmt.Errorf("wrapped: %w", NewStageError(stageSpec, run.FailureExecute, errors.New("explode")))
+
+	failure := failureFromError(spec, run.FailureScore, err)
+	if failure.RunID != stageSpec.ID {
+		t.Fatalf("RunID = %q, want %q", failure.RunID, stageSpec.ID)
+	}
+	if failure.TaskID != stageSpec.Task.ID {
+		t.Fatalf("TaskID = %q, want %q", failure.TaskID, stageSpec.Task.ID)
+	}
+	if failure.System != stageSpec.System.ID {
+		t.Fatalf("System = %q, want %q", failure.System, stageSpec.System.ID)
+	}
+	if failure.Stage != run.FailureExecute {
+		t.Fatalf("Stage = %q, want %q", failure.Stage, run.FailureExecute)
+	}
+}
+</file>
+
+<file path="internal/compare/parallelism_test.go">
+package compare
+
+import "testing"
+
+func TestParallelismNormalizeAndValidate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   Parallelism
+		want    Parallelism
+		wantErr bool
+	}{
+		{
+			name:  "zero value normalizes to sequential",
+			input: Parallelism{},
+			want: Parallelism{
+				Mode:       ExecutionSequential,
+				MaxWorkers: 1,
+			},
+		},
+		{
+			name: "sequential ignores high max workers",
+			input: Parallelism{
+				Mode:       ExecutionSequential,
+				MaxWorkers: 99,
+				FailFast:   true,
+			},
+			want: Parallelism{
+				Mode:       ExecutionSequential,
+				MaxWorkers: 1,
+				FailFast:   true,
+			},
+		},
+		{
+			name: "parallel with workers validates",
+			input: Parallelism{
+				Mode:       ExecutionParallel,
+				MaxWorkers: 2,
+			},
+			want: Parallelism{
+				Mode:       ExecutionParallel,
+				MaxWorkers: 2,
+			},
+		},
+		{
+			name: "parallel zero workers fails validation",
+			input: Parallelism{
+				Mode: ExecutionParallel,
+			},
+			wantErr: true,
+		},
+		{
+			name: "unknown mode fails validation",
+			input: Parallelism{
+				Mode: ExecutionMode("weird"),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			normalized := tt.input.Normalize()
+			if tt.wantErr {
+				if err := tt.input.Validate(); err == nil {
+					t.Fatal("expected validation error")
+				}
+				return
+			}
+
+			if err := normalized.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+			if normalized != tt.want {
+				t.Fatalf("Normalize() = %#v, want %#v", normalized, tt.want)
+			}
+		})
+	}
+}
+</file>
+
+<file path="internal/compare/runner_test.go">
+package compare
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/codegraph"
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/run"
+	"github.com/becker63/searchbench-go/internal/score"
+)
+
+var _ Executor = fakeExecutor{}
+var _ GraphProvider = fakeGraphProvider{}
+var _ Scorer = fakeScorer{}
+var _ Decider = fakeDecider{}
+
+func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
+	t.Parallel()
+
+	runner := Runner{
+		Executor: failingExecutor{
+			err: errors.New("candidate execute failed"),
+		},
+		GraphProvider: fakeGraphProvider{},
+		Scorer:        fakeScorer{},
+		Decider:       fakeDecider{},
+		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
+		},
+		NewReportID: func() domain.ReportID { return domain.ReportID("report-2") },
+	}
+
+	got, err := runner.Run(context.Background(), NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+		),
+		domain.NewNonEmpty(exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug.go"))),
+	))
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(got.Runs.Baseline) != 1 {
+		t.Fatalf("len(got.Runs.Baseline) = %d, want 1", len(got.Runs.Baseline))
+	}
+	if len(got.Runs.Candidate) != 0 {
+		t.Fatalf("len(got.Runs.Candidate) = %d, want 0", len(got.Runs.Candidate))
+	}
+	if len(got.Failures.Candidate) != 1 {
+		t.Fatalf("len(got.Failures.Candidate) = %d, want 1", len(got.Failures.Candidate))
+	}
+	if got.Failures.Candidate[0].Stage != run.FailureExecute {
+		t.Fatalf("candidate failure stage = %q, want %q", got.Failures.Candidate[0].Stage, run.FailureExecute)
+	}
+}
+
+func TestRunnerParallelTasksPreservesPlanOrder(t *testing.T) {
+	t.Parallel()
+
+	runner := exampleRunner(fixedTestTime())
+	runner.Executor = delayedExecutor{
+		now: fixedTestTime(),
+		delays: map[domain.TaskID]time.Duration{
+			domain.TaskID("task-1"): 30 * time.Millisecond,
+			domain.TaskID("task-2"): 10 * time.Millisecond,
+			domain.TaskID("task-3"): 1 * time.Millisecond,
+		},
+	}
+	runner.Parallelism = Parallelism{
+		Mode:       ExecutionParallel,
+		MaxWorkers: 2,
+	}
+
+	plan := NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+		),
+		domain.NewNonEmpty(
+			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+			exampleTask(domain.TaskID("task-3"), domain.RepoRelPath("pkg/bug3.go")),
+		),
+	)
+
+	got, err := runner.Run(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	wantOrder := []domain.TaskID{
+		domain.TaskID("task-1"),
+		domain.TaskID("task-2"),
+		domain.TaskID("task-3"),
+	}
+	assertRunOrder(t, got.Runs.Baseline, wantOrder)
+	assertRunOrder(t, got.Runs.Candidate, wantOrder)
+}
+
+func TestRunnerParallelTasksRespectsContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	runner := exampleRunner(fixedTestTime())
+	runner.Parallelism = Parallelism{
+		Mode:       ExecutionParallel,
+		MaxWorkers: 2,
+	}
+
+	_, err := runner.Run(ctx, NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+		),
+		domain.NewNonEmpty(
+			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+		),
+	))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want %v", err, context.Canceled)
+	}
+}
+
+type fakeExecutor struct {
+	now time.Time
+}
+
+func (f fakeExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun, error) {
+	planned := run.NewPlanned(spec)
+	prepared := run.NewPrepared(planned, domain.SessionID("session-"+spec.ID.String()))
+
+	predictionFile := domain.RepoRelPath("pkg/baseline.go")
+	reasoning := "baseline path"
+	if spec.System.Backend == domain.BackendIterativeContext {
+		predictionFile = domain.RepoRelPath("pkg/candidate.go")
+		reasoning = "candidate path"
+	}
+
+	return run.NewExecuted(
+		prepared,
+		domain.Prediction{
+			Files:     []domain.RepoRelPath{predictionFile},
+			Reasoning: reasoning,
+		},
+		domain.UsageSummary{
+			InputTokens:  100,
+			OutputTokens: 20,
+			TotalTokens:  120,
+			CostUSD:      0.05,
+		},
+		domain.TraceID("trace-"+spec.ID.String()),
+		f.now,
+		f.now.Add(2*time.Second),
+	), nil
+}
+
+type delayedExecutor struct {
+	now    time.Time
+	delays map[domain.TaskID]time.Duration
+}
+
+var _ Executor = delayedExecutor{}
+
+func (d delayedExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
+	if delay := d.delays[spec.Task.ID]; delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+
+		select {
+		case <-ctx.Done():
+			return run.ExecutedRun{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return fakeExecutor{now: d.now}.Execute(ctx, spec)
+}
+
+type failingExecutor struct {
+	err error
+}
+
+var _ Executor = failingExecutor{}
+
+func (f failingExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
+	if spec.System.Backend == domain.BackendIterativeContext {
+		return run.ExecutedRun{}, f.err
+	}
+	return fakeExecutor{now: time.Now().UTC()}.Execute(ctx, spec)
+}
+
+type fakeGraphProvider struct{}
+
+func (fakeGraphProvider) GraphForTask(_ context.Context, task domain.TaskSpec) (codegraph.Graph, error) {
+	store := codegraph.NewStore()
+	fileID := codegraph.NodeID("file-" + task.ID.String())
+	fnID := codegraph.NodeID("fn-" + task.ID.String())
+
+	if err := store.AddNode(codegraph.NewFileNode(fileID, task.Oracle.GoldFiles[0])); err != nil {
+		return nil, err
+	}
+	if err := store.AddNode(codegraph.NewFunctionNode(fnID, task.Oracle.GoldFiles[0], "score", 1, 10)); err != nil {
+		return nil, err
+	}
+	if err := store.AddEdge(codegraph.Edge{
+		From:   fileID,
+		To:     fnID,
+		Kind:   codegraph.EdgeContains,
+		Weight: 1,
+	}); err != nil {
+		return nil, err
+	}
+	return store.Build()
+}
+
+type fakeScorer struct{}
+
+func (fakeScorer) Score(_ context.Context, input score.Input) (score.ScoreSet, error) {
+	if input.Run.Spec().System.Backend == domain.BackendIterativeContext {
+		return score.NewScoreSet(
+			score.Metric[score.HopDistance]{Name: score.MetricGoldHop, Value: 1},
+			score.Metric[score.HopDistance]{Name: score.MetricIssueHop, Value: 1},
+			score.Metric[score.EfficiencyScore]{Name: score.MetricTokenEfficiency, Value: 0.9},
+			score.Metric[score.CostScore]{Name: score.MetricCost, Value: 0.1},
+			score.Metric[score.CompositeScore]{Name: score.MetricComposite, Value: 0.95},
+		)
+	}
+	return score.NewScoreSet(
+		score.Metric[score.HopDistance]{Name: score.MetricGoldHop, Value: 4},
+		score.Metric[score.HopDistance]{Name: score.MetricIssueHop, Value: 5},
+		score.Metric[score.EfficiencyScore]{Name: score.MetricTokenEfficiency, Value: 0.4},
+		score.Metric[score.CostScore]{Name: score.MetricCost, Value: 0.6},
+		score.Metric[score.CompositeScore]{Name: score.MetricComposite, Value: 0.3},
+	)
+}
+
+type fakeDecider struct{}
+
+func (fakeDecider) Decide(_ []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision {
+	if len(regressions) == 0 {
+		return report.PromotionDecision{
+			Decision: report.DecisionPromote,
+			Reason:   "candidate improved every required metric",
+		}
+	}
+	return report.PromotionDecision{
+		Decision: report.DecisionReview,
+		Reason:   "candidate has regressions",
+	}
+}
+
+func assertRunOrder(t *testing.T, runs []score.ScoredRun, want []domain.TaskID) {
+	t.Helper()
+
+	if len(runs) != len(want) {
+		t.Fatalf("len(runs) = %d, want %d", len(runs), len(want))
+	}
+	for i, taskID := range want {
+		if got := runs[i].Execution.Spec().Task.ID; got != taskID {
+			t.Fatalf("runs[%d].Task.ID = %q, want %q", i, got, taskID)
+		}
 	}
 }
 </file>
@@ -1214,6 +1692,291 @@ func NewStyles(opts Options) Styles {
 }
 </file>
 
+<file path="internal/domain/doc.go">
+// Package domain defines the stable Searchbench vocabulary.
+//
+// It owns identifiers, tasks, systems, policy refs, repo snapshots,
+// predictions, usage summaries, artifact references, and other value types that
+// are shared across execution, scoring, and reporting.
+//
+// It does not own run lifecycle, score computation, report generation,
+// orchestration, backend sessions, or graph ingestion. Those higher-level
+// concerns build on the domain model rather than living inside it.
+package domain
+</file>
+
+<file path="internal/domain/pair_test.go">
+package domain
+
+import "testing"
+
+func TestPairAll(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		pair      Pair[string]
+		wantRoles []Role
+		wantVals  []string
+		stopAfter int
+	}{
+		{
+			name:      "yields both roles in order",
+			pair:      NewPair("baseline", "candidate"),
+			wantRoles: []Role{RoleBaseline, RoleCandidate},
+			wantVals:  []string{"baseline", "candidate"},
+			stopAfter: 2,
+		},
+		{
+			name:      "respects early stop",
+			pair:      NewPair("baseline", "candidate"),
+			wantRoles: []Role{RoleBaseline},
+			wantVals:  []string{"baseline"},
+			stopAfter: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotRoles := make([]Role, 0)
+			gotVals := make([]string, 0)
+			count := 0
+			for role, value := range tt.pair.All() {
+				gotRoles = append(gotRoles, role)
+				gotVals = append(gotVals, value)
+				count++
+				if count >= tt.stopAfter {
+					break
+				}
+			}
+
+			if len(gotRoles) != len(tt.wantRoles) {
+				t.Fatalf("len(gotRoles) = %d, want %d", len(gotRoles), len(tt.wantRoles))
+			}
+			for i := range tt.wantRoles {
+				if gotRoles[i] != tt.wantRoles[i] {
+					t.Fatalf("gotRoles[%d] = %q, want %q", i, gotRoles[i], tt.wantRoles[i])
+				}
+				if gotVals[i] != tt.wantVals[i] {
+					t.Fatalf("gotVals[%d] = %q, want %q", i, gotVals[i], tt.wantVals[i])
+				}
+			}
+		})
+	}
+}
+</file>
+
+<file path="internal/domain/prediction.go">
+package domain
+
+// Prediction is the normalized answer produced by a system run.
+//
+// For now Searchbench is file-localization first. Function/symbol prediction
+// can be added later without putting raw model output into this type.
+type Prediction struct {
+	Files     []RepoRelPath `json:"files"`
+	Reasoning string        `json:"reasoning,omitempty"`
+}
+</file>
+
+<file path="internal/domain/repo.go">
+package domain
+
+// RepoName identifies a repository in benchmark/task space.
+//
+// Examples:
+//   - "accenture/ampligraph"
+//   - "django/django"
+//   - "JetBrains-Research/lca-bug-localization:py:dev:..."
+type RepoName string
+
+// RepoSHA identifies the exact commit under evaluation.
+type RepoSHA string
+
+// RepoRelPath is a path relative to the repository root.
+//
+// Use this for files returned by agents, gold labels, graph nodes, etc.
+type RepoRelPath string
+
+// HostPath is a local filesystem path on the machine running Searchbench.
+//
+// Keep this distinct from RepoRelPath so agents/tests do not casually mix
+// benchmark-relative paths with local paths.
+type HostPath string
+
+// RepoSnapshot identifies the exact code universe for a task.
+//
+// The same RepoSnapshot should be shared by baseline and candidate runs.
+type RepoSnapshot struct {
+	Name RepoName `json:"name"`
+	SHA  RepoSHA  `json:"sha"`
+	Path HostPath `json:"path"`
+}
+</file>
+
+<file path="internal/domain/system_test.go">
+package domain
+
+import "testing"
+
+func TestPolicyArtifactValidate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		policy  PolicyArtifact
+		wantErr bool
+	}{
+		{
+			name:   "valid python policy",
+			policy: NewPythonPolicy(PolicyID("policy-1"), "def run():\n    return 1\n", "run"),
+		},
+		{
+			name: "mismatched hash",
+			policy: PolicyArtifact{
+				ID:         PolicyID("policy-1"),
+				Language:   PolicyLanguagePython,
+				SHA256:     PolicyHash("deadbeef"),
+				Entrypoint: "run",
+				Source:     "def run():\n    return 1\n",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing entrypoint",
+			policy: PolicyArtifact{
+				ID:       PolicyID("policy-1"),
+				Language: PolicyLanguagePython,
+				SHA256:   NewPythonPolicy(PolicyID("policy-1"), "print('x')", "run").SHA256,
+				Source:   "print('x')",
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.policy.Validate()
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestSystemSpecFingerprintDeterminism(t *testing.T) {
+	t.Parallel()
+
+	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
+	base := SystemSpec{
+		ID:      SystemID("system-1"),
+		Name:    "Baseline Name",
+		Backend: BackendIterativeContext,
+		Model: ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-test",
+		},
+		PromptBundle: PromptBundleRef{
+			Name:    "default",
+			Version: "v1",
+		},
+		Policy: &policy,
+		Runtime: RuntimeConfig{
+			MaxSteps:        12,
+			MaxOutputTokens: 500,
+		},
+	}
+
+	same := base
+	if got, want := base.Fingerprint(), same.Fingerprint(); got != want {
+		t.Fatalf("fingerprint mismatch for identical system: got %q want %q", got, want)
+	}
+
+	renamed := base
+	renamed.Name = "Candidate Display Name"
+	if got, want := base.Fingerprint(), renamed.Fingerprint(); got != want {
+		t.Fatalf("fingerprint should ignore cosmetic name: got %q want %q", got, want)
+	}
+
+	changedRuntime := base
+	changedRuntime.Runtime.MaxSteps = 99
+	if base.Fingerprint() == changedRuntime.Fingerprint() {
+		t.Fatal("fingerprint should change when behavior-affecting fields change")
+	}
+
+	changedEntrypoint := base
+	changedPolicy := *base.Policy
+	changedPolicy.Entrypoint = "alternate"
+	changedEntrypoint.Policy = &changedPolicy
+	if base.Fingerprint() == changedEntrypoint.Fingerprint() {
+		t.Fatal("fingerprint should change when policy entrypoint changes")
+	}
+}
+
+func TestSystemSpecRefOmitsPolicySource(t *testing.T) {
+	t.Parallel()
+
+	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
+	spec := SystemSpec{
+		ID:      SystemID("system-1"),
+		Name:    "Candidate",
+		Backend: BackendIterativeContext,
+		Model: ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-test",
+		},
+		PromptBundle: PromptBundleRef{Name: "default"},
+		Policy:       &policy,
+	}
+
+	ref := spec.Ref()
+	if ref.Policy == nil {
+		t.Fatal("expected policy ref")
+	}
+	if ref.Policy.Entrypoint != policy.Entrypoint {
+		t.Fatalf("Policy.Entrypoint = %q, want %q", ref.Policy.Entrypoint, policy.Entrypoint)
+	}
+	if ref.Fingerprint != spec.Fingerprint() {
+		t.Fatalf("Fingerprint = %q, want %q", ref.Fingerprint, spec.Fingerprint())
+	}
+}
+</file>
+
+<file path="internal/domain/usage.go">
+package domain
+
+// TokenCount is a normalized token count.
+//
+// Keep it separate from int so token/cost code is explicit.
+type TokenCount int64
+
+// UsageSummary is normalized run-level usage.
+//
+// Provider-specific usage details can exist elsewhere. This type is the stable
+// Searchbench shape used by scoring and reports.
+type UsageSummary struct {
+	InputTokens  TokenCount `json:"input_tokens"`
+	OutputTokens TokenCount `json:"output_tokens"`
+	TotalTokens  TokenCount `json:"total_tokens"`
+	CostUSD      float64    `json:"cost_usd,omitempty"`
+}
+
+// Empty reports whether no usage was recorded.
+func (u UsageSummary) Empty() bool {
+	return u.InputTokens == 0 &&
+		u.OutputTokens == 0 &&
+		u.TotalTokens == 0 &&
+		u.CostUSD == 0
+}
+</file>
+
 <file path="internal/logging/attrs_test.go">
 package logging
 
@@ -1503,6 +2266,7 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (l Logger) devInfo(event string, parts ...string) {
@@ -1543,7 +2307,7 @@ func (l Logger) writeDevLine(level string, event string, parts ...string) {
 		l.styles.Time.Render(time.Now().Format("15:04:05")),
 		levelStyle.Render(level),
 		l.renderLoggerName(),
-		l.styles.Event.Render(event),
+		l.eventStyle(event).Render(event),
 		line,
 	)
 }
@@ -1595,6 +2359,31 @@ func (l Logger) renderLoggerName() string {
 		return ""
 	}
 	return l.styles.Muted.Render("[" + l.name + "] ")
+}
+
+func (l Logger) eventStyle(event string) lipgloss.Style {
+	switch event {
+	case "comparison.started":
+		return l.styles.ComparisonStarted
+	case "comparison.completed":
+		return l.styles.ComparisonCompleted
+	case "task.started":
+		return l.styles.TaskStarted
+	case "task.completed":
+		return l.styles.TaskCompleted
+	case "run.started":
+		return l.styles.RunStarted
+	case "run.executed":
+		return l.styles.RunExecuted
+	case "run.scored":
+		return l.styles.RunScored
+	case "run.failed":
+		return l.styles.RunFailed
+	case "report.created":
+		return l.styles.ReportCreated
+	default:
+		return l.styles.Event
+	}
 }
 
 func filterEmpty(parts []string) []string {
@@ -2236,989 +3025,77 @@ import "github.com/charmbracelet/lipgloss"
 
 // Styles controls pretty development log rendering.
 type Styles struct {
-	Time     lipgloss.Style
-	Info     lipgloss.Style
-	Warn     lipgloss.Style
-	Error    lipgloss.Style
-	Event    lipgloss.Style
-	Muted    lipgloss.Style
-	RoleBase lipgloss.Style
-	RoleCand lipgloss.Style
-	Success  lipgloss.Style
-	Failure  lipgloss.Style
-	Metric   lipgloss.Style
+	Time                lipgloss.Style
+	Info                lipgloss.Style
+	Warn                lipgloss.Style
+	Error               lipgloss.Style
+	Event               lipgloss.Style
+	ComparisonStarted   lipgloss.Style
+	ComparisonCompleted lipgloss.Style
+	TaskStarted         lipgloss.Style
+	TaskCompleted       lipgloss.Style
+	RunStarted          lipgloss.Style
+	RunExecuted         lipgloss.Style
+	RunScored           lipgloss.Style
+	RunFailed           lipgloss.Style
+	ReportCreated       lipgloss.Style
+	Muted               lipgloss.Style
+	RoleBase            lipgloss.Style
+	RoleCand            lipgloss.Style
+	Success             lipgloss.Style
+	Failure             lipgloss.Style
+	Metric              lipgloss.Style
 }
 
 // NewStyles constructs the style set for pretty development logs.
 func NewStyles(color bool) Styles {
 	if !color {
 		return Styles{
-			Time:     lipgloss.NewStyle(),
-			Info:     lipgloss.NewStyle(),
-			Warn:     lipgloss.NewStyle(),
-			Error:    lipgloss.NewStyle(),
-			Event:    lipgloss.NewStyle(),
-			Muted:    lipgloss.NewStyle(),
-			RoleBase: lipgloss.NewStyle(),
-			RoleCand: lipgloss.NewStyle(),
-			Success:  lipgloss.NewStyle(),
-			Failure:  lipgloss.NewStyle(),
-			Metric:   lipgloss.NewStyle(),
+			Time:                lipgloss.NewStyle(),
+			Info:                lipgloss.NewStyle(),
+			Warn:                lipgloss.NewStyle(),
+			Error:               lipgloss.NewStyle(),
+			Event:               lipgloss.NewStyle(),
+			ComparisonStarted:   lipgloss.NewStyle(),
+			ComparisonCompleted: lipgloss.NewStyle(),
+			TaskStarted:         lipgloss.NewStyle(),
+			TaskCompleted:       lipgloss.NewStyle(),
+			RunStarted:          lipgloss.NewStyle(),
+			RunExecuted:         lipgloss.NewStyle(),
+			RunScored:           lipgloss.NewStyle(),
+			RunFailed:           lipgloss.NewStyle(),
+			ReportCreated:       lipgloss.NewStyle(),
+			Muted:               lipgloss.NewStyle(),
+			RoleBase:            lipgloss.NewStyle(),
+			RoleCand:            lipgloss.NewStyle(),
+			Success:             lipgloss.NewStyle(),
+			Failure:             lipgloss.NewStyle(),
+			Metric:              lipgloss.NewStyle(),
 		}
 	}
 
 	return Styles{
-		Time:     lipgloss.NewStyle().Foreground(lipgloss.Color("241")),
-		Info:     lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true),
-		Warn:     lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true),
-		Error:    lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
-		Event:    lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Bold(true),
-		Muted:    lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
-		RoleBase: lipgloss.NewStyle().Foreground(lipgloss.Color("81")).Bold(true),
-		RoleCand: lipgloss.NewStyle().Foreground(lipgloss.Color("121")).Bold(true),
-		Success:  lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true),
-		Failure:  lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true),
-		Metric:   lipgloss.NewStyle().Foreground(lipgloss.Color("220")),
+		Time:                lipgloss.NewStyle().Foreground(lipgloss.Color("241")),
+		Info:                lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true),
+		Warn:                lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true),
+		Error:               lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true),
+		Event:               lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Bold(true),
+		ComparisonStarted:   lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true),
+		ComparisonCompleted: lipgloss.NewStyle().Foreground(lipgloss.Color("45")).Bold(true),
+		TaskStarted:         lipgloss.NewStyle().Foreground(lipgloss.Color("75")).Bold(true),
+		TaskCompleted:       lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true),
+		RunStarted:          lipgloss.NewStyle().Foreground(lipgloss.Color("219")).Bold(true),
+		RunExecuted:         lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true),
+		RunScored:           lipgloss.NewStyle().Foreground(lipgloss.Color("51")).Bold(true),
+		RunFailed:           lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true),
+		ReportCreated:       lipgloss.NewStyle().Foreground(lipgloss.Color("141")).Bold(true),
+		Muted:               lipgloss.NewStyle().Foreground(lipgloss.Color("245")),
+		RoleBase:            lipgloss.NewStyle().Foreground(lipgloss.Color("81")).Bold(true),
+		RoleCand:            lipgloss.NewStyle().Foreground(lipgloss.Color("121")).Bold(true),
+		Success:             lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true),
+		Failure:             lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true),
+		Metric:              lipgloss.NewStyle().Foreground(lipgloss.Color("220")),
 	}
-}
-</file>
-
-<file path="cmd/searchbench/main.go">
-package main
-
-import (
-	"context"
-	"fmt"
-	"os"
-
-	"github.com/becker63/searchbench-go/internal/cli"
-)
-
-func main() {
-	if err := cli.Run(context.Background(), os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
-</file>
-
-<file path="internal/backend/doc.go">
-// Package backend defines the future runtime/session boundary for Searchbench.
-//
-// It owns abstract backend and session interfaces plus small tool protocol
-// shapes that can later be implemented by integrations such as iterative
-// context or jCodeMunch adapters.
-//
-// It does not implement real backend behavior in this repository pass. The
-// package exists to make the eventual session boundary explicit and context-
-// aware without coupling orchestration to a concrete runtime.
-package backend
-</file>
-
-<file path="internal/codegraph/doc.go">
-// Package codegraph defines the Searchbench code graph model.
-//
-// It owns graph nodes, edges, paths, the mutable Builder interface used during
-// ingestion, and the read-only Graph interface used during scoring.
-//
-// It does not own tree-sitter ingestion logic or scoring policy. Those higher-
-// level concerns should depend on Builder or Graph rather than on the Store
-// implementation or its gograph backing.
-package codegraph
-</file>
-
-<file path="internal/compare/doc.go">
-// Package compare coordinates baseline/candidate comparisons.
-//
-// It owns orchestration only: validating executable plans, running task
-// comparisons, applying task-level parallelism policy, accumulating results,
-// and emitting candidate reports.
-//
-// It does not own concrete backend sessions, graph ingestion, metric
-// algorithms, prompt construction, or telemetry integrations. Those enter
-// through small interfaces such as Executor, GraphProvider, Scorer, and
-// Decider.
-package compare
-</file>
-
-<file path="internal/compare/errors_test.go">
-package compare
-
-import (
-	"errors"
-	"fmt"
-	"testing"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/run"
-)
-
-func TestStageErrorUnwrap(t *testing.T) {
-	t.Parallel()
-
-	cause := errors.New("boom")
-	spec := run.NewSpec(
-		domain.RunID("run-1"),
-		domain.TaskSpec{ID: domain.TaskID("task-1")},
-		domain.SystemSpec{ID: domain.SystemID("system-1")},
-	)
-
-	stageErr := NewStageError(spec, run.FailureExecute, cause)
-	if !errors.Is(stageErr, cause) {
-		t.Fatal("StageError should unwrap to original cause")
-	}
-	if got := stageErr.Unwrap(); got != cause {
-		t.Fatalf("Unwrap() = %v, want %v", got, cause)
-	}
-}
-
-func TestStageErrorAsThroughWrapping(t *testing.T) {
-	t.Parallel()
-
-	spec := run.NewSpec(
-		domain.RunID("run-1"),
-		domain.TaskSpec{ID: domain.TaskID("task-1")},
-		domain.SystemSpec{ID: domain.SystemID("system-1")},
-	)
-	err := fmt.Errorf("outer: %w", NewStageError(spec, run.FailureScore, errors.New("bad score")))
-
-	var stageErr StageError
-	if !errors.As(err, &stageErr) {
-		t.Fatal("errors.As should find wrapped StageError")
-	}
-	if stageErr.Stage != run.FailureScore {
-		t.Fatalf("Stage = %q, want %q", stageErr.Stage, run.FailureScore)
-	}
-}
-
-func TestFailureFromErrorUsesStageErrorFields(t *testing.T) {
-	t.Parallel()
-
-	spec := run.NewSpec(
-		domain.RunID("run-spec"),
-		domain.TaskSpec{ID: domain.TaskID("task-spec")},
-		domain.SystemSpec{ID: domain.SystemID("system-spec")},
-	)
-	stageSpec := run.NewSpec(
-		domain.RunID("run-stage"),
-		domain.TaskSpec{ID: domain.TaskID("task-stage")},
-		domain.SystemSpec{ID: domain.SystemID("system-stage")},
-	)
-	err := fmt.Errorf("wrapped: %w", NewStageError(stageSpec, run.FailureExecute, errors.New("explode")))
-
-	failure := failureFromError(spec, run.FailureScore, err)
-	if failure.RunID != stageSpec.ID {
-		t.Fatalf("RunID = %q, want %q", failure.RunID, stageSpec.ID)
-	}
-	if failure.TaskID != stageSpec.Task.ID {
-		t.Fatalf("TaskID = %q, want %q", failure.TaskID, stageSpec.Task.ID)
-	}
-	if failure.System != stageSpec.System.ID {
-		t.Fatalf("System = %q, want %q", failure.System, stageSpec.System.ID)
-	}
-	if failure.Stage != run.FailureExecute {
-		t.Fatalf("Stage = %q, want %q", failure.Stage, run.FailureExecute)
-	}
-}
-</file>
-
-<file path="internal/compare/parallelism_test.go">
-package compare
-
-import "testing"
-
-func TestParallelismNormalizeAndValidate(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		input   Parallelism
-		want    Parallelism
-		wantErr bool
-	}{
-		{
-			name:  "zero value normalizes to sequential",
-			input: Parallelism{},
-			want: Parallelism{
-				Mode:       ExecutionSequential,
-				MaxWorkers: 1,
-			},
-		},
-		{
-			name: "sequential ignores high max workers",
-			input: Parallelism{
-				Mode:       ExecutionSequential,
-				MaxWorkers: 99,
-				FailFast:   true,
-			},
-			want: Parallelism{
-				Mode:       ExecutionSequential,
-				MaxWorkers: 1,
-				FailFast:   true,
-			},
-		},
-		{
-			name: "parallel with workers validates",
-			input: Parallelism{
-				Mode:       ExecutionParallel,
-				MaxWorkers: 2,
-			},
-			want: Parallelism{
-				Mode:       ExecutionParallel,
-				MaxWorkers: 2,
-			},
-		},
-		{
-			name: "parallel zero workers fails validation",
-			input: Parallelism{
-				Mode: ExecutionParallel,
-			},
-			wantErr: true,
-		},
-		{
-			name: "unknown mode fails validation",
-			input: Parallelism{
-				Mode: ExecutionMode("weird"),
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			normalized := tt.input.Normalize()
-			if tt.wantErr {
-				if err := tt.input.Validate(); err == nil {
-					t.Fatal("expected validation error")
-				}
-				return
-			}
-
-			if err := normalized.Validate(); err != nil {
-				t.Fatalf("Validate() error = %v", err)
-			}
-			if normalized != tt.want {
-				t.Fatalf("Normalize() = %#v, want %#v", normalized, tt.want)
-			}
-		})
-	}
-}
-</file>
-
-<file path="internal/compare/runner_example_test.go">
-package compare
-
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
-	"testing"
-	"time"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/logging"
-	"github.com/becker63/searchbench-go/internal/report"
-)
-
-func TestRunnerExampleComparison(t *testing.T) {
-	t.Parallel()
-
-	policySource := "def score(task):\n    return 'candidate'\n"
-
-	// Define the systems being compared and the benchmark tasks.
-	plan := NewPlan(
-		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem(policySource),
-		),
-		domain.NewNonEmpty(
-			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
-			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
-		),
-	)
-
-	// Inject fake runtime dependencies and run the comparison.
-	got, err := exampleRunner(fixedTestTime()).Run(context.Background(), plan)
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-
-	// Inspect the resulting report at a high level.
-	if got.Decision.Decision != report.DecisionPromote {
-		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromote)
-	}
-	if len(got.Runs.Baseline) != 2 || len(got.Runs.Candidate) != 2 {
-		t.Fatalf("unexpected run counts: baseline=%d candidate=%d", len(got.Runs.Baseline), len(got.Runs.Candidate))
-	}
-	if len(got.Failures.Baseline) != 0 || len(got.Failures.Candidate) != 0 {
-		t.Fatal("expected no failures")
-	}
-	if len(got.Regressions) != 0 {
-		t.Fatal("expected no regressions")
-	}
-	if got.Spec.Systems.Candidate.Policy == nil {
-		t.Fatal("expected report-safe candidate policy ref")
-	}
-
-	assertReportDoesNotLeakPolicySource(t, got, policySource)
-}
-
-func exampleBaselineSystem() domain.SystemSpec {
-	return domain.SystemSpec{
-		ID:      domain.SystemID("baseline-system"),
-		Name:    "Baseline",
-		Backend: domain.BackendJCodeMunch,
-		Model: domain.ModelSpec{
-			Provider: "openai",
-			Name:     "gpt-baseline",
-		},
-		PromptBundle: domain.PromptBundleRef{
-			Name:    "bundle",
-			Version: "v1",
-		},
-		Runtime: domain.RuntimeConfig{
-			MaxSteps: 5,
-		},
-	}
-}
-
-func exampleCandidateSystem(policySource string) domain.SystemSpec {
-	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
-	return domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
-		Backend: domain.BackendIterativeContext,
-		Model: domain.ModelSpec{
-			Provider: "openai",
-			Name:     "gpt-candidate",
-		},
-		PromptBundle: domain.PromptBundleRef{
-			Name:    "bundle",
-			Version: "v2",
-		},
-		Policy: &policy,
-		Runtime: domain.RuntimeConfig{
-			MaxSteps: 7,
-		},
-	}
-}
-
-func exampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
-	return domain.TaskSpec{
-		ID:        id,
-		Benchmark: domain.BenchmarkLCA,
-		Repo: domain.RepoSnapshot{
-			Name: domain.RepoName("repo/example"),
-			SHA:  domain.RepoSHA("abc123"),
-			Path: domain.HostPath("/tmp/repo"),
-		},
-		Input: domain.TaskInput{
-			Title: "Find issue " + id.String(),
-			Body:  "Locate bug for " + id.String(),
-		},
-		Oracle: domain.TaskOracle{
-			GoldFiles: []domain.RepoRelPath{gold},
-		},
-	}
-}
-
-func exampleRunner(now time.Time) Runner {
-	return Runner{
-		Executor:      fakeExecutor{now: now},
-		GraphProvider: fakeGraphProvider{},
-		Scorer:        fakeScorer{},
-		Decider:       fakeDecider{},
-		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
-			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
-		},
-		NewReportID: func() domain.ReportID {
-			return domain.ReportID("report-1")
-		},
-		Now: func() time.Time {
-			return now
-		},
-		Logger: logging.NewNop(),
-	}
-}
-
-func fixedTestTime() time.Time {
-	return time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
-}
-
-func assertReportDoesNotLeakPolicySource(t *testing.T, got report.CandidateReport, policySource string) {
-	t.Helper()
-
-	data, err := json.Marshal(got)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(data), policySource) {
-		t.Fatal("report leaked policy source")
-	}
-	if strings.Contains(string(data), "\"source\"") {
-		t.Fatal("report JSON should not include policy source field")
-	}
-}
-</file>
-
-<file path="internal/compare/runner_test.go">
-package compare
-
-import (
-	"context"
-	"errors"
-	"fmt"
-	"testing"
-	"time"
-
-	"github.com/becker63/searchbench-go/internal/codegraph"
-	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/report"
-	"github.com/becker63/searchbench-go/internal/run"
-	"github.com/becker63/searchbench-go/internal/score"
-)
-
-var _ Executor = fakeExecutor{}
-var _ GraphProvider = fakeGraphProvider{}
-var _ Scorer = fakeScorer{}
-var _ Decider = fakeDecider{}
-
-func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
-	t.Parallel()
-
-	runner := Runner{
-		Executor: failingExecutor{
-			err: errors.New("candidate execute failed"),
-		},
-		GraphProvider: fakeGraphProvider{},
-		Scorer:        fakeScorer{},
-		Decider:       fakeDecider{},
-		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
-			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
-		},
-		NewReportID: func() domain.ReportID { return domain.ReportID("report-2") },
-	}
-
-	got, err := runner.Run(context.Background(), NewPlan(
-		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
-		),
-		domain.NewNonEmpty(exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug.go"))),
-	))
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-	if len(got.Runs.Baseline) != 1 {
-		t.Fatalf("len(got.Runs.Baseline) = %d, want 1", len(got.Runs.Baseline))
-	}
-	if len(got.Runs.Candidate) != 0 {
-		t.Fatalf("len(got.Runs.Candidate) = %d, want 0", len(got.Runs.Candidate))
-	}
-	if len(got.Failures.Candidate) != 1 {
-		t.Fatalf("len(got.Failures.Candidate) = %d, want 1", len(got.Failures.Candidate))
-	}
-	if got.Failures.Candidate[0].Stage != run.FailureExecute {
-		t.Fatalf("candidate failure stage = %q, want %q", got.Failures.Candidate[0].Stage, run.FailureExecute)
-	}
-}
-
-func TestRunnerParallelTasksPreservesPlanOrder(t *testing.T) {
-	t.Parallel()
-
-	runner := exampleRunner(fixedTestTime())
-	runner.Executor = delayedExecutor{
-		now: fixedTestTime(),
-		delays: map[domain.TaskID]time.Duration{
-			domain.TaskID("task-1"): 30 * time.Millisecond,
-			domain.TaskID("task-2"): 10 * time.Millisecond,
-			domain.TaskID("task-3"): 1 * time.Millisecond,
-		},
-	}
-	runner.Parallelism = Parallelism{
-		Mode:       ExecutionParallel,
-		MaxWorkers: 2,
-	}
-
-	plan := NewPlan(
-		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
-		),
-		domain.NewNonEmpty(
-			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
-			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
-			exampleTask(domain.TaskID("task-3"), domain.RepoRelPath("pkg/bug3.go")),
-		),
-	)
-
-	got, err := runner.Run(context.Background(), plan)
-	if err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-
-	wantOrder := []domain.TaskID{
-		domain.TaskID("task-1"),
-		domain.TaskID("task-2"),
-		domain.TaskID("task-3"),
-	}
-	assertRunOrder(t, got.Runs.Baseline, wantOrder)
-	assertRunOrder(t, got.Runs.Candidate, wantOrder)
-}
-
-func TestRunnerParallelTasksRespectsContextCancellation(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	runner := exampleRunner(fixedTestTime())
-	runner.Parallelism = Parallelism{
-		Mode:       ExecutionParallel,
-		MaxWorkers: 2,
-	}
-
-	_, err := runner.Run(ctx, NewPlan(
-		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
-		),
-		domain.NewNonEmpty(
-			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
-			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
-		),
-	))
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run() error = %v, want %v", err, context.Canceled)
-	}
-}
-
-type fakeExecutor struct {
-	now time.Time
-}
-
-func (f fakeExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun, error) {
-	planned := run.NewPlanned(spec)
-	prepared := run.NewPrepared(planned, domain.SessionID("session-"+spec.ID.String()))
-
-	predictionFile := domain.RepoRelPath("pkg/baseline.go")
-	reasoning := "baseline path"
-	if spec.System.Backend == domain.BackendIterativeContext {
-		predictionFile = domain.RepoRelPath("pkg/candidate.go")
-		reasoning = "candidate path"
-	}
-
-	return run.NewExecuted(
-		prepared,
-		domain.Prediction{
-			Files:     []domain.RepoRelPath{predictionFile},
-			Reasoning: reasoning,
-		},
-		domain.UsageSummary{
-			InputTokens:  100,
-			OutputTokens: 20,
-			TotalTokens:  120,
-			CostUSD:      0.05,
-		},
-		domain.TraceID("trace-"+spec.ID.String()),
-		f.now,
-		f.now.Add(2*time.Second),
-	), nil
-}
-
-type delayedExecutor struct {
-	now    time.Time
-	delays map[domain.TaskID]time.Duration
-}
-
-var _ Executor = delayedExecutor{}
-
-func (d delayedExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
-	if delay := d.delays[spec.Task.ID]; delay > 0 {
-		timer := time.NewTimer(delay)
-		defer timer.Stop()
-
-		select {
-		case <-ctx.Done():
-			return run.ExecutedRun{}, ctx.Err()
-		case <-timer.C:
-		}
-	}
-	return fakeExecutor{now: d.now}.Execute(ctx, spec)
-}
-
-type failingExecutor struct {
-	err error
-}
-
-var _ Executor = failingExecutor{}
-
-func (f failingExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
-	if spec.System.Backend == domain.BackendIterativeContext {
-		return run.ExecutedRun{}, f.err
-	}
-	return fakeExecutor{now: time.Now().UTC()}.Execute(ctx, spec)
-}
-
-type fakeGraphProvider struct{}
-
-func (fakeGraphProvider) GraphForTask(_ context.Context, task domain.TaskSpec) (codegraph.Graph, error) {
-	store := codegraph.NewStore()
-	fileID := codegraph.NodeID("file-" + task.ID.String())
-	fnID := codegraph.NodeID("fn-" + task.ID.String())
-
-	if err := store.AddNode(codegraph.NewFileNode(fileID, task.Oracle.GoldFiles[0])); err != nil {
-		return nil, err
-	}
-	if err := store.AddNode(codegraph.NewFunctionNode(fnID, task.Oracle.GoldFiles[0], "score", 1, 10)); err != nil {
-		return nil, err
-	}
-	if err := store.AddEdge(codegraph.Edge{
-		From:   fileID,
-		To:     fnID,
-		Kind:   codegraph.EdgeContains,
-		Weight: 1,
-	}); err != nil {
-		return nil, err
-	}
-	return store.Build()
-}
-
-type fakeScorer struct{}
-
-func (fakeScorer) Score(_ context.Context, input score.Input) (score.ScoreSet, error) {
-	if input.Run.Spec().System.Backend == domain.BackendIterativeContext {
-		return score.NewScoreSet(
-			score.Metric[score.HopDistance]{Name: score.MetricGoldHop, Value: 1},
-			score.Metric[score.HopDistance]{Name: score.MetricIssueHop, Value: 1},
-			score.Metric[score.EfficiencyScore]{Name: score.MetricTokenEfficiency, Value: 0.9},
-			score.Metric[score.CostScore]{Name: score.MetricCost, Value: 0.1},
-			score.Metric[score.CompositeScore]{Name: score.MetricComposite, Value: 0.95},
-		)
-	}
-	return score.NewScoreSet(
-		score.Metric[score.HopDistance]{Name: score.MetricGoldHop, Value: 4},
-		score.Metric[score.HopDistance]{Name: score.MetricIssueHop, Value: 5},
-		score.Metric[score.EfficiencyScore]{Name: score.MetricTokenEfficiency, Value: 0.4},
-		score.Metric[score.CostScore]{Name: score.MetricCost, Value: 0.6},
-		score.Metric[score.CompositeScore]{Name: score.MetricComposite, Value: 0.3},
-	)
-}
-
-type fakeDecider struct{}
-
-func (fakeDecider) Decide(_ []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision {
-	if len(regressions) == 0 {
-		return report.PromotionDecision{
-			Decision: report.DecisionPromote,
-			Reason:   "candidate improved every required metric",
-		}
-	}
-	return report.PromotionDecision{
-		Decision: report.DecisionReview,
-		Reason:   "candidate has regressions",
-	}
-}
-
-func assertRunOrder(t *testing.T, runs []score.ScoredRun, want []domain.TaskID) {
-	t.Helper()
-
-	if len(runs) != len(want) {
-		t.Fatalf("len(runs) = %d, want %d", len(runs), len(want))
-	}
-	for i, taskID := range want {
-		if got := runs[i].Execution.Spec().Task.ID; got != taskID {
-			t.Fatalf("runs[%d].Task.ID = %q, want %q", i, got, taskID)
-		}
-	}
-}
-</file>
-
-<file path="internal/domain/doc.go">
-// Package domain defines the stable Searchbench vocabulary.
-//
-// It owns identifiers, tasks, systems, policy refs, repo snapshots,
-// predictions, usage summaries, artifact references, and other value types that
-// are shared across execution, scoring, and reporting.
-//
-// It does not own run lifecycle, score computation, report generation,
-// orchestration, backend sessions, or graph ingestion. Those higher-level
-// concerns build on the domain model rather than living inside it.
-package domain
-</file>
-
-<file path="internal/domain/pair_test.go">
-package domain
-
-import "testing"
-
-func TestPairAll(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		pair      Pair[string]
-		wantRoles []Role
-		wantVals  []string
-		stopAfter int
-	}{
-		{
-			name:      "yields both roles in order",
-			pair:      NewPair("baseline", "candidate"),
-			wantRoles: []Role{RoleBaseline, RoleCandidate},
-			wantVals:  []string{"baseline", "candidate"},
-			stopAfter: 2,
-		},
-		{
-			name:      "respects early stop",
-			pair:      NewPair("baseline", "candidate"),
-			wantRoles: []Role{RoleBaseline},
-			wantVals:  []string{"baseline"},
-			stopAfter: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotRoles := make([]Role, 0)
-			gotVals := make([]string, 0)
-			count := 0
-			for role, value := range tt.pair.All() {
-				gotRoles = append(gotRoles, role)
-				gotVals = append(gotVals, value)
-				count++
-				if count >= tt.stopAfter {
-					break
-				}
-			}
-
-			if len(gotRoles) != len(tt.wantRoles) {
-				t.Fatalf("len(gotRoles) = %d, want %d", len(gotRoles), len(tt.wantRoles))
-			}
-			for i := range tt.wantRoles {
-				if gotRoles[i] != tt.wantRoles[i] {
-					t.Fatalf("gotRoles[%d] = %q, want %q", i, gotRoles[i], tt.wantRoles[i])
-				}
-				if gotVals[i] != tt.wantVals[i] {
-					t.Fatalf("gotVals[%d] = %q, want %q", i, gotVals[i], tt.wantVals[i])
-				}
-			}
-		})
-	}
-}
-</file>
-
-<file path="internal/domain/prediction.go">
-package domain
-
-// Prediction is the normalized answer produced by a system run.
-//
-// For now Searchbench is file-localization first. Function/symbol prediction
-// can be added later without putting raw model output into this type.
-type Prediction struct {
-	Files     []RepoRelPath `json:"files"`
-	Reasoning string        `json:"reasoning,omitempty"`
-}
-</file>
-
-<file path="internal/domain/repo.go">
-package domain
-
-// RepoName identifies a repository in benchmark/task space.
-//
-// Examples:
-//   - "accenture/ampligraph"
-//   - "django/django"
-//   - "JetBrains-Research/lca-bug-localization:py:dev:..."
-type RepoName string
-
-// RepoSHA identifies the exact commit under evaluation.
-type RepoSHA string
-
-// RepoRelPath is a path relative to the repository root.
-//
-// Use this for files returned by agents, gold labels, graph nodes, etc.
-type RepoRelPath string
-
-// HostPath is a local filesystem path on the machine running Searchbench.
-//
-// Keep this distinct from RepoRelPath so agents/tests do not casually mix
-// benchmark-relative paths with local paths.
-type HostPath string
-
-// RepoSnapshot identifies the exact code universe for a task.
-//
-// The same RepoSnapshot should be shared by baseline and candidate runs.
-type RepoSnapshot struct {
-	Name RepoName `json:"name"`
-	SHA  RepoSHA  `json:"sha"`
-	Path HostPath `json:"path"`
-}
-</file>
-
-<file path="internal/domain/system_test.go">
-package domain
-
-import "testing"
-
-func TestPolicyArtifactValidate(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		policy  PolicyArtifact
-		wantErr bool
-	}{
-		{
-			name:   "valid python policy",
-			policy: NewPythonPolicy(PolicyID("policy-1"), "def run():\n    return 1\n", "run"),
-		},
-		{
-			name: "mismatched hash",
-			policy: PolicyArtifact{
-				ID:         PolicyID("policy-1"),
-				Language:   PolicyLanguagePython,
-				SHA256:     PolicyHash("deadbeef"),
-				Entrypoint: "run",
-				Source:     "def run():\n    return 1\n",
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing entrypoint",
-			policy: PolicyArtifact{
-				ID:       PolicyID("policy-1"),
-				Language: PolicyLanguagePython,
-				SHA256:   NewPythonPolicy(PolicyID("policy-1"), "print('x')", "run").SHA256,
-				Source:   "print('x')",
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tt.policy.Validate()
-			if tt.wantErr && err == nil {
-				t.Fatal("expected error")
-			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestSystemSpecFingerprintDeterminism(t *testing.T) {
-	t.Parallel()
-
-	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
-	base := SystemSpec{
-		ID:      SystemID("system-1"),
-		Name:    "Baseline Name",
-		Backend: BackendIterativeContext,
-		Model: ModelSpec{
-			Provider: "openai",
-			Name:     "gpt-test",
-		},
-		PromptBundle: PromptBundleRef{
-			Name:    "default",
-			Version: "v1",
-		},
-		Policy: &policy,
-		Runtime: RuntimeConfig{
-			MaxSteps:        12,
-			MaxOutputTokens: 500,
-		},
-	}
-
-	same := base
-	if got, want := base.Fingerprint(), same.Fingerprint(); got != want {
-		t.Fatalf("fingerprint mismatch for identical system: got %q want %q", got, want)
-	}
-
-	renamed := base
-	renamed.Name = "Candidate Display Name"
-	if got, want := base.Fingerprint(), renamed.Fingerprint(); got != want {
-		t.Fatalf("fingerprint should ignore cosmetic name: got %q want %q", got, want)
-	}
-
-	changedRuntime := base
-	changedRuntime.Runtime.MaxSteps = 99
-	if base.Fingerprint() == changedRuntime.Fingerprint() {
-		t.Fatal("fingerprint should change when behavior-affecting fields change")
-	}
-
-	changedEntrypoint := base
-	changedPolicy := *base.Policy
-	changedPolicy.Entrypoint = "alternate"
-	changedEntrypoint.Policy = &changedPolicy
-	if base.Fingerprint() == changedEntrypoint.Fingerprint() {
-		t.Fatal("fingerprint should change when policy entrypoint changes")
-	}
-}
-
-func TestSystemSpecRefOmitsPolicySource(t *testing.T) {
-	t.Parallel()
-
-	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
-	spec := SystemSpec{
-		ID:      SystemID("system-1"),
-		Name:    "Candidate",
-		Backend: BackendIterativeContext,
-		Model: ModelSpec{
-			Provider: "openai",
-			Name:     "gpt-test",
-		},
-		PromptBundle: PromptBundleRef{Name: "default"},
-		Policy:       &policy,
-	}
-
-	ref := spec.Ref()
-	if ref.Policy == nil {
-		t.Fatal("expected policy ref")
-	}
-	if ref.Policy.Entrypoint != policy.Entrypoint {
-		t.Fatalf("Policy.Entrypoint = %q, want %q", ref.Policy.Entrypoint, policy.Entrypoint)
-	}
-	if ref.Fingerprint != spec.Fingerprint() {
-		t.Fatalf("Fingerprint = %q, want %q", ref.Fingerprint, spec.Fingerprint())
-	}
-}
-</file>
-
-<file path="internal/domain/usage.go">
-package domain
-
-// TokenCount is a normalized token count.
-//
-// Keep it separate from int so token/cost code is explicit.
-type TokenCount int64
-
-// UsageSummary is normalized run-level usage.
-//
-// Provider-specific usage details can exist elsewhere. This type is the stable
-// Searchbench shape used by scoring and reports.
-type UsageSummary struct {
-	InputTokens  TokenCount `json:"input_tokens"`
-	OutputTokens TokenCount `json:"output_tokens"`
-	TotalTokens  TokenCount `json:"total_tokens"`
-	CostUSD      float64    `json:"cost_usd,omitempty"`
-}
-
-// Empty reports whether no usage was recorded.
-func (u UsageSummary) Empty() bool {
-	return u.InputTokens == 0 &&
-		u.OutputTokens == 0 &&
-		u.TotalTokens == 0 &&
-		u.CostUSD == 0
 }
 </file>
 
@@ -3650,6 +3527,25 @@ echo "  go test ./..."
 echo "  go run ./cmd/searchbench"
 </file>
 
+<file path="cmd/searchbench/main.go">
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/becker63/searchbench-go/internal/cli"
+)
+
+func main() {
+	if err := cli.Run(context.Background(), os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+</file>
+
 <file path="internal/backend/errors.go">
 package backend
 
@@ -3993,405 +3889,160 @@ func (r Results) Summary() Summary {
 }
 </file>
 
-<file path="internal/compare/runner.go">
+<file path="internal/compare/runner_example_test.go">
 package compare
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
+	"strings"
+	"testing"
 	"time"
 
-	"github.com/becker63/searchbench-go/internal/codegraph"
 	"github.com/becker63/searchbench-go/internal/domain"
 	"github.com/becker63/searchbench-go/internal/logging"
 	"github.com/becker63/searchbench-go/internal/report"
-	"github.com/becker63/searchbench-go/internal/run"
-	"github.com/becker63/searchbench-go/internal/score"
 )
 
-// Executor is the orchestration seam for turning one planned run spec into a
-// successful executed run without binding compare to a concrete runtime.
-//
-// Implementations used with parallel execution must be safe for concurrent
-// calls. Parallel-safe executors should create isolated per-run state. They
-// must not share mutable backend/session state across concurrent Execute calls
-// unless they provide their own synchronization.
-type Executor interface {
-	Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
-}
+func TestRunnerExampleComparison(t *testing.T) {
+	t.Parallel()
 
-// GraphProvider is the orchestration seam for loading a scoring graph for one
-// task without binding compare to a concrete graph source.
-//
-// Implementations used with parallel execution must be safe for concurrent
-// calls, or the runner must be configured with sequential execution.
-type GraphProvider interface {
-	GraphForTask(ctx context.Context, task domain.TaskSpec) (codegraph.Graph, error)
-}
+	policySource := "def score(task):\n    return 'candidate'\n"
 
-// Scorer is the orchestration seam for turning one executed run plus graph
-// input into a complete required ScoreSet.
-//
-// Implementations used with parallel execution must be safe for concurrent
-// calls. Parallel-safe scorers should not mutate shared scoring state without
-// synchronization.
-type Scorer interface {
-	Score(ctx context.Context, input score.Input) (score.ScoreSet, error)
-}
-
-// Decider is the orchestration seam for reducing comparisons and regressions
-// into a final promotion decision.
-type Decider interface {
-	Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision
-}
-
-// RunIDFunc derives a run identifier for one role/task/system combination.
-type RunIDFunc func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID
-
-// ReportIDFunc derives a report identifier for one completed comparison.
-type ReportIDFunc func() domain.ReportID
-
-// ClockFunc provides the current time for emitted report timestamps.
-type ClockFunc func() time.Time
-
-// Runner coordinates a full baseline/candidate comparison.
-//
-// Its flow is:
-//
-//	Plan -> RunTasks -> CompareTask -> ExecuteAndScore -> Results -> CandidateReport
-//
-// Runner owns orchestration policy only. Concrete execution, graph loading,
-// scoring, and final release decisions enter through injected interfaces.
-type Runner struct {
-	Executor      Executor
-	GraphProvider GraphProvider
-	Scorer        Scorer
-	Decider       Decider
-	NewRunID      RunIDFunc
-	NewReportID   ReportIDFunc
-	Now           ClockFunc
-	Parallelism   Parallelism
-	Logger        logging.Logger
-}
-
-// TaskComparisonResult is the per-task outcome produced by CompareTask.
-//
-// Most execution and scoring failures remain here as run.RunFailure values
-// rather than escaping as top-level errors from Runner.
-type TaskComparisonResult struct {
-	Runs        domain.Pair[*score.ScoredRun]
-	Failures    domain.Pair[*run.RunFailure]
-	Regressions []report.Regression
-}
-
-// Run executes a complete baseline/candidate comparison and returns the
-// candidate report.
-//
-// It validates the executable plan, runs task comparisons according to the
-// configured Parallelism policy, accumulates successful runs and failures,
-// summarizes metric comparisons, asks the Decider for a promotion decision,
-// and emits a report-safe CandidateReport.
-func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, error) {
-	if err := plan.Validate(); err != nil {
-		return report.CandidateReport{}, err
-	}
-	if err := r.Validate(); err != nil {
-		return report.CandidateReport{}, err
-	}
-
-	parallelism := r.normalizedParallelism()
-	logger := r.logger()
-	logger.ComparisonStarted(
-		"",
-		plan.Systems.Baseline.Ref(),
-		plan.Systems.Candidate.Ref(),
-		plan.Tasks.Len(),
-		string(parallelism.Mode),
-		parallelism.MaxWorkers,
+	// Define the systems being compared and the benchmark tasks.
+	plan := NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem(policySource),
+		),
+		domain.NewNonEmpty(
+			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+		),
 	)
 
-	taskResults, err := r.RunTasks(ctx, plan)
+	// Inject fake runtime dependencies and run the comparison.
+	got, err := exampleRunner(fixedTestTime()).Run(context.Background(), plan)
 	if err != nil {
-		return report.CandidateReport{}, err
+		t.Fatalf("Run() error = %v", err)
 	}
 
-	results := NewResults(plan.Tasks.Len())
-	for _, taskResult := range taskResults {
-		results.AddTaskResult(taskResult.Result)
+	// Inspect the resulting report at a high level.
+	if got.Decision.Decision != report.DecisionPromote {
+		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromote)
+	}
+	if len(got.Runs.Baseline) != 2 || len(got.Runs.Candidate) != 2 {
+		t.Fatalf("unexpected run counts: baseline=%d candidate=%d", len(got.Runs.Baseline), len(got.Runs.Candidate))
+	}
+	if len(got.Failures.Baseline) != 0 || len(got.Failures.Candidate) != 0 {
+		t.Fatal("expected no failures")
+	}
+	if len(got.Regressions) != 0 {
+		t.Fatal("expected no regressions")
+	}
+	if got.Spec.Systems.Candidate.Policy == nil {
+		t.Fatal("expected report-safe candidate policy ref")
 	}
 
-	summary := results.Summary()
-	decision := r.Decider.Decide(summary.Comparisons, summary.Regressions)
-	out := report.NewCandidateReport(
-		r.NewReportID(),
-		plan.ReportSpec(),
-		summary.Runs,
-		summary.Failures,
-		summary.Comparisons,
-		summary.Regressions,
-		decision,
-	)
-	if r.Now != nil {
-		out.CreatedAt = r.Now().UTC()
-	}
-	logger.ReportCreated(out)
-	logger.ComparisonCompleted(out)
-	return out, nil
+	assertReportDoesNotLeakPolicySource(t, got, policySource)
 }
 
-// Validate checks that Runner has the injected dependencies needed to
-// orchestrate a comparison.
-func (r Runner) Validate() error {
-	if r.Executor == nil {
-		return errors.New("compare: executor is required")
+func exampleBaselineSystem() domain.SystemSpec {
+	return domain.SystemSpec{
+		ID:      domain.SystemID("baseline-system"),
+		Name:    "Baseline",
+		Backend: domain.BackendJCodeMunch,
+		Model: domain.ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-baseline",
+		},
+		PromptBundle: domain.PromptBundleRef{
+			Name:    "bundle",
+			Version: "v1",
+		},
+		Runtime: domain.RuntimeConfig{
+			MaxSteps: 5,
+		},
 	}
-	if r.GraphProvider == nil {
-		return errors.New("compare: graph provider is required")
-	}
-	if r.Scorer == nil {
-		return errors.New("compare: scorer is required")
-	}
-	if r.Decider == nil {
-		return errors.New("compare: decider is required")
-	}
-	if r.NewRunID == nil {
-		return errors.New("compare: run id function is required")
-	}
-	if r.NewReportID == nil {
-		return errors.New("compare: report id function is required")
-	}
-	if err := r.normalizedParallelism().Validate(); err != nil {
-		return err
-	}
-	return nil
 }
 
-func (r Runner) normalizedParallelism() Parallelism {
-	return r.Parallelism.Normalize()
+func exampleCandidateSystem(policySource string) domain.SystemSpec {
+	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
+	return domain.SystemSpec{
+		ID:      domain.SystemID("candidate-system"),
+		Name:    "Candidate",
+		Backend: domain.BackendIterativeContext,
+		Model: domain.ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-candidate",
+		},
+		PromptBundle: domain.PromptBundleRef{
+			Name:    "bundle",
+			Version: "v2",
+		},
+		Policy: &policy,
+		Runtime: domain.RuntimeConfig{
+			MaxSteps: 7,
+		},
+	}
 }
 
-func (r Runner) logger() logging.Logger {
-	return r.Logger
+func exampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
+	return domain.TaskSpec{
+		ID:        id,
+		Benchmark: domain.BenchmarkLCA,
+		Repo: domain.RepoSnapshot{
+			Name: domain.RepoName("repo/example"),
+			SHA:  domain.RepoSHA("abc123"),
+			Path: domain.HostPath("/tmp/repo"),
+		},
+		Input: domain.TaskInput{
+			Title: "Find issue " + id.String(),
+			Body:  "Locate bug for " + id.String(),
+		},
+		Oracle: domain.TaskOracle{
+			GoldFiles: []domain.RepoRelPath{gold},
+		},
+	}
 }
 
-// RunTasks executes task comparisons according to the configured task-level
-// parallelism policy.
-//
-// Parallelism is over tasks only. Baseline and candidate work for one task are
-// still coordinated inside CompareTask. Results are always returned in original
-// plan order, and the shared Results accumulator is intentionally not mutated
-// from worker goroutines.
-//
-// Context cancellation aborts orchestration with a top-level error. Ordinary
-// task-level execution and scoring failures stay inside TaskComparisonResult as
-// run.RunFailure values.
-func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, error) {
-	tasks := plan.Tasks.All()
-	parallelism := r.normalizedParallelism()
-
-	if parallelism.Mode == ExecutionSequential {
-		results := make([]TaskWorkResult, 0, len(tasks))
-		for index, task := range tasks {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-
-			result := r.CompareTask(ctx, plan.Systems, task)
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-
-			results = append(results, TaskWorkResult{
-				Index:  index,
-				TaskID: task.ID,
-				Result: result,
-			})
-		}
-		return results, nil
+func exampleRunner(now time.Time) Runner {
+	return Runner{
+		Executor:      fakeExecutor{now: now},
+		GraphProvider: fakeGraphProvider{},
+		Scorer:        fakeScorer{},
+		Decider:       fakeDecider{},
+		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
+		},
+		NewReportID: func() domain.ReportID {
+			return domain.ReportID("report-1")
+		},
+		Now: func() time.Time {
+			return now
+		},
+		Logger: logging.NewNop(),
 	}
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	type taskJob struct {
-		index int
-		task  domain.TaskSpec
-	}
-
-	type workerResult struct {
-		work TaskWorkResult
-		err  error
-	}
-
-	workerCount := parallelism.MaxWorkers
-	if workerCount > len(tasks) {
-		workerCount = len(tasks)
-	}
-	if workerCount == 0 {
-		return nil, nil
-	}
-
-	jobs := make(chan taskJob)
-	resultsCh := make(chan workerResult, len(tasks))
-
-	for range workerCount {
-		go func() {
-			for job := range jobs {
-				if err := ctx.Err(); err != nil {
-					resultsCh <- workerResult{err: err}
-					return
-				}
-
-				result := r.CompareTask(ctx, plan.Systems, job.task)
-				if err := ctx.Err(); err != nil {
-					resultsCh <- workerResult{err: err}
-					return
-				}
-
-				resultsCh <- workerResult{
-					work: TaskWorkResult{
-						Index:  job.index,
-						TaskID: job.task.ID,
-						Result: result,
-					},
-				}
-			}
-		}()
-	}
-
-	go func() {
-		defer close(jobs)
-		for index, task := range tasks {
-			select {
-			case <-ctx.Done():
-				return
-			case jobs <- taskJob{index: index, task: task}:
-			}
-		}
-	}()
-
-	ordered := make([]TaskWorkResult, len(tasks))
-	received := 0
-	for received < len(tasks) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case result := <-resultsCh:
-			if result.err != nil {
-				if parallelism.FailFast {
-					cancel()
-				}
-				return nil, result.err
-			}
-			ordered[result.work.Index] = result.work
-			received++
-		}
-	}
-
-	return ordered, nil
 }
 
-// CompareTask runs both systems against one task and interprets any resulting
-// score regressions at the report level.
-func (r Runner) CompareTask(
-	ctx context.Context,
-	systems domain.Pair[domain.SystemSpec],
-	task domain.TaskSpec,
-) TaskComparisonResult {
-	type outcome struct {
-		run     *score.ScoredRun
-		failure *run.RunFailure
-	}
+func fixedTestTime() time.Time {
+	return time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+}
 
-	graph, err := r.GraphProvider.GraphForTask(ctx, task)
-	logger := r.logger()
-	logger.TaskStarted(task)
+func assertReportDoesNotLeakPolicySource(t *testing.T, got report.CandidateReport, policySource string) {
+	t.Helper()
+
+	data, err := json.Marshal(got)
 	if err != nil {
-		result := TaskComparisonResult{
-			Failures: domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) *run.RunFailure {
-				spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
-				stageErr := NewStageError(spec, run.FailureScore, fmt.Errorf("graph: %w", err))
-				failure := failureFromError(spec, run.FailureScore, stageErr)
-				logger.RunFailed(role, failure)
-				return &failure
-			}),
-		}
-		logger.TaskCompleted(task, false, false, 0)
-		return result
+		t.Fatal(err)
 	}
-
-	outcomes := domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) outcome {
-		scoredRun, failure := r.ExecuteAndScore(ctx, role, task, system, graph)
-		return outcome{
-			run:     scoredRun,
-			failure: failure,
-		}
-	})
-
-	out := TaskComparisonResult{
-		Runs: domain.NewPair(
-			outcomes.Baseline.run,
-			outcomes.Candidate.run,
-		),
-		Failures: domain.NewPair(
-			outcomes.Baseline.failure,
-			outcomes.Candidate.failure,
-		),
+	if strings.Contains(string(data), policySource) {
+		t.Fatal("report leaked policy source")
 	}
-	if out.Runs.Baseline != nil && out.Runs.Candidate != nil {
-		out.Regressions = report.RegressionsForTask(task.ID, score.CompareSets(out.Runs.Baseline.Scores, out.Runs.Candidate.Scores))
+	if strings.Contains(string(data), "\"source\"") {
+		t.Fatal("report JSON should not include policy source field")
 	}
-	logger.TaskCompleted(task, out.Runs.Baseline != nil, out.Runs.Candidate != nil, len(out.Regressions))
-	return out
-}
-
-// ExecuteAndScore runs one system on one task and attempts to compute a
-// complete ScoredRun.
-//
-// Execute and score failures are classified internally with StageError and then
-// converted into report-facing run.RunFailure values.
-func (r Runner) ExecuteAndScore(
-	ctx context.Context,
-	role domain.Role,
-	task domain.TaskSpec,
-	system domain.SystemSpec,
-	graph codegraph.Graph,
-) (*score.ScoredRun, *run.RunFailure) {
-	spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
-	logger := r.logger()
-	logger.RunStarted(role, spec)
-
-	executed, err := r.Executor.Execute(ctx, spec)
-	if err != nil {
-		stageErr := NewStageError(spec, run.FailureExecute, err)
-		failure := failureFromError(spec, run.FailureExecute, stageErr)
-		logger.RunFailed(role, failure)
-		return nil, &failure
-	}
-	logger.RunExecuted(role, executed)
-
-	scoreSet, err := r.Scorer.Score(ctx, score.Input{
-		Run:   executed,
-		Graph: graph,
-	})
-	if err != nil {
-		stageErr := NewStageError(spec, run.FailureScore, err)
-		failure := failureFromError(spec, run.FailureScore, stageErr)
-		logger.RunFailed(role, failure)
-		return nil, &failure
-	}
-
-	scoredRun, err := score.NewScoredRun(executed, scoreSet)
-	if err != nil {
-		stageErr := NewStageError(spec, run.FailureScore, err)
-		failure := failureFromError(spec, run.FailureScore, stageErr)
-		logger.RunFailed(role, failure)
-		return nil, &failure
-	}
-	logger.RunScored(role, executed, scoreSet)
-
-	return &scoredRun, nil
 }
 </file>
 
@@ -5084,35 +4735,6 @@ type Input struct {
 }
 </file>
 
-<file path="go.mod">
-module github.com/becker63/searchbench-go
-
-go 1.26.2
-
-require (
-	github.com/alecthomas/kong v1.15.0
-	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/hmdsefi/gograph v0.7.0
-	go.uber.org/zap v1.27.1
-)
-
-require (
-	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
-	github.com/charmbracelet/x/ansi v0.8.0 // indirect
-	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
-	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-)
-</file>
-
 <file path="internal/backend/backend.go">
 package backend
 
@@ -5642,6 +5264,408 @@ func (s *Store) pathEdges(nodes []NodeID) []Edge {
 	}
 
 	return out
+}
+</file>
+
+<file path="internal/compare/runner.go">
+package compare
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/codegraph"
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/logging"
+	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/run"
+	"github.com/becker63/searchbench-go/internal/score"
+)
+
+// Executor is the orchestration seam for turning one planned run spec into a
+// successful executed run without binding compare to a concrete runtime.
+//
+// Implementations used with parallel execution must be safe for concurrent
+// calls. Parallel-safe executors should create isolated per-run state. They
+// must not share mutable backend/session state across concurrent Execute calls
+// unless they provide their own synchronization.
+type Executor interface {
+	Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
+}
+
+// GraphProvider is the orchestration seam for loading a scoring graph for one
+// task without binding compare to a concrete graph source.
+//
+// Implementations used with parallel execution must be safe for concurrent
+// calls, or the runner must be configured with sequential execution.
+type GraphProvider interface {
+	GraphForTask(ctx context.Context, task domain.TaskSpec) (codegraph.Graph, error)
+}
+
+// Scorer is the orchestration seam for turning one executed run plus graph
+// input into a complete required ScoreSet.
+//
+// Implementations used with parallel execution must be safe for concurrent
+// calls. Parallel-safe scorers should not mutate shared scoring state without
+// synchronization.
+type Scorer interface {
+	Score(ctx context.Context, input score.Input) (score.ScoreSet, error)
+}
+
+// Decider is the orchestration seam for reducing comparisons and regressions
+// into a final promotion decision.
+type Decider interface {
+	Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision
+}
+
+// RunIDFunc derives a run identifier for one role/task/system combination.
+type RunIDFunc func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID
+
+// ReportIDFunc derives a report identifier for one completed comparison.
+type ReportIDFunc func() domain.ReportID
+
+// ClockFunc provides the current time for emitted report timestamps.
+type ClockFunc func() time.Time
+
+// Runner coordinates a full baseline/candidate comparison.
+//
+// Its flow is:
+//
+//	Plan -> RunTasks -> CompareTask -> ExecuteAndScore -> Results -> CandidateReport
+//
+// Runner owns orchestration policy only. Concrete execution, graph loading,
+// scoring, and final release decisions enter through injected interfaces.
+type Runner struct {
+	Executor      Executor
+	GraphProvider GraphProvider
+	Scorer        Scorer
+	Decider       Decider
+	NewRunID      RunIDFunc
+	NewReportID   ReportIDFunc
+	Now           ClockFunc
+	Parallelism   Parallelism
+	Logger        logging.Logger
+}
+
+// TaskComparisonResult is the per-task outcome produced by CompareTask.
+//
+// Most execution and scoring failures remain here as run.RunFailure values
+// rather than escaping as top-level errors from Runner.
+type TaskComparisonResult struct {
+	Runs        domain.Pair[*score.ScoredRun]
+	Failures    domain.Pair[*run.RunFailure]
+	Regressions []report.Regression
+}
+
+// Run executes a complete baseline/candidate comparison and returns the
+// candidate report.
+//
+// It validates the executable plan, runs task comparisons according to the
+// configured Parallelism policy, accumulates successful runs and failures,
+// summarizes metric comparisons, asks the Decider for a promotion decision,
+// and emits a report-safe CandidateReport.
+func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, error) {
+	if err := plan.Validate(); err != nil {
+		return report.CandidateReport{}, err
+	}
+	if err := r.Validate(); err != nil {
+		return report.CandidateReport{}, err
+	}
+
+	parallelism := r.normalizedParallelism()
+	logger := r.logger()
+	logger.ComparisonStarted(
+		"",
+		plan.Systems.Baseline.Ref(),
+		plan.Systems.Candidate.Ref(),
+		plan.Tasks.Len(),
+		string(parallelism.Mode),
+		parallelism.MaxWorkers,
+	)
+
+	taskResults, err := r.RunTasks(ctx, plan)
+	if err != nil {
+		return report.CandidateReport{}, err
+	}
+
+	results := NewResults(plan.Tasks.Len())
+	for _, taskResult := range taskResults {
+		results.AddTaskResult(taskResult.Result)
+	}
+
+	summary := results.Summary()
+	decision := r.Decider.Decide(summary.Comparisons, summary.Regressions)
+	out := report.NewCandidateReport(
+		r.NewReportID(),
+		plan.ReportSpec(),
+		summary.Runs,
+		summary.Failures,
+		summary.Comparisons,
+		summary.Regressions,
+		decision,
+	)
+	if r.Now != nil {
+		out.CreatedAt = r.Now().UTC()
+	}
+	logger.ReportCreated(out)
+	logger.ComparisonCompleted(out)
+	return out, nil
+}
+
+// Validate checks that Runner has the injected dependencies needed to
+// orchestrate a comparison.
+func (r Runner) Validate() error {
+	if r.Executor == nil {
+		return errors.New("compare: executor is required")
+	}
+	if r.GraphProvider == nil {
+		return errors.New("compare: graph provider is required")
+	}
+	if r.Scorer == nil {
+		return errors.New("compare: scorer is required")
+	}
+	if r.Decider == nil {
+		return errors.New("compare: decider is required")
+	}
+	if r.NewRunID == nil {
+		return errors.New("compare: run id function is required")
+	}
+	if r.NewReportID == nil {
+		return errors.New("compare: report id function is required")
+	}
+	if err := r.normalizedParallelism().Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r Runner) normalizedParallelism() Parallelism {
+	return r.Parallelism.Normalize()
+}
+
+func (r Runner) logger() logging.Logger {
+	return r.Logger
+}
+
+// RunTasks executes task comparisons according to the configured task-level
+// parallelism policy.
+//
+// Parallelism is over tasks only. Baseline and candidate work for one task are
+// still coordinated inside CompareTask. Results are always returned in original
+// plan order, and the shared Results accumulator is intentionally not mutated
+// from worker goroutines.
+//
+// Context cancellation aborts orchestration with a top-level error. Ordinary
+// task-level execution and scoring failures stay inside TaskComparisonResult as
+// run.RunFailure values.
+func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, error) {
+	tasks := plan.Tasks.All()
+	parallelism := r.normalizedParallelism()
+
+	if parallelism.Mode == ExecutionSequential {
+		results := make([]TaskWorkResult, 0, len(tasks))
+		for index, task := range tasks {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
+			result := r.CompareTask(ctx, plan.Systems, task)
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
+			results = append(results, TaskWorkResult{
+				Index:  index,
+				TaskID: task.ID,
+				Result: result,
+			})
+		}
+		return results, nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	type taskJob struct {
+		index int
+		task  domain.TaskSpec
+	}
+
+	type workerResult struct {
+		work TaskWorkResult
+		err  error
+	}
+
+	workerCount := parallelism.MaxWorkers
+	if workerCount > len(tasks) {
+		workerCount = len(tasks)
+	}
+	if workerCount == 0 {
+		return nil, nil
+	}
+
+	jobs := make(chan taskJob)
+	resultsCh := make(chan workerResult, len(tasks))
+
+	for range workerCount {
+		go func() {
+			for job := range jobs {
+				if err := ctx.Err(); err != nil {
+					resultsCh <- workerResult{err: err}
+					return
+				}
+
+				result := r.CompareTask(ctx, plan.Systems, job.task)
+				if err := ctx.Err(); err != nil {
+					resultsCh <- workerResult{err: err}
+					return
+				}
+
+				resultsCh <- workerResult{
+					work: TaskWorkResult{
+						Index:  job.index,
+						TaskID: job.task.ID,
+						Result: result,
+					},
+				}
+			}
+		}()
+	}
+
+	go func() {
+		defer close(jobs)
+		for index, task := range tasks {
+			select {
+			case <-ctx.Done():
+				return
+			case jobs <- taskJob{index: index, task: task}:
+			}
+		}
+	}()
+
+	ordered := make([]TaskWorkResult, len(tasks))
+	received := 0
+	for received < len(tasks) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-resultsCh:
+			if result.err != nil {
+				if parallelism.FailFast {
+					cancel()
+				}
+				return nil, result.err
+			}
+			ordered[result.work.Index] = result.work
+			received++
+		}
+	}
+
+	return ordered, nil
+}
+
+// CompareTask runs both systems against one task and interprets any resulting
+// score regressions at the report level.
+func (r Runner) CompareTask(
+	ctx context.Context,
+	systems domain.Pair[domain.SystemSpec],
+	task domain.TaskSpec,
+) TaskComparisonResult {
+	type outcome struct {
+		run     *score.ScoredRun
+		failure *run.RunFailure
+	}
+
+	graph, err := r.GraphProvider.GraphForTask(ctx, task)
+	logger := r.logger()
+	logger.TaskStarted(task)
+	if err != nil {
+		result := TaskComparisonResult{
+			Failures: domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) *run.RunFailure {
+				spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
+				stageErr := NewStageError(spec, run.FailureScore, fmt.Errorf("graph: %w", err))
+				failure := failureFromError(spec, run.FailureScore, stageErr)
+				logger.RunFailed(role, failure)
+				return &failure
+			}),
+		}
+		logger.TaskCompleted(task, false, false, 0)
+		return result
+	}
+
+	outcomes := domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) outcome {
+		scoredRun, failure := r.ExecuteAndScore(ctx, role, task, system, graph)
+		return outcome{
+			run:     scoredRun,
+			failure: failure,
+		}
+	})
+
+	out := TaskComparisonResult{
+		Runs: domain.NewPair(
+			outcomes.Baseline.run,
+			outcomes.Candidate.run,
+		),
+		Failures: domain.NewPair(
+			outcomes.Baseline.failure,
+			outcomes.Candidate.failure,
+		),
+	}
+	if out.Runs.Baseline != nil && out.Runs.Candidate != nil {
+		out.Regressions = report.RegressionsForTask(task.ID, score.CompareSets(out.Runs.Baseline.Scores, out.Runs.Candidate.Scores))
+	}
+	logger.TaskCompleted(task, out.Runs.Baseline != nil, out.Runs.Candidate != nil, len(out.Regressions))
+	return out
+}
+
+// ExecuteAndScore runs one system on one task and attempts to compute a
+// complete ScoredRun.
+//
+// Execute and score failures are classified internally with StageError and then
+// converted into report-facing run.RunFailure values.
+func (r Runner) ExecuteAndScore(
+	ctx context.Context,
+	role domain.Role,
+	task domain.TaskSpec,
+	system domain.SystemSpec,
+	graph codegraph.Graph,
+) (*score.ScoredRun, *run.RunFailure) {
+	spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
+	logger := r.logger()
+	logger.RunStarted(role, spec)
+
+	executed, err := r.Executor.Execute(ctx, spec)
+	if err != nil {
+		stageErr := NewStageError(spec, run.FailureExecute, err)
+		failure := failureFromError(spec, run.FailureExecute, stageErr)
+		logger.RunFailed(role, failure)
+		return nil, &failure
+	}
+	logger.RunExecuted(role, executed)
+
+	scoreSet, err := r.Scorer.Score(ctx, score.Input{
+		Run:   executed,
+		Graph: graph,
+	})
+	if err != nil {
+		stageErr := NewStageError(spec, run.FailureScore, err)
+		failure := failureFromError(spec, run.FailureScore, stageErr)
+		logger.RunFailed(role, failure)
+		return nil, &failure
+	}
+
+	scoredRun, err := score.NewScoredRun(executed, scoreSet)
+	if err != nil {
+		stageErr := NewStageError(spec, run.FailureScore, err)
+		failure := failureFromError(spec, run.FailureScore, stageErr)
+		logger.RunFailed(role, failure)
+		return nil, &failure
+	}
+	logger.RunScored(role, executed, scoreSet)
+
+	return &scoredRun, nil
 }
 </file>
 
@@ -6525,6 +6549,35 @@ import "context"
 type Engine interface {
 	Score(ctx context.Context, input Input) (ScoreSet, error)
 }
+</file>
+
+<file path="go.mod">
+module github.com/becker63/searchbench-go
+
+go 1.26.2
+
+require (
+	github.com/alecthomas/kong v1.15.0
+	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/hmdsefi/gograph v0.7.0
+	go.uber.org/zap v1.27.1
+)
+
+require (
+	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
+	github.com/charmbracelet/x/ansi v0.8.0 // indirect
+	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
+	github.com/charmbracelet/x/term v0.2.1 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
+	github.com/muesli/termenv v0.16.0 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
+	go.uber.org/multierr v1.10.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+)
 </file>
 
 <file path="internal/report/comparison.go">
