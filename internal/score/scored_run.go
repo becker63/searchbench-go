@@ -11,9 +11,12 @@ type ScoredRun struct {
 }
 
 // NewScoredRun constructs a scored run from an executed run and complete scores.
-func NewScoredRun(execution run.ExecutedRun, scores ScoreSet) ScoredRun {
+func NewScoredRun(execution run.ExecutedRun, scores ScoreSet) (ScoredRun, error) {
+	if err := scores.Validate(); err != nil {
+		return ScoredRun{}, err
+	}
 	return ScoredRun{
 		Execution: execution,
 		Scores:    scores,
-	}
+	}, nil
 }

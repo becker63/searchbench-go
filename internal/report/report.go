@@ -4,18 +4,9 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/run"
 	"github.com/becker63/searchbench-go/internal/score"
 )
-
-// ComparisonSpec declares the systems and tasks being compared.
-//
-// This is the planned report boundary:
-//
-//	baseline system + candidate system + fixed task slice
-type ComparisonSpec struct {
-	Systems domain.Pair[domain.SystemSpec] `json:"systems"`
-	Tasks   []domain.TaskSpec              `json:"tasks"`
-}
 
 // CandidateReport is the central Searchbench product object.
 //
@@ -27,7 +18,8 @@ type CandidateReport struct {
 
 	Spec ComparisonSpec `json:"spec"`
 
-	Runs domain.Pair[[]score.ScoredRun] `json:"runs"`
+	Runs     domain.Pair[[]score.ScoredRun] `json:"runs"`
+	Failures domain.Pair[[]run.RunFailure]  `json:"failures,omitempty"`
 
 	Comparisons []ScoreComparison `json:"comparisons"`
 	Regressions []Regression      `json:"regressions"`
@@ -41,6 +33,7 @@ func NewCandidateReport(
 	id domain.ReportID,
 	spec ComparisonSpec,
 	runs domain.Pair[[]score.ScoredRun],
+	failures domain.Pair[[]run.RunFailure],
 	comparisons []ScoreComparison,
 	regressions []Regression,
 	decision PromotionDecision,
@@ -50,6 +43,7 @@ func NewCandidateReport(
 		CreatedAt:   time.Now().UTC(),
 		Spec:        spec,
 		Runs:        runs,
+		Failures:    failures,
 		Comparisons: comparisons,
 		Regressions: regressions,
 		Decision:    decision,

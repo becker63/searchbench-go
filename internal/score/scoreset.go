@@ -1,5 +1,7 @@
 package score
 
+import "fmt"
+
 // ScoreSet is the complete required metric set for one executed run.
 //
 // If a ScoreSet exists, every required metric exists. If any metric cannot be
@@ -10,6 +12,45 @@ type ScoreSet struct {
 	TokenEfficiency Metric[EfficiencyScore] `json:"token_efficiency"`
 	Cost            Metric[CostScore]       `json:"cost"`
 	Composite       Metric[CompositeScore]  `json:"composite"`
+}
+
+func NewScoreSet(
+	goldHop Metric[HopDistance],
+	issueHop Metric[HopDistance],
+	tokenEfficiency Metric[EfficiencyScore],
+	cost Metric[CostScore],
+	composite Metric[CompositeScore],
+) (ScoreSet, error) {
+	s := ScoreSet{
+		GoldHop:         goldHop,
+		IssueHop:        issueHop,
+		TokenEfficiency: tokenEfficiency,
+		Cost:            cost,
+		Composite:       composite,
+	}
+	if err := s.Validate(); err != nil {
+		return ScoreSet{}, err
+	}
+	return s, nil
+}
+
+func (s ScoreSet) Validate() error {
+	if s.GoldHop.Name != MetricGoldHop {
+		return fmt.Errorf("gold hop metric must be named %q", MetricGoldHop)
+	}
+	if s.IssueHop.Name != MetricIssueHop {
+		return fmt.Errorf("issue hop metric must be named %q", MetricIssueHop)
+	}
+	if s.TokenEfficiency.Name != MetricTokenEfficiency {
+		return fmt.Errorf("token efficiency metric must be named %q", MetricTokenEfficiency)
+	}
+	if s.Cost.Name != MetricCost {
+		return fmt.Errorf("cost metric must be named %q", MetricCost)
+	}
+	if s.Composite.Name != MetricComposite {
+		return fmt.Errorf("composite metric must be named %q", MetricComposite)
+	}
+	return nil
 }
 
 // Metrics returns the score set as a flat list for reporting/iteration.

@@ -1,5 +1,13 @@
 package domain
 
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
 // BackendKind identifies the execution backend used by a system.
 //
 // A backend is not the whole system. It is only the runtime/tool adapter.
@@ -37,6 +45,13 @@ const (
 // PolicyHash is the stable content hash for a policy source.
 type PolicyHash string
 
+type PolicyRef struct {
+	ID         PolicyID       `json:"id"`
+	Language   PolicyLanguage `json:"language"`
+	SHA256     PolicyHash     `json:"sha256"`
+	Entrypoint string         `json:"entrypoint"`
+}
+
 // PolicyArtifact is a replaceable policy used by a system.
 //
 // In the Go harness, policy source is data. For iterative-context, this can be
@@ -48,6 +63,50 @@ type PolicyArtifact struct {
 	SHA256     PolicyHash     `json:"sha256"`
 	Entrypoint string         `json:"entrypoint"`
 	Source     string         `json:"source,omitempty"`
+}
+
+func NewPythonPolicy(id PolicyID, source string, entrypoint string) PolicyArtifact {
+	return PolicyArtifact{
+		ID:         id,
+		Language:   PolicyLanguagePython,
+		SHA256:     hashPolicySource(source),
+		Entrypoint: entrypoint,
+		Source:     source,
+	}
+}
+
+func (p PolicyArtifact) Validate() error {
+	if p.ID.Empty() {
+		return errors.New("policy id is required")
+	}
+	switch p.Language {
+	case PolicyLanguagePython:
+	default:
+		return fmt.Errorf("unsupported policy language: %q", p.Language)
+	}
+	if p.Entrypoint == "" {
+		return errors.New("policy entrypoint is required")
+	}
+	if p.Source == "" {
+		return errors.New("policy source is required")
+	}
+	if p.SHA256 == "" {
+		return errors.New("policy sha256 is required")
+	}
+	expected := hashPolicySource(p.Source)
+	if p.SHA256 != expected {
+		return fmt.Errorf("policy sha256 does not match source: got %q want %q", p.SHA256, expected)
+	}
+	return nil
+}
+
+func (p PolicyArtifact) Ref() PolicyRef {
+	return PolicyRef{
+		ID:         p.ID,
+		Language:   p.Language,
+		SHA256:     p.SHA256,
+		Entrypoint: p.Entrypoint,
+	}
 }
 
 // RuntimeConfig captures behavior-affecting runtime limits.
@@ -75,4 +134,96 @@ type SystemSpec struct {
 	PromptBundle PromptBundleRef `json:"prompt_bundle"`
 	Policy       *PolicyArtifact `json:"policy,omitempty"`
 	Runtime      RuntimeConfig   `json:"runtime,omitempty"`
+}
+
+type SystemFingerprint string
+
+type SystemRef struct {
+	ID           SystemID          `json:"id"`
+	Name         string            `json:"name"`
+	Backend      BackendKind       `json:"backend"`
+	Model        ModelSpec         `json:"model"`
+	PromptBundle PromptBundleRef   `json:"prompt_bundle"`
+	Policy       *PolicyRef        `json:"policy,omitempty"`
+	Runtime      RuntimeConfig     `json:"runtime,omitempty"`
+	Fingerprint  SystemFingerprint `json:"fingerprint"`
+}
+
+func (s SystemSpec) Validate() error {
+	if s.ID.Empty() {
+		return errors.New("system id is required")
+	}
+	switch s.Backend {
+	case BackendIterativeContext, BackendJCodeMunch, BackendFake:
+	default:
+		return fmt.Errorf("unsupported backend: %q", s.Backend)
+	}
+	if s.Model.Provider == "" {
+		return errors.New("model provider is required")
+	}
+	if s.Model.Name == "" {
+		return errors.New("model name is required")
+	}
+	if s.PromptBundle.Name == "" {
+		return errors.New("prompt bundle name is required")
+	}
+	if s.Policy != nil {
+		if err := s.Policy.Validate(); err != nil {
+			return fmt.Errorf("policy: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s SystemSpec) Fingerprint() SystemFingerprint {
+	var policy *PolicyRef
+	if s.Policy != nil {
+		ref := s.Policy.Ref()
+		policy = &ref
+	}
+
+	canonical := struct {
+		Backend      BackendKind     `json:"backend"`
+		Model        ModelSpec       `json:"model"`
+		PromptBundle PromptBundleRef `json:"prompt_bundle"`
+		Policy       *PolicyRef      `json:"policy,omitempty"`
+		Runtime      RuntimeConfig   `json:"runtime,omitempty"`
+	}{
+		Backend:      s.Backend,
+		Model:        s.Model,
+		PromptBundle: s.PromptBundle,
+		Policy:       policy,
+		Runtime:      s.Runtime,
+	}
+
+	data, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return SystemFingerprint(hex.EncodeToString(sum[:]))
+}
+
+func (s SystemSpec) Ref() SystemRef {
+	var policy *PolicyRef
+	if s.Policy != nil {
+		ref := s.Policy.Ref()
+		policy = &ref
+	}
+
+	return SystemRef{
+		ID:           s.ID,
+		Name:         s.Name,
+		Backend:      s.Backend,
+		Model:        s.Model,
+		PromptBundle: s.PromptBundle,
+		Policy:       policy,
+		Runtime:      s.Runtime,
+		Fingerprint:  s.Fingerprint(),
+	}
+}
+
+func hashPolicySource(source string) PolicyHash {
+	sum := sha256.Sum256([]byte(source))
+	return PolicyHash(hex.EncodeToString(sum[:]))
 }
