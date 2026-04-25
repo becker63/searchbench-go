@@ -25,3 +25,36 @@ type Regression struct {
 	Severity RegressionSeverity `json:"severity"`
 	Reason   string             `json:"reason"`
 }
+
+func NewRegressionFromMetricComparison(
+	taskID domain.TaskID,
+	comparison score.MetricComparison,
+	severity RegressionSeverity,
+	reason string,
+) Regression {
+	return Regression{
+		TaskID:    taskID,
+		Metric:    comparison.Metric,
+		Baseline:  comparison.Baseline,
+		Candidate: comparison.Candidate,
+		Delta:     comparison.Delta,
+		Severity:  severity,
+		Reason:    reason,
+	}
+}
+
+func RegressionsForTask(taskID domain.TaskID, comparisons []score.MetricComparison) []Regression {
+	out := make([]Regression, 0)
+	for _, comparison := range comparisons {
+		if !comparison.Regressed {
+			continue
+		}
+		out = append(out, NewRegressionFromMetricComparison(
+			taskID,
+			comparison,
+			RegressionMinor,
+			"candidate score is worse than baseline",
+		))
+	}
+	return out
+}

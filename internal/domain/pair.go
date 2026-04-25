@@ -1,5 +1,7 @@
 package domain
 
+import "iter"
+
 // Role names the two sides of a Searchbench comparison.
 type Role string
 
@@ -21,6 +23,22 @@ func NewPair[T any](baseline T, candidate T) Pair[T] {
 	return Pair[T]{
 		Baseline:  baseline,
 		Candidate: candidate,
+	}
+}
+
+func MapPair[A, B any](p Pair[A], f func(Role, A) B) Pair[B] {
+	return Pair[B]{
+		Baseline:  f(RoleBaseline, p.Baseline),
+		Candidate: f(RoleCandidate, p.Candidate),
+	}
+}
+
+func (p Pair[T]) All() iter.Seq2[Role, T] {
+	return func(yield func(Role, T) bool) {
+		if !yield(RoleBaseline, p.Baseline) {
+			return
+		}
+		yield(RoleCandidate, p.Candidate)
 	}
 }
 

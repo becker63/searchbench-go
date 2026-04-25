@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"errors"
+	"iter"
 )
 
 var errEmptyNonEmpty = errors.New("non-empty slice is required")
@@ -51,6 +52,22 @@ func (n NonEmpty[T]) All() []T {
 	items[0] = n.head
 	copy(items[1:], n.tail)
 	return items
+}
+
+func (n NonEmpty[T]) Values() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		if !n.valid {
+			return
+		}
+		if !yield(n.head) {
+			return
+		}
+		for _, item := range n.tail {
+			if !yield(item) {
+				return
+			}
+		}
+	}
 }
 
 func (n NonEmpty[T]) Len() int {

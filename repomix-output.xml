@@ -47,6 +47,7 @@ cmd/
 internal/
   backend/
     backend.go
+    errors.go
     session.go
   codegraph/
     builder.go
@@ -55,11 +56,20 @@ internal/
     node.go
     path.go
     store.go
+  compare/
+    errors_test.go
+    errors.go
+    plan.go
+    results.go
+    runner_example_test.go
+    runner_test.go
+    runner.go
   domain/
     artifact.go
     ids.go
     nonempty_test.go
     nonempty.go
+    pair_test.go
     pair.go
     prediction.go
     repo.go
@@ -81,6 +91,8 @@ internal/
     record.go
     spec.go
   score/
+    comparison_test.go
+    comparison.go
     direction_test.go
     direction.go
     input.go
@@ -109,724 +121,1073 @@ init.sh
 <files>
 This section contains the contents of the repository's files.
 
-<file path="internal/domain/nonempty_test.go">
-package domain
+<file path="internal/backend/errors.go">
+package backend
 
 import (
-	"encoding/json"
-	"testing"
-)
-
-func TestNonEmptyFromSlice(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		items   []int
-		wantErr bool
-	}{
-		{
-			name:    "empty",
-			items:   nil,
-			wantErr: true,
-		},
-		{
-			name:  "single item",
-			items: []int{7},
-		},
-		{
-			name:  "multiple items",
-			items: []int{1, 2, 3},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := NonEmptyFromSlice(tt.items)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			all := got.All()
-			if len(all) != len(tt.items) {
-				t.Fatalf("len(all) = %d, want %d", len(all), len(tt.items))
-			}
-			for i := range all {
-				if all[i] != tt.items[i] {
-					t.Fatalf("all[%d] = %d, want %d", i, all[i], tt.items[i])
-				}
-			}
-
-			if len(tt.items) > 1 {
-				tail := got.Tail()
-				tail[0] = 999
-				if got.Tail()[0] == 999 {
-					t.Fatal("Tail exposed internal slice")
-				}
-			}
-		})
-	}
-}
-
-func TestNonEmptyZeroValue(t *testing.T) {
-	t.Parallel()
-
-	var n NonEmpty[int]
-
-	if n.Valid() {
-		t.Fatal("zero-value NonEmpty should be invalid")
-	}
-	if got := n.Len(); got != 0 {
-		t.Fatalf("Len() = %d, want 0", got)
-	}
-	if got := n.All(); got != nil {
-		t.Fatalf("All() = %#v, want nil", got)
-	}
-	if got := n.Tail(); got != nil {
-		t.Fatalf("Tail() = %#v, want nil", got)
-	}
-	if err := n.Validate(); err == nil {
-		t.Fatal("expected validation error")
-	}
-	if _, err := json.Marshal(n); err == nil {
-		t.Fatal("expected marshal error")
-	}
-}
-</file>
-
-<file path="internal/domain/nonempty.go">
-package domain
-
-import (
-	"encoding/json"
-	"errors"
-)
-
-var errEmptyNonEmpty = errors.New("non-empty slice is required")
-
-// NonEmpty represents a slice with at least one element.
-//
-// The zero value can still exist because of Go, so callers should prefer the
-// constructors for meaningful values.
-type NonEmpty[T any] struct {
-	head  T
-	tail  []T
-	valid bool
-}
-
-func NewNonEmpty[T any](head T, tail ...T) NonEmpty[T] {
-	return NonEmpty[T]{
-		head:  head,
-		tail:  append([]T(nil), tail...),
-		valid: true,
-	}
-}
-
-func NonEmptyFromSlice[T any](items []T) (NonEmpty[T], error) {
-	if len(items) == 0 {
-		return NonEmpty[T]{}, errEmptyNonEmpty
-	}
-	return NewNonEmpty(items[0], items[1:]...), nil
-}
-
-func (n NonEmpty[T]) Head() T {
-	return n.head
-}
-
-func (n NonEmpty[T]) Tail() []T {
-	if !n.valid {
-		return nil
-	}
-	return append([]T(nil), n.tail...)
-}
-
-func (n NonEmpty[T]) All() []T {
-	if !n.valid {
-		return nil
-	}
-	items := make([]T, 1+len(n.tail))
-	items[0] = n.head
-	copy(items[1:], n.tail)
-	return items
-}
-
-func (n NonEmpty[T]) Len() int {
-	if !n.valid {
-		return 0
-	}
-	return 1 + len(n.tail)
-}
-
-func (n NonEmpty[T]) Valid() bool {
-	return n.valid
-}
-
-func (n NonEmpty[T]) Validate() error {
-	if !n.valid {
-		return errEmptyNonEmpty
-	}
-	return nil
-}
-
-func (n NonEmpty[T]) MarshalJSON() ([]byte, error) {
-	if err := n.Validate(); err != nil {
-		return nil, err
-	}
-	return json.Marshal(n.All())
-}
-
-func (n *NonEmpty[T]) UnmarshalJSON(data []byte) error {
-	var items []T
-	if err := json.Unmarshal(data, &items); err != nil {
-		return err
-	}
-	value, err := NonEmptyFromSlice(items)
-	if err != nil {
-		return err
-	}
-	*n = value
-	return nil
-}
-</file>
-
-<file path="internal/domain/system_test.go">
-package domain
-
-import "testing"
-
-func TestPolicyArtifactValidate(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		policy  PolicyArtifact
-		wantErr bool
-	}{
-		{
-			name:   "valid python policy",
-			policy: NewPythonPolicy(PolicyID("policy-1"), "def run():\n    return 1\n", "run"),
-		},
-		{
-			name: "mismatched hash",
-			policy: PolicyArtifact{
-				ID:         PolicyID("policy-1"),
-				Language:   PolicyLanguagePython,
-				SHA256:     PolicyHash("deadbeef"),
-				Entrypoint: "run",
-				Source:     "def run():\n    return 1\n",
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing entrypoint",
-			policy: PolicyArtifact{
-				ID:       PolicyID("policy-1"),
-				Language: PolicyLanguagePython,
-				SHA256:   NewPythonPolicy(PolicyID("policy-1"), "print('x')", "run").SHA256,
-				Source:   "print('x')",
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tt.policy.Validate()
-			if tt.wantErr && err == nil {
-				t.Fatal("expected error")
-			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
-func TestSystemSpecFingerprintDeterminism(t *testing.T) {
-	t.Parallel()
-
-	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
-	base := SystemSpec{
-		ID:      SystemID("system-1"),
-		Name:    "Baseline Name",
-		Backend: BackendIterativeContext,
-		Model: ModelSpec{
-			Provider: "openai",
-			Name:     "gpt-test",
-		},
-		PromptBundle: PromptBundleRef{
-			Name:    "default",
-			Version: "v1",
-		},
-		Policy: &policy,
-		Runtime: RuntimeConfig{
-			MaxSteps:        12,
-			MaxOutputTokens: 500,
-		},
-	}
-
-	same := base
-	if got, want := base.Fingerprint(), same.Fingerprint(); got != want {
-		t.Fatalf("fingerprint mismatch for identical system: got %q want %q", got, want)
-	}
-
-	renamed := base
-	renamed.Name = "Candidate Display Name"
-	if got, want := base.Fingerprint(), renamed.Fingerprint(); got != want {
-		t.Fatalf("fingerprint should ignore cosmetic name: got %q want %q", got, want)
-	}
-
-	changedRuntime := base
-	changedRuntime.Runtime.MaxSteps = 99
-	if base.Fingerprint() == changedRuntime.Fingerprint() {
-		t.Fatal("fingerprint should change when behavior-affecting fields change")
-	}
-
-	changedEntrypoint := base
-	changedPolicy := *base.Policy
-	changedPolicy.Entrypoint = "alternate"
-	changedEntrypoint.Policy = &changedPolicy
-	if base.Fingerprint() == changedEntrypoint.Fingerprint() {
-		t.Fatal("fingerprint should change when policy entrypoint changes")
-	}
-}
-
-func TestSystemSpecRefOmitsPolicySource(t *testing.T) {
-	t.Parallel()
-
-	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
-	spec := SystemSpec{
-		ID:      SystemID("system-1"),
-		Name:    "Candidate",
-		Backend: BackendIterativeContext,
-		Model: ModelSpec{
-			Provider: "openai",
-			Name:     "gpt-test",
-		},
-		PromptBundle: PromptBundleRef{Name: "default"},
-		Policy:       &policy,
-	}
-
-	ref := spec.Ref()
-	if ref.Policy == nil {
-		t.Fatal("expected policy ref")
-	}
-	if ref.Policy.Entrypoint != policy.Entrypoint {
-		t.Fatalf("Policy.Entrypoint = %q, want %q", ref.Policy.Entrypoint, policy.Entrypoint)
-	}
-	if ref.Fingerprint != spec.Fingerprint() {
-		t.Fatalf("Fingerprint = %q, want %q", ref.Fingerprint, spec.Fingerprint())
-	}
-}
-</file>
-
-<file path="internal/report/spec.go">
-package report
-
-import "github.com/becker63/searchbench-go/internal/domain"
-
-// ComparisonSpec declares the systems and tasks being compared.
-//
-// This is the planned report boundary:
-//
-//	baseline system + candidate system + fixed task slice
-type ComparisonSpec struct {
-	Systems domain.Pair[domain.SystemRef]    `json:"systems"`
-	Tasks   domain.NonEmpty[domain.TaskSpec] `json:"tasks"`
-}
-
-func NewComparisonSpec(
-	systems domain.Pair[domain.SystemSpec],
-	tasks domain.NonEmpty[domain.TaskSpec],
-) ComparisonSpec {
-	return NewComparisonSpecFromRefs(domain.NewPair(systems.Baseline.Ref(), systems.Candidate.Ref()), tasks)
-}
-
-func NewComparisonSpecFromRefs(
-	systems domain.Pair[domain.SystemRef],
-	tasks domain.NonEmpty[domain.TaskSpec],
-) ComparisonSpec {
-	return ComparisonSpec{
-		Systems: systems,
-		Tasks:   tasks,
-	}
-}
-</file>
-
-<file path="internal/report/task_run_set_test.go">
-package report
-
-import (
-	"testing"
+	"fmt"
 
 	"github.com/becker63/searchbench-go/internal/domain"
 )
 
-func TestNewTaskRunSetValidation(t *testing.T) {
+type Operation string
+
+const (
+	OperationStartSession Operation = "start_session"
+	OperationListTools    Operation = "list_tools"
+	OperationCallTool     Operation = "call_tool"
+	OperationCloseSession Operation = "close_session"
+)
+
+type Error struct {
+	Backend domain.BackendKind
+	Op      Operation
+	Err     error
+}
+
+func (e Error) Error() string {
+	return fmt.Sprintf("backend=%s op=%s: %v", e.Backend, e.Op, e.Err)
+}
+
+func (e Error) Unwrap() error {
+	return e.Err
+}
+</file>
+
+<file path="internal/compare/errors_test.go">
+package compare
+
+import (
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/run"
+)
+
+func TestStageErrorUnwrap(t *testing.T) {
 	t.Parallel()
 
-	task1 := domain.TaskID("task-1")
-	task2 := domain.TaskID("task-2")
+	cause := errors.New("boom")
+	spec := run.NewSpec(
+		domain.RunID("run-1"),
+		domain.TaskSpec{ID: domain.TaskID("task-1")},
+		domain.SystemSpec{ID: domain.SystemID("system-1")},
+	)
 
-	tests := []struct {
-		name    string
-		items   map[domain.TaskID]string
-		order   []domain.TaskID
-		wantErr bool
-	}{
-		{
-			name:    "empty order",
-			items:   map[domain.TaskID]string{task1: "a"},
-			wantErr: true,
-		},
-		{
-			name:    "missing task",
-			items:   map[domain.TaskID]string{task1: "a"},
-			order:   []domain.TaskID{task1, task2},
-			wantErr: true,
-		},
-		{
-			name: "duplicate task id",
-			items: map[domain.TaskID]string{
-				task1: "a",
-				task2: "b",
-			},
-			order:   []domain.TaskID{task1, task1},
-			wantErr: true,
-		},
-		{
-			name: "valid",
-			items: map[domain.TaskID]string{
-				task1: "a",
-				task2: "b",
-			},
-			order: []domain.TaskID{task2, task1},
-		},
+	stageErr := NewStageError(spec, run.FailureExecute, cause)
+	if !errors.Is(stageErr, cause) {
+		t.Fatal("StageError should unwrap to original cause")
 	}
+	if got := stageErr.Unwrap(); got != cause {
+		t.Fatalf("Unwrap() = %v, want %v", got, cause)
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+func TestStageErrorAsThroughWrapping(t *testing.T) {
+	t.Parallel()
 
-			set, err := NewTaskRunSet(tt.items, tt.order)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got, want := set.Len(), len(tt.order); got != want {
-				t.Fatalf("Len() = %d, want %d", got, want)
-			}
-			if got := set.Values(); len(got) != len(tt.order) {
-				t.Fatalf("len(Values()) = %d, want %d", len(got), len(tt.order))
-			}
-		})
+	spec := run.NewSpec(
+		domain.RunID("run-1"),
+		domain.TaskSpec{ID: domain.TaskID("task-1")},
+		domain.SystemSpec{ID: domain.SystemID("system-1")},
+	)
+	err := fmt.Errorf("outer: %w", NewStageError(spec, run.FailureScore, errors.New("bad score")))
+
+	var stageErr StageError
+	if !errors.As(err, &stageErr) {
+		t.Fatal("errors.As should find wrapped StageError")
+	}
+	if stageErr.Stage != run.FailureScore {
+		t.Fatalf("Stage = %q, want %q", stageErr.Stage, run.FailureScore)
+	}
+}
+
+func TestFailureFromErrorUsesStageErrorFields(t *testing.T) {
+	t.Parallel()
+
+	spec := run.NewSpec(
+		domain.RunID("run-spec"),
+		domain.TaskSpec{ID: domain.TaskID("task-spec")},
+		domain.SystemSpec{ID: domain.SystemID("system-spec")},
+	)
+	stageSpec := run.NewSpec(
+		domain.RunID("run-stage"),
+		domain.TaskSpec{ID: domain.TaskID("task-stage")},
+		domain.SystemSpec{ID: domain.SystemID("system-stage")},
+	)
+	err := fmt.Errorf("wrapped: %w", NewStageError(stageSpec, run.FailureExecute, errors.New("explode")))
+
+	failure := failureFromError(spec, run.FailureScore, err)
+	if failure.RunID != stageSpec.ID {
+		t.Fatalf("RunID = %q, want %q", failure.RunID, stageSpec.ID)
+	}
+	if failure.TaskID != stageSpec.Task.ID {
+		t.Fatalf("TaskID = %q, want %q", failure.TaskID, stageSpec.Task.ID)
+	}
+	if failure.System != stageSpec.System.ID {
+		t.Fatalf("System = %q, want %q", failure.System, stageSpec.System.ID)
+	}
+	if failure.Stage != run.FailureExecute {
+		t.Fatalf("Stage = %q, want %q", failure.Stage, run.FailureExecute)
 	}
 }
 </file>
 
-<file path="internal/report/task_run_set.go">
-package report
+<file path="internal/compare/errors.go">
+package compare
 
 import (
 	"errors"
 	"fmt"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/run"
 )
 
-type TaskRunSet[T any] struct {
-	order  []domain.TaskID
-	byTask map[domain.TaskID]T
+type StageError struct {
+	Stage    run.FailureStage
+	RunID    domain.RunID
+	TaskID   domain.TaskID
+	SystemID domain.SystemID
+	Err      error
 }
 
-func NewTaskRunSet[T any](items map[domain.TaskID]T, order []domain.TaskID) (TaskRunSet[T], error) {
-	if len(order) == 0 {
-		return TaskRunSet[T]{}, errors.New("task order must be non-empty")
+func NewStageError(spec run.Spec, stage run.FailureStage, err error) StageError {
+	if err == nil {
+		err = errors.New("unknown error")
 	}
-
-	ordered := append([]domain.TaskID(nil), order...)
-	byTask := make(map[domain.TaskID]T, len(items))
-	for id, item := range items {
-		byTask[id] = item
+	return StageError{
+		Stage:    stage,
+		RunID:    spec.ID,
+		TaskID:   spec.Task.ID,
+		SystemID: spec.System.ID,
+		Err:      err,
 	}
+}
 
-	seen := make(map[domain.TaskID]struct{}, len(ordered))
-	for _, id := range ordered {
-		if _, ok := seen[id]; ok {
-			return TaskRunSet[T]{}, fmt.Errorf("duplicate task id in order: %s", id)
+func (e StageError) Error() string {
+	return fmt.Sprintf(
+		"stage=%s run_id=%s task_id=%s system_id=%s: %v",
+		e.Stage,
+		e.RunID,
+		e.TaskID,
+		e.SystemID,
+		e.Err,
+	)
+}
+
+func (e StageError) Unwrap() error {
+	return e.Err
+}
+
+func failureFromError(spec run.Spec, stage run.FailureStage, err error) run.RunFailure {
+	var stageErr StageError
+	if errors.As(err, &stageErr) {
+		return run.RunFailure{
+			RunID:   stageErr.RunID,
+			TaskID:  stageErr.TaskID,
+			System:  stageErr.SystemID,
+			Stage:   stageErr.Stage,
+			Message: err.Error(),
 		}
-		seen[id] = struct{}{}
-		if _, ok := byTask[id]; !ok {
-			return TaskRunSet[T]{}, fmt.Errorf("missing item for task id: %s", id)
-		}
 	}
 
-	return TaskRunSet[T]{
-		order:  ordered,
-		byTask: byTask,
-	}, nil
-}
-
-func (s TaskRunSet[T]) Get(id domain.TaskID) (T, bool) {
-	value, ok := s.byTask[id]
-	return value, ok
-}
-
-func (s TaskRunSet[T]) Order() []domain.TaskID {
-	return append([]domain.TaskID(nil), s.order...)
-}
-
-func (s TaskRunSet[T]) Values() []T {
-	values := make([]T, 0, len(s.order))
-	for _, id := range s.order {
-		values = append(values, s.byTask[id])
+	if err == nil {
+		err = errors.New("unknown error")
 	}
-	return values
-}
-
-func (s TaskRunSet[T]) Len() int {
-	return len(s.order)
+	return run.NewFailure(spec, stage, err.Error())
 }
 </file>
 
-<file path="internal/run/failure.go">
-package run
+<file path="internal/compare/plan.go">
+package compare
 
-import "github.com/becker63/searchbench-go/internal/domain"
+import (
+	"fmt"
 
-type FailureStage string
-
-const (
-	FailurePrepare FailureStage = "prepare"
-	FailureExecute FailureStage = "execute"
-	FailureScore   FailureStage = "score"
-	FailureReport  FailureStage = "report"
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/report"
 )
 
-// RunFailure records a failed path for one task/system run.
-type RunFailure struct {
-	RunID   domain.RunID    `json:"run_id"`
-	TaskID  domain.TaskID   `json:"task_id"`
-	System  domain.SystemID `json:"system"`
-	Stage   FailureStage    `json:"stage"`
-	Message string          `json:"message"`
+type Plan struct {
+	Systems domain.Pair[domain.SystemSpec]
+	Tasks   domain.NonEmpty[domain.TaskSpec]
 }
 
-func NewFailure(spec Spec, stage FailureStage, message string) RunFailure {
-	return RunFailure{
-		RunID:   spec.ID,
-		TaskID:  spec.Task.ID,
-		System:  spec.System.ID,
-		Stage:   stage,
-		Message: message,
+func NewPlan(
+	systems domain.Pair[domain.SystemSpec],
+	tasks domain.NonEmpty[domain.TaskSpec],
+) Plan {
+	return Plan{
+		Systems: systems,
+		Tasks:   tasks,
+	}
+}
+
+func (p Plan) Validate() error {
+	if err := p.Tasks.Validate(); err != nil {
+		return err
+	}
+	if err := p.Systems.Baseline.Validate(); err != nil {
+		return fmt.Errorf("baseline system: %w", err)
+	}
+	if err := p.Systems.Candidate.Validate(); err != nil {
+		return fmt.Errorf("candidate system: %w", err)
+	}
+	return nil
+}
+
+func (p Plan) ReportSpec() report.ComparisonSpec {
+	return report.NewComparisonSpec(p.Systems, p.Tasks)
+}
+</file>
+
+<file path="internal/compare/results.go">
+package compare
+
+import (
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/run"
+	"github.com/becker63/searchbench-go/internal/score"
+)
+
+type Results struct {
+	runs        domain.Pair[[]score.ScoredRun]
+	failures    domain.Pair[[]run.RunFailure]
+	regressions []report.Regression
+}
+
+type Summary struct {
+	Runs        domain.Pair[[]score.ScoredRun]
+	Failures    domain.Pair[[]run.RunFailure]
+	Comparisons []report.ScoreComparison
+	Regressions []report.Regression
+}
+
+func NewResults(capacity int) Results {
+	return Results{
+		runs: domain.NewPair(
+			make([]score.ScoredRun, 0, capacity),
+			make([]score.ScoredRun, 0, capacity),
+		),
+		failures: domain.NewPair(
+			make([]run.RunFailure, 0),
+			make([]run.RunFailure, 0),
+		),
+		regressions: make([]report.Regression, 0),
+	}
+}
+
+func (r *Results) AddTaskResult(result TaskComparisonResult) {
+	if result.Runs.Baseline != nil {
+		r.runs.Baseline = append(r.runs.Baseline, *result.Runs.Baseline)
+	}
+	if result.Runs.Candidate != nil {
+		r.runs.Candidate = append(r.runs.Candidate, *result.Runs.Candidate)
+	}
+	if result.Failures.Baseline != nil {
+		r.failures.Baseline = append(r.failures.Baseline, *result.Failures.Baseline)
+	}
+	if result.Failures.Candidate != nil {
+		r.failures.Candidate = append(r.failures.Candidate, *result.Failures.Candidate)
+	}
+	r.regressions = append(r.regressions, result.Regressions...)
+}
+
+func (r Results) Summary() Summary {
+	metricComparisons := score.CompareAverages(r.runs.Baseline, r.runs.Candidate)
+	comparisons := make([]report.ScoreComparison, 0, len(metricComparisons))
+	for _, comparison := range metricComparisons {
+		comparisons = append(comparisons, report.NewScoreComparisonFromMetric(comparison))
+	}
+
+	return Summary{
+		Runs:        r.runs,
+		Failures:    r.failures,
+		Comparisons: comparisons,
+		Regressions: append([]report.Regression(nil), r.regressions...),
 	}
 }
 </file>
 
-<file path="internal/score/direction_test.go">
-package score
+<file path="internal/compare/runner_example_test.go">
+package compare
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/report"
+)
+
+func TestRunnerExampleComparison(t *testing.T) {
+	t.Parallel()
+
+	policySource := "def score(task):\n    return 'candidate'\n"
+
+	// Define the systems being compared and the benchmark tasks.
+	plan := NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem(policySource),
+		),
+		domain.NewNonEmpty(
+			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+		),
+	)
+
+	// Inject fake runtime dependencies and run the comparison.
+	got, err := exampleRunner(fixedTestTime()).Run(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	// Inspect the resulting report at a high level.
+	if got.Decision.Decision != report.DecisionPromote {
+		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromote)
+	}
+	if len(got.Runs.Baseline) != 2 || len(got.Runs.Candidate) != 2 {
+		t.Fatalf("unexpected run counts: baseline=%d candidate=%d", len(got.Runs.Baseline), len(got.Runs.Candidate))
+	}
+	if len(got.Failures.Baseline) != 0 || len(got.Failures.Candidate) != 0 {
+		t.Fatal("expected no failures")
+	}
+	if len(got.Regressions) != 0 {
+		t.Fatal("expected no regressions")
+	}
+	if got.Spec.Systems.Candidate.Policy == nil {
+		t.Fatal("expected report-safe candidate policy ref")
+	}
+
+	assertReportDoesNotLeakPolicySource(t, got, policySource)
+}
+
+func exampleBaselineSystem() domain.SystemSpec {
+	return domain.SystemSpec{
+		ID:      domain.SystemID("baseline-system"),
+		Name:    "Baseline",
+		Backend: domain.BackendJCodeMunch,
+		Model: domain.ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-baseline",
+		},
+		PromptBundle: domain.PromptBundleRef{
+			Name:    "bundle",
+			Version: "v1",
+		},
+		Runtime: domain.RuntimeConfig{
+			MaxSteps: 5,
+		},
+	}
+}
+
+func exampleCandidateSystem(policySource string) domain.SystemSpec {
+	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
+	return domain.SystemSpec{
+		ID:      domain.SystemID("candidate-system"),
+		Name:    "Candidate",
+		Backend: domain.BackendIterativeContext,
+		Model: domain.ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-candidate",
+		},
+		PromptBundle: domain.PromptBundleRef{
+			Name:    "bundle",
+			Version: "v2",
+		},
+		Policy: &policy,
+		Runtime: domain.RuntimeConfig{
+			MaxSteps: 7,
+		},
+	}
+}
+
+func exampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
+	return domain.TaskSpec{
+		ID:        id,
+		Benchmark: domain.BenchmarkLCA,
+		Repo: domain.RepoSnapshot{
+			Name: domain.RepoName("repo/example"),
+			SHA:  domain.RepoSHA("abc123"),
+			Path: domain.HostPath("/tmp/repo"),
+		},
+		Input: domain.TaskInput{
+			Title: "Find issue " + id.String(),
+			Body:  "Locate bug for " + id.String(),
+		},
+		Oracle: domain.TaskOracle{
+			GoldFiles: []domain.RepoRelPath{gold},
+		},
+	}
+}
+
+func exampleRunner(now time.Time) Runner {
+	return Runner{
+		Executor:      fakeExecutor{now: now},
+		GraphProvider: fakeGraphProvider{},
+		Scorer:        fakeScorer{},
+		Decider:       fakeDecider{},
+		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
+		},
+		NewReportID: func() domain.ReportID {
+			return domain.ReportID("report-1")
+		},
+		Now: func() time.Time {
+			return now
+		},
+	}
+}
+
+func fixedTestTime() time.Time {
+	return time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+}
+
+func assertReportDoesNotLeakPolicySource(t *testing.T, got report.CandidateReport, policySource string) {
+	t.Helper()
+
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), policySource) {
+		t.Fatal("report leaked policy source")
+	}
+	if strings.Contains(string(data), "\"source\"") {
+		t.Fatal("report JSON should not include policy source field")
+	}
+}
+</file>
+
+<file path="internal/compare/runner_test.go">
+package compare
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/codegraph"
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/run"
+	"github.com/becker63/searchbench-go/internal/score"
+)
+
+var _ Executor = fakeExecutor{}
+var _ GraphProvider = fakeGraphProvider{}
+var _ Scorer = fakeScorer{}
+var _ Decider = fakeDecider{}
+
+func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
+	t.Parallel()
+
+	runner := Runner{
+		Executor: failingExecutor{
+			err: errors.New("candidate execute failed"),
+		},
+		GraphProvider: fakeGraphProvider{},
+		Scorer:        fakeScorer{},
+		Decider:       fakeDecider{},
+		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
+		},
+		NewReportID: func() domain.ReportID { return domain.ReportID("report-2") },
+	}
+
+	got, err := runner.Run(context.Background(), NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+		),
+		domain.NewNonEmpty(exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug.go"))),
+	))
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(got.Runs.Baseline) != 1 {
+		t.Fatalf("len(got.Runs.Baseline) = %d, want 1", len(got.Runs.Baseline))
+	}
+	if len(got.Runs.Candidate) != 0 {
+		t.Fatalf("len(got.Runs.Candidate) = %d, want 0", len(got.Runs.Candidate))
+	}
+	if len(got.Failures.Candidate) != 1 {
+		t.Fatalf("len(got.Failures.Candidate) = %d, want 1", len(got.Failures.Candidate))
+	}
+	if got.Failures.Candidate[0].Stage != run.FailureExecute {
+		t.Fatalf("candidate failure stage = %q, want %q", got.Failures.Candidate[0].Stage, run.FailureExecute)
+	}
+}
+
+type fakeExecutor struct {
+	now time.Time
+}
+
+func (f fakeExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun, error) {
+	planned := run.NewPlanned(spec)
+	prepared := run.NewPrepared(planned, domain.SessionID("session-"+spec.ID.String()))
+
+	predictionFile := domain.RepoRelPath("pkg/baseline.go")
+	reasoning := "baseline path"
+	if spec.System.Backend == domain.BackendIterativeContext {
+		predictionFile = domain.RepoRelPath("pkg/candidate.go")
+		reasoning = "candidate path"
+	}
+
+	return run.NewExecuted(
+		prepared,
+		domain.Prediction{
+			Files:     []domain.RepoRelPath{predictionFile},
+			Reasoning: reasoning,
+		},
+		domain.UsageSummary{
+			InputTokens:  100,
+			OutputTokens: 20,
+			TotalTokens:  120,
+			CostUSD:      0.05,
+		},
+		domain.TraceID("trace-"+spec.ID.String()),
+		f.now,
+		f.now.Add(2*time.Second),
+	), nil
+}
+
+type failingExecutor struct {
+	err error
+}
+
+var _ Executor = failingExecutor{}
+
+func (f failingExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
+	if spec.System.Backend == domain.BackendIterativeContext {
+		return run.ExecutedRun{}, f.err
+	}
+	return fakeExecutor{now: time.Now().UTC()}.Execute(ctx, spec)
+}
+
+type fakeGraphProvider struct{}
+
+func (fakeGraphProvider) GraphForTask(_ context.Context, task domain.TaskSpec) (codegraph.Graph, error) {
+	store := codegraph.NewStore()
+	fileID := codegraph.NodeID("file-" + task.ID.String())
+	fnID := codegraph.NodeID("fn-" + task.ID.String())
+
+	if err := store.AddNode(codegraph.NewFileNode(fileID, task.Oracle.GoldFiles[0])); err != nil {
+		return nil, err
+	}
+	if err := store.AddNode(codegraph.NewFunctionNode(fnID, task.Oracle.GoldFiles[0], "score", 1, 10)); err != nil {
+		return nil, err
+	}
+	if err := store.AddEdge(codegraph.Edge{
+		From:   fileID,
+		To:     fnID,
+		Kind:   codegraph.EdgeContains,
+		Weight: 1,
+	}); err != nil {
+		return nil, err
+	}
+	return store.Build()
+}
+
+type fakeScorer struct{}
+
+func (fakeScorer) Score(_ context.Context, input score.Input) (score.ScoreSet, error) {
+	if input.Run.Spec().System.Backend == domain.BackendIterativeContext {
+		return score.NewScoreSet(
+			score.Metric[score.HopDistance]{Name: score.MetricGoldHop, Value: 1},
+			score.Metric[score.HopDistance]{Name: score.MetricIssueHop, Value: 1},
+			score.Metric[score.EfficiencyScore]{Name: score.MetricTokenEfficiency, Value: 0.9},
+			score.Metric[score.CostScore]{Name: score.MetricCost, Value: 0.1},
+			score.Metric[score.CompositeScore]{Name: score.MetricComposite, Value: 0.95},
+		)
+	}
+	return score.NewScoreSet(
+		score.Metric[score.HopDistance]{Name: score.MetricGoldHop, Value: 4},
+		score.Metric[score.HopDistance]{Name: score.MetricIssueHop, Value: 5},
+		score.Metric[score.EfficiencyScore]{Name: score.MetricTokenEfficiency, Value: 0.4},
+		score.Metric[score.CostScore]{Name: score.MetricCost, Value: 0.6},
+		score.Metric[score.CompositeScore]{Name: score.MetricComposite, Value: 0.3},
+	)
+}
+
+type fakeDecider struct{}
+
+func (fakeDecider) Decide(_ []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision {
+	if len(regressions) == 0 {
+		return report.PromotionDecision{
+			Decision: report.DecisionPromote,
+			Reason:   "candidate improved every required metric",
+		}
+	}
+	return report.PromotionDecision{
+		Decision: report.DecisionReview,
+		Reason:   "candidate has regressions",
+	}
+}
+</file>
+
+<file path="internal/compare/runner.go">
+package compare
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/codegraph"
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/run"
+	"github.com/becker63/searchbench-go/internal/score"
+)
+
+// Executor is the orchestration seam for turning one planned run spec into a
+// successful executed run without binding compare to a concrete runtime.
+type Executor interface {
+	Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
+}
+
+// GraphProvider is the orchestration seam for loading a scoring graph for one
+// task without binding compare to a concrete graph source.
+type GraphProvider interface {
+	GraphForTask(ctx context.Context, task domain.TaskSpec) (codegraph.Graph, error)
+}
+
+// Scorer is the orchestration seam for turning one executed run plus graph
+// input into a complete required ScoreSet.
+type Scorer interface {
+	Score(ctx context.Context, input score.Input) (score.ScoreSet, error)
+}
+
+// Decider is the orchestration seam for reducing comparisons and regressions
+// into a final promotion decision.
+type Decider interface {
+	Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision
+}
+
+type RunIDFunc func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID
+
+type ReportIDFunc func() domain.ReportID
+
+type ClockFunc func() time.Time
+
+type Runner struct {
+	Executor      Executor
+	GraphProvider GraphProvider
+	Scorer        Scorer
+	Decider       Decider
+	NewRunID      RunIDFunc
+	NewReportID   ReportIDFunc
+	Now           ClockFunc
+}
+
+type TaskComparisonResult struct {
+	Runs        domain.Pair[*score.ScoredRun]
+	Failures    domain.Pair[*run.RunFailure]
+	Regressions []report.Regression
+}
+
+func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, error) {
+	if err := plan.Validate(); err != nil {
+		return report.CandidateReport{}, err
+	}
+	if err := r.Validate(); err != nil {
+		return report.CandidateReport{}, err
+	}
+
+	results := NewResults(plan.Tasks.Len())
+	for task := range plan.Tasks.Values() {
+		results.AddTaskResult(r.CompareTask(ctx, plan.Systems, task))
+	}
+
+	summary := results.Summary()
+	decision := r.Decider.Decide(summary.Comparisons, summary.Regressions)
+	out := report.NewCandidateReport(
+		r.NewReportID(),
+		plan.ReportSpec(),
+		summary.Runs,
+		summary.Failures,
+		summary.Comparisons,
+		summary.Regressions,
+		decision,
+	)
+	if r.Now != nil {
+		out.CreatedAt = r.Now().UTC()
+	}
+	return out, nil
+}
+
+func (r Runner) Validate() error {
+	if r.Executor == nil {
+		return errors.New("compare: executor is required")
+	}
+	if r.GraphProvider == nil {
+		return errors.New("compare: graph provider is required")
+	}
+	if r.Scorer == nil {
+		return errors.New("compare: scorer is required")
+	}
+	if r.Decider == nil {
+		return errors.New("compare: decider is required")
+	}
+	if r.NewRunID == nil {
+		return errors.New("compare: run id function is required")
+	}
+	if r.NewReportID == nil {
+		return errors.New("compare: report id function is required")
+	}
+	return nil
+}
+
+func (r Runner) CompareTask(
+	ctx context.Context,
+	systems domain.Pair[domain.SystemSpec],
+	task domain.TaskSpec,
+) TaskComparisonResult {
+	type outcome struct {
+		run     *score.ScoredRun
+		failure *run.RunFailure
+	}
+
+	graph, err := r.GraphProvider.GraphForTask(ctx, task)
+	if err != nil {
+		return TaskComparisonResult{
+			Failures: domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) *run.RunFailure {
+				spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
+				stageErr := NewStageError(spec, run.FailureScore, fmt.Errorf("graph: %w", err))
+				failure := failureFromError(spec, run.FailureScore, stageErr)
+				return &failure
+			}),
+		}
+	}
+
+	outcomes := domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) outcome {
+		scoredRun, failure := r.ExecuteAndScore(ctx, role, task, system, graph)
+		return outcome{
+			run:     scoredRun,
+			failure: failure,
+		}
+	})
+
+	out := TaskComparisonResult{
+		Runs: domain.NewPair(
+			outcomes.Baseline.run,
+			outcomes.Candidate.run,
+		),
+		Failures: domain.NewPair(
+			outcomes.Baseline.failure,
+			outcomes.Candidate.failure,
+		),
+	}
+	if out.Runs.Baseline != nil && out.Runs.Candidate != nil {
+		out.Regressions = report.RegressionsForTask(task.ID, score.CompareSets(out.Runs.Baseline.Scores, out.Runs.Candidate.Scores))
+	}
+	return out
+}
+
+func (r Runner) ExecuteAndScore(
+	ctx context.Context,
+	role domain.Role,
+	task domain.TaskSpec,
+	system domain.SystemSpec,
+	graph codegraph.Graph,
+) (*score.ScoredRun, *run.RunFailure) {
+	spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
+
+	executed, err := r.Executor.Execute(ctx, spec)
+	if err != nil {
+		stageErr := NewStageError(spec, run.FailureExecute, err)
+		failure := failureFromError(spec, run.FailureExecute, stageErr)
+		return nil, &failure
+	}
+
+	scoreSet, err := r.Scorer.Score(ctx, score.Input{
+		Run:   executed,
+		Graph: graph,
+	})
+	if err != nil {
+		stageErr := NewStageError(spec, run.FailureScore, err)
+		failure := failureFromError(spec, run.FailureScore, stageErr)
+		return nil, &failure
+	}
+
+	scoredRun, err := score.NewScoredRun(executed, scoreSet)
+	if err != nil {
+		stageErr := NewStageError(spec, run.FailureScore, err)
+		failure := failureFromError(spec, run.FailureScore, stageErr)
+		return nil, &failure
+	}
+
+	return &scoredRun, nil
+}
+</file>
+
+<file path="internal/domain/pair_test.go">
+package domain
 
 import "testing"
 
-func TestImproved(t *testing.T) {
+func TestPairAll(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name      string
-		direction Direction
-		baseline  float64
-		candidate float64
-		want      bool
+		pair      Pair[string]
+		wantRoles []Role
+		wantVals  []string
+		stopAfter int
 	}{
 		{
-			name:      "higher is better improves",
-			direction: HigherIsBetter,
-			baseline:  0.5,
-			candidate: 0.8,
-			want:      true,
+			name:      "yields both roles in order",
+			pair:      NewPair("baseline", "candidate"),
+			wantRoles: []Role{RoleBaseline, RoleCandidate},
+			wantVals:  []string{"baseline", "candidate"},
+			stopAfter: 2,
 		},
 		{
-			name:      "higher is better regression",
-			direction: HigherIsBetter,
-			baseline:  0.8,
-			candidate: 0.5,
-			want:      false,
-		},
-		{
-			name:      "lower is better improves",
-			direction: LowerIsBetter,
-			baseline:  5,
-			candidate: 3,
-			want:      true,
-		},
-		{
-			name:      "lower is better regression",
-			direction: LowerIsBetter,
-			baseline:  3,
-			candidate: 5,
-			want:      false,
+			name:      "respects early stop",
+			pair:      NewPair("baseline", "candidate"),
+			wantRoles: []Role{RoleBaseline},
+			wantVals:  []string{"baseline"},
+			stopAfter: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := Improved(tt.direction, tt.baseline, tt.candidate); got != tt.want {
-				t.Fatalf("Improved(%q, %v, %v) = %v, want %v", tt.direction, tt.baseline, tt.candidate, got, tt.want)
+
+			gotRoles := make([]Role, 0)
+			gotVals := make([]string, 0)
+			count := 0
+			for role, value := range tt.pair.All() {
+				gotRoles = append(gotRoles, role)
+				gotVals = append(gotVals, value)
+				count++
+				if count >= tt.stopAfter {
+					break
+				}
+			}
+
+			if len(gotRoles) != len(tt.wantRoles) {
+				t.Fatalf("len(gotRoles) = %d, want %d", len(gotRoles), len(tt.wantRoles))
+			}
+			for i := range tt.wantRoles {
+				if gotRoles[i] != tt.wantRoles[i] {
+					t.Fatalf("gotRoles[%d] = %q, want %q", i, gotRoles[i], tt.wantRoles[i])
+				}
+				if gotVals[i] != tt.wantVals[i] {
+					t.Fatalf("gotVals[%d] = %q, want %q", i, gotVals[i], tt.wantVals[i])
+				}
 			}
 		})
 	}
 }
 </file>
 
-<file path="internal/score/direction.go">
-package score
-
-type Direction string
-
-const (
-	LowerIsBetter  Direction = "lower_is_better"
-	HigherIsBetter Direction = "higher_is_better"
-)
-
-type MetricDefinition[T any] struct {
-	Name      MetricName
-	Direction Direction
-}
-
-var GoldHopDefinition = MetricDefinition[HopDistance]{
-	Name:      MetricGoldHop,
-	Direction: LowerIsBetter,
-}
-
-var IssueHopDefinition = MetricDefinition[HopDistance]{
-	Name:      MetricIssueHop,
-	Direction: LowerIsBetter,
-}
-
-var TokenEfficiencyDefinition = MetricDefinition[EfficiencyScore]{
-	Name:      MetricTokenEfficiency,
-	Direction: HigherIsBetter,
-}
-
-var CostDefinition = MetricDefinition[CostScore]{
-	Name:      MetricCost,
-	Direction: LowerIsBetter,
-}
-
-var CompositeDefinition = MetricDefinition[CompositeScore]{
-	Name:      MetricComposite,
-	Direction: HigherIsBetter,
-}
-
-func Improved(def Direction, baseline, candidate float64) bool {
-	switch def {
-	case HigherIsBetter:
-		return candidate > baseline
-	case LowerIsBetter:
-		return candidate < baseline
-	default:
-		return false
-	}
-}
-
-func DirectionForMetric(name MetricName) (Direction, bool) {
-	switch name {
-	case MetricGoldHop:
-		return GoldHopDefinition.Direction, true
-	case MetricIssueHop:
-		return IssueHopDefinition.Direction, true
-	case MetricTokenEfficiency:
-		return TokenEfficiencyDefinition.Direction, true
-	case MetricCost:
-		return CostDefinition.Direction, true
-	case MetricComposite:
-		return CompositeDefinition.Direction, true
-	default:
-		return "", false
-	}
-}
-</file>
-
-<file path="internal/score/scoreset_test.go">
+<file path="internal/score/comparison_test.go">
 package score
 
 import "testing"
 
-func TestScoreSetValidate(t *testing.T) {
+func TestScoreSetPoints(t *testing.T) {
 	t.Parallel()
 
-	valid := ScoreSet{
+	set := ScoreSet{
 		GoldHop:         Metric[HopDistance]{Name: MetricGoldHop, Value: 1},
 		IssueHop:        Metric[HopDistance]{Name: MetricIssueHop, Value: 2},
-		TokenEfficiency: Metric[EfficiencyScore]{Name: MetricTokenEfficiency, Value: 0.8},
+		TokenEfficiency: Metric[EfficiencyScore]{Name: MetricTokenEfficiency, Value: 0.7},
 		Cost:            Metric[CostScore]{Name: MetricCost, Value: 0.2},
 		Composite:       Metric[CompositeScore]{Name: MetricComposite, Value: 0.9},
 	}
 
-	tests := []struct {
-		name    string
-		set     ScoreSet
-		wantErr bool
-	}{
-		{
-			name: "valid",
-			set:  valid,
-		},
-		{
-			name: "wrong gold hop name",
-			set: func() ScoreSet {
-				s := valid
-				s.GoldHop.Name = MetricComposite
-				return s
-			}(),
-			wantErr: true,
-		},
-		{
-			name: "wrong composite name",
-			set: func() ScoreSet {
-				s := valid
-				s.Composite.Name = MetricCost
-				return s
-			}(),
-			wantErr: true,
-		},
+	got := make([]MetricPoint, 0)
+	for point := range set.Points() {
+		got = append(got, point)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	wantNames := []MetricName{
+		MetricGoldHop,
+		MetricIssueHop,
+		MetricTokenEfficiency,
+		MetricCost,
+		MetricComposite,
+	}
+	wantDirections := []Direction{
+		LowerIsBetter,
+		LowerIsBetter,
+		HigherIsBetter,
+		LowerIsBetter,
+		HigherIsBetter,
+	}
 
-			err := tt.set.Validate()
-			if tt.wantErr && err == nil {
-				t.Fatal("expected error")
-			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-		})
+	if len(got) != len(wantNames) {
+		t.Fatalf("len(got) = %d, want %d", len(got), len(wantNames))
+	}
+	for i := range wantNames {
+		if got[i].Name != wantNames[i] {
+			t.Fatalf("got[%d].Name = %q, want %q", i, got[i].Name, wantNames[i])
+		}
+		if got[i].Direction != wantDirections[i] {
+			t.Fatalf("got[%d].Direction = %q, want %q", i, got[i].Direction, wantDirections[i])
+		}
 	}
 }
 </file>
 
-<file path=".gitignore">
-.codex
-.tmp/
+<file path="internal/score/comparison.go">
+package score
+
+import "iter"
+
+type MetricPoint struct {
+	Name      MetricName
+	Value     float64
+	Direction Direction
+}
+
+type MetricComparison struct {
+	Metric    MetricName
+	Baseline  float64
+	Candidate float64
+	Delta     float64
+	Direction Direction
+	Improved  bool
+	Regressed bool
+}
+
+// Points returns the full required metric set in stable metric order.
+func (s ScoreSet) Points() iter.Seq[MetricPoint] {
+	return func(yield func(MetricPoint) bool) {
+		if !yield(MetricPoint{
+			Name:      MetricGoldHop,
+			Value:     float64(s.GoldHop.Value),
+			Direction: GoldHopDefinition.Direction,
+		}) {
+			return
+		}
+		if !yield(MetricPoint{
+			Name:      MetricIssueHop,
+			Value:     float64(s.IssueHop.Value),
+			Direction: IssueHopDefinition.Direction,
+		}) {
+			return
+		}
+		if !yield(MetricPoint{
+			Name:      MetricTokenEfficiency,
+			Value:     float64(s.TokenEfficiency.Value),
+			Direction: TokenEfficiencyDefinition.Direction,
+		}) {
+			return
+		}
+		if !yield(MetricPoint{
+			Name:      MetricCost,
+			Value:     float64(s.Cost.Value),
+			Direction: CostDefinition.Direction,
+		}) {
+			return
+		}
+		yield(MetricPoint{
+			Name:      MetricComposite,
+			Value:     float64(s.Composite.Value),
+			Direction: CompositeDefinition.Direction,
+		})
+	}
+}
+
+func CompareSets(baseline ScoreSet, candidate ScoreSet) []MetricComparison {
+	candidateByName := make(map[MetricName]MetricPoint, 5)
+	for point := range candidate.Points() {
+		candidateByName[point.Name] = point
+	}
+
+	out := make([]MetricComparison, 0, 5)
+	for base := range baseline.Points() {
+		cand, ok := candidateByName[base.Name]
+		if !ok {
+			continue
+		}
+		delta := cand.Value - base.Value
+		improved := Improved(base.Direction, base.Value, cand.Value)
+		out = append(out, MetricComparison{
+			Metric:    base.Name,
+			Baseline:  base.Value,
+			Candidate: cand.Value,
+			Delta:     delta,
+			Direction: base.Direction,
+			Improved:  improved,
+			Regressed: base.Value != cand.Value && !improved,
+		})
+	}
+	return out
+}
+
+// AverageByMetric returns averages for every required metric name.
+//
+// Empty slices produce all required metrics with zero values so callers can
+// still build a complete comparison shape.
+func AverageByMetric(runs []ScoredRun) map[MetricName]float64 {
+	totals := map[MetricName]float64{
+		MetricGoldHop:         0,
+		MetricIssueHop:        0,
+		MetricTokenEfficiency: 0,
+		MetricCost:            0,
+		MetricComposite:       0,
+	}
+	if len(runs) == 0 {
+		return totals
+	}
+
+	for _, run := range runs {
+		for point := range run.Scores.Points() {
+			totals[point.Name] += point.Value
+		}
+	}
+	for name, total := range totals {
+		totals[name] = total / float64(len(runs))
+	}
+	return totals
+}
+
+func CompareAverages(baseline []ScoredRun, candidate []ScoredRun) []MetricComparison {
+	baselineAverages := AverageByMetric(baseline)
+	candidateAverages := AverageByMetric(candidate)
+
+	return []MetricComparison{
+		newMetricComparison(MetricGoldHop, baselineAverages[MetricGoldHop], candidateAverages[MetricGoldHop]),
+		newMetricComparison(MetricIssueHop, baselineAverages[MetricIssueHop], candidateAverages[MetricIssueHop]),
+		newMetricComparison(MetricTokenEfficiency, baselineAverages[MetricTokenEfficiency], candidateAverages[MetricTokenEfficiency]),
+		newMetricComparison(MetricCost, baselineAverages[MetricCost], candidateAverages[MetricCost]),
+		newMetricComparison(MetricComposite, baselineAverages[MetricComposite], candidateAverages[MetricComposite]),
+	}
+}
+
+func newMetricComparison(name MetricName, baseline float64, candidate float64) MetricComparison {
+	direction, _ := DirectionForMetric(name)
+	delta := candidate - baseline
+	improved := Improved(direction, baseline, candidate)
+	return MetricComparison{
+		Metric:    name,
+		Baseline:  baseline,
+		Candidate: candidate,
+		Delta:     delta,
+		Direction: direction,
+		Improved:  improved,
+		Regressed: baseline != candidate && !improved,
+	}
+}
 </file>
 
 <file path="cmd/searchbench/main.go">
@@ -841,10 +1202,47 @@ func main() {
 
 <file path="internal/backend/backend.go">
 package backend
+
+import "context"
+
+type Backend interface {
+	StartSession(ctx context.Context, spec SessionSpec) (Session, error)
+}
 </file>
 
 <file path="internal/backend/session.go">
 package backend
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+type ToolSpec struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Schema      json.RawMessage `json:"schema,omitempty"`
+}
+
+type ToolResult struct {
+	Name   string          `json:"name"`
+	Output json.RawMessage `json:"output"`
+}
+
+type SessionSpec struct {
+	ID     domain.SessionID  `json:"id"`
+	Task   domain.TaskSpec   `json:"task"`
+	System domain.SystemSpec `json:"system"`
+}
+
+type Session interface {
+	ID() domain.SessionID
+	Tools(ctx context.Context) ([]ToolSpec, error)
+	CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)
+	Close(ctx context.Context) error
+}
 </file>
 
 <file path="internal/codegraph/builder.go">
@@ -869,6 +1267,9 @@ import (
 	"github.com/becker63/searchbench-go/internal/domain"
 	"github.com/hmdsefi/gograph"
 )
+
+var _ Builder = (*Store)(nil)
+var _ Graph = (*Store)(nil)
 
 type Store struct {
 	graph gograph.Graph[NodeID]
@@ -1126,8 +1527,269 @@ type ReportID = ID[reportTag]
 type NodeID = ID[nodeTag]
 </file>
 
+<file path="internal/domain/nonempty_test.go">
+package domain
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestNonEmptyFromSlice(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		items   []int
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			items:   nil,
+			wantErr: true,
+		},
+		{
+			name:  "single item",
+			items: []int{7},
+		},
+		{
+			name:  "multiple items",
+			items: []int{1, 2, 3},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := NonEmptyFromSlice(tt.items)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			all := got.All()
+			if len(all) != len(tt.items) {
+				t.Fatalf("len(all) = %d, want %d", len(all), len(tt.items))
+			}
+			for i := range all {
+				if all[i] != tt.items[i] {
+					t.Fatalf("all[%d] = %d, want %d", i, all[i], tt.items[i])
+				}
+			}
+
+			if len(tt.items) > 1 {
+				tail := got.Tail()
+				tail[0] = 999
+				if got.Tail()[0] == 999 {
+					t.Fatal("Tail exposed internal slice")
+				}
+			}
+		})
+	}
+}
+
+func TestNonEmptyZeroValue(t *testing.T) {
+	t.Parallel()
+
+	var n NonEmpty[int]
+
+	if n.Valid() {
+		t.Fatal("zero-value NonEmpty should be invalid")
+	}
+	if got := n.Len(); got != 0 {
+		t.Fatalf("Len() = %d, want 0", got)
+	}
+	if got := n.All(); got != nil {
+		t.Fatalf("All() = %#v, want nil", got)
+	}
+	if got := n.Tail(); got != nil {
+		t.Fatalf("Tail() = %#v, want nil", got)
+	}
+	if err := n.Validate(); err == nil {
+		t.Fatal("expected validation error")
+	}
+	if _, err := json.Marshal(n); err == nil {
+		t.Fatal("expected marshal error")
+	}
+
+	var values []int
+	for value := range n.Values() {
+		values = append(values, value)
+	}
+	if len(values) != 0 {
+		t.Fatalf("len(Values()) = %d, want 0", len(values))
+	}
+}
+
+func TestNonEmptyValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input NonEmpty[int]
+		want  []int
+		stop  int
+	}{
+		{
+			name:  "all values",
+			input: NewNonEmpty(1, 2, 3),
+			want:  []int{1, 2, 3},
+			stop:  3,
+		},
+		{
+			name:  "early stop",
+			input: NewNonEmpty(4, 5, 6),
+			want:  []int{4, 5},
+			stop:  2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := make([]int, 0)
+			for value := range tt.input.Values() {
+				got = append(got, value)
+				if len(got) >= tt.stop {
+					break
+				}
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("len(got) = %d, want %d", len(got), len(tt.want))
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("got[%d] = %d, want %d", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+</file>
+
+<file path="internal/domain/nonempty.go">
+package domain
+
+import (
+	"encoding/json"
+	"errors"
+	"iter"
+)
+
+var errEmptyNonEmpty = errors.New("non-empty slice is required")
+
+// NonEmpty represents a slice with at least one element.
+//
+// The zero value can still exist because of Go, so callers should prefer the
+// constructors for meaningful values.
+type NonEmpty[T any] struct {
+	head  T
+	tail  []T
+	valid bool
+}
+
+func NewNonEmpty[T any](head T, tail ...T) NonEmpty[T] {
+	return NonEmpty[T]{
+		head:  head,
+		tail:  append([]T(nil), tail...),
+		valid: true,
+	}
+}
+
+func NonEmptyFromSlice[T any](items []T) (NonEmpty[T], error) {
+	if len(items) == 0 {
+		return NonEmpty[T]{}, errEmptyNonEmpty
+	}
+	return NewNonEmpty(items[0], items[1:]...), nil
+}
+
+func (n NonEmpty[T]) Head() T {
+	return n.head
+}
+
+func (n NonEmpty[T]) Tail() []T {
+	if !n.valid {
+		return nil
+	}
+	return append([]T(nil), n.tail...)
+}
+
+func (n NonEmpty[T]) All() []T {
+	if !n.valid {
+		return nil
+	}
+	items := make([]T, 1+len(n.tail))
+	items[0] = n.head
+	copy(items[1:], n.tail)
+	return items
+}
+
+func (n NonEmpty[T]) Values() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		if !n.valid {
+			return
+		}
+		if !yield(n.head) {
+			return
+		}
+		for _, item := range n.tail {
+			if !yield(item) {
+				return
+			}
+		}
+	}
+}
+
+func (n NonEmpty[T]) Len() int {
+	if !n.valid {
+		return 0
+	}
+	return 1 + len(n.tail)
+}
+
+func (n NonEmpty[T]) Valid() bool {
+	return n.valid
+}
+
+func (n NonEmpty[T]) Validate() error {
+	if !n.valid {
+		return errEmptyNonEmpty
+	}
+	return nil
+}
+
+func (n NonEmpty[T]) MarshalJSON() ([]byte, error) {
+	if err := n.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(n.All())
+}
+
+func (n *NonEmpty[T]) UnmarshalJSON(data []byte) error {
+	var items []T
+	if err := json.Unmarshal(data, &items); err != nil {
+		return err
+	}
+	value, err := NonEmptyFromSlice(items)
+	if err != nil {
+		return err
+	}
+	*n = value
+	return nil
+}
+</file>
+
 <file path="internal/domain/pair.go">
 package domain
+
+import "iter"
 
 // Role names the two sides of a Searchbench comparison.
 type Role string
@@ -1150,6 +1812,22 @@ func NewPair[T any](baseline T, candidate T) Pair[T] {
 	return Pair[T]{
 		Baseline:  baseline,
 		Candidate: candidate,
+	}
+}
+
+func MapPair[A, B any](p Pair[A], f func(Role, A) B) Pair[B] {
+	return Pair[B]{
+		Baseline:  f(RoleBaseline, p.Baseline),
+		Candidate: f(RoleCandidate, p.Candidate),
+	}
+}
+
+func (p Pair[T]) All() iter.Seq2[Role, T] {
+	return func(yield func(Role, T) bool) {
+		if !yield(RoleBaseline, p.Baseline) {
+			return
+		}
+		yield(RoleCandidate, p.Candidate)
 	}
 }
 
@@ -1214,235 +1892,136 @@ type RepoSnapshot struct {
 }
 </file>
 
-<file path="internal/domain/system.go">
+<file path="internal/domain/system_test.go">
 package domain
 
-import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"fmt"
-)
+import "testing"
 
-// BackendKind identifies the execution backend used by a system.
-//
-// A backend is not the whole system. It is only the runtime/tool adapter.
-// The full system also includes model, prompt bundle, policy, and runtime config.
-type BackendKind string
+func TestPolicyArtifactValidate(t *testing.T) {
+	t.Parallel()
 
-const (
-	BackendIterativeContext BackendKind = "iterative-context"
-	BackendJCodeMunch       BackendKind = "jcodemunch"
-	BackendFake             BackendKind = "fake"
-)
-
-// ModelSpec identifies the model used by a system.
-type ModelSpec struct {
-	Provider string `json:"provider"`
-	Name     string `json:"name"`
-}
-
-// PromptBundleRef identifies the prompt bundle used by a system.
-//
-// Keep this as a reference rather than inline prompt text. Prompt text can live
-// in files/artifacts later.
-type PromptBundleRef struct {
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-}
-
-// PolicyLanguage identifies the language/runtime for a policy artifact.
-type PolicyLanguage string
-
-const (
-	PolicyLanguagePython PolicyLanguage = "python"
-)
-
-// PolicyHash is the stable content hash for a policy source.
-type PolicyHash string
-
-type PolicyRef struct {
-	ID         PolicyID       `json:"id"`
-	Language   PolicyLanguage `json:"language"`
-	SHA256     PolicyHash     `json:"sha256"`
-	Entrypoint string         `json:"entrypoint"`
-}
-
-// PolicyArtifact is a replaceable policy used by a system.
-//
-// In the Go harness, policy source is data. For iterative-context, this can be
-// passed into the Python backend through the MCP/session API instead of being
-// written into a worktree.
-type PolicyArtifact struct {
-	ID         PolicyID       `json:"id"`
-	Language   PolicyLanguage `json:"language"`
-	SHA256     PolicyHash     `json:"sha256"`
-	Entrypoint string         `json:"entrypoint"`
-	Source     string         `json:"source,omitempty"`
-}
-
-func NewPythonPolicy(id PolicyID, source string, entrypoint string) PolicyArtifact {
-	return PolicyArtifact{
-		ID:         id,
-		Language:   PolicyLanguagePython,
-		SHA256:     hashPolicySource(source),
-		Entrypoint: entrypoint,
-		Source:     source,
-	}
-}
-
-func (p PolicyArtifact) Validate() error {
-	if p.ID.Empty() {
-		return errors.New("policy id is required")
-	}
-	switch p.Language {
-	case PolicyLanguagePython:
-	default:
-		return fmt.Errorf("unsupported policy language: %q", p.Language)
-	}
-	if p.Entrypoint == "" {
-		return errors.New("policy entrypoint is required")
-	}
-	if p.Source == "" {
-		return errors.New("policy source is required")
-	}
-	if p.SHA256 == "" {
-		return errors.New("policy sha256 is required")
-	}
-	expected := hashPolicySource(p.Source)
-	if p.SHA256 != expected {
-		return fmt.Errorf("policy sha256 does not match source: got %q want %q", p.SHA256, expected)
-	}
-	return nil
-}
-
-func (p PolicyArtifact) Ref() PolicyRef {
-	return PolicyRef{
-		ID:         p.ID,
-		Language:   p.Language,
-		SHA256:     p.SHA256,
-		Entrypoint: p.Entrypoint,
-	}
-}
-
-// RuntimeConfig captures behavior-affecting runtime limits.
-//
-// If changing a field could change the system's output, it belongs somewhere
-// under SystemSpec.
-type RuntimeConfig struct {
-	MaxSteps           int `json:"max_steps,omitempty"`
-	MaxToolCalls       int `json:"max_tool_calls,omitempty"`
-	MaxInputTokens     int `json:"max_input_tokens,omitempty"`
-	MaxOutputTokens    int `json:"max_output_tokens,omitempty"`
-	MaxContextTokens   int `json:"max_context_tokens,omitempty"`
-	ToolResultMaxBytes int `json:"tool_result_max_bytes,omitempty"`
-}
-
-// SystemSpec is the complete recipe for an agentic code-search system.
-//
-// Baseline and candidate are not different types. They are roles that a
-// SystemSpec can occupy inside a comparison.
-type SystemSpec struct {
-	ID           SystemID        `json:"id"`
-	Name         string          `json:"name"`
-	Backend      BackendKind     `json:"backend"`
-	Model        ModelSpec       `json:"model"`
-	PromptBundle PromptBundleRef `json:"prompt_bundle"`
-	Policy       *PolicyArtifact `json:"policy,omitempty"`
-	Runtime      RuntimeConfig   `json:"runtime,omitempty"`
-}
-
-type SystemFingerprint string
-
-type SystemRef struct {
-	ID           SystemID          `json:"id"`
-	Name         string            `json:"name"`
-	Backend      BackendKind       `json:"backend"`
-	Model        ModelSpec         `json:"model"`
-	PromptBundle PromptBundleRef   `json:"prompt_bundle"`
-	Policy       *PolicyRef        `json:"policy,omitempty"`
-	Runtime      RuntimeConfig     `json:"runtime,omitempty"`
-	Fingerprint  SystemFingerprint `json:"fingerprint"`
-}
-
-func (s SystemSpec) Validate() error {
-	if s.ID.Empty() {
-		return errors.New("system id is required")
-	}
-	switch s.Backend {
-	case BackendIterativeContext, BackendJCodeMunch, BackendFake:
-	default:
-		return fmt.Errorf("unsupported backend: %q", s.Backend)
-	}
-	if s.Model.Provider == "" {
-		return errors.New("model provider is required")
-	}
-	if s.Model.Name == "" {
-		return errors.New("model name is required")
-	}
-	if s.PromptBundle.Name == "" {
-		return errors.New("prompt bundle name is required")
-	}
-	if s.Policy != nil {
-		if err := s.Policy.Validate(); err != nil {
-			return fmt.Errorf("policy: %w", err)
-		}
-	}
-	return nil
-}
-
-func (s SystemSpec) Fingerprint() SystemFingerprint {
-	var policy *PolicyRef
-	if s.Policy != nil {
-		ref := s.Policy.Ref()
-		policy = &ref
-	}
-
-	canonical := struct {
-		Backend      BackendKind     `json:"backend"`
-		Model        ModelSpec       `json:"model"`
-		PromptBundle PromptBundleRef `json:"prompt_bundle"`
-		Policy       *PolicyRef      `json:"policy,omitempty"`
-		Runtime      RuntimeConfig   `json:"runtime,omitempty"`
+	tests := []struct {
+		name    string
+		policy  PolicyArtifact
+		wantErr bool
 	}{
-		Backend:      s.Backend,
-		Model:        s.Model,
-		PromptBundle: s.PromptBundle,
-		Policy:       policy,
-		Runtime:      s.Runtime,
+		{
+			name:   "valid python policy",
+			policy: NewPythonPolicy(PolicyID("policy-1"), "def run():\n    return 1\n", "run"),
+		},
+		{
+			name: "mismatched hash",
+			policy: PolicyArtifact{
+				ID:         PolicyID("policy-1"),
+				Language:   PolicyLanguagePython,
+				SHA256:     PolicyHash("deadbeef"),
+				Entrypoint: "run",
+				Source:     "def run():\n    return 1\n",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing entrypoint",
+			policy: PolicyArtifact{
+				ID:       PolicyID("policy-1"),
+				Language: PolicyLanguagePython,
+				SHA256:   NewPythonPolicy(PolicyID("policy-1"), "print('x')", "run").SHA256,
+				Source:   "print('x')",
+			},
+			wantErr: true,
+		},
 	}
 
-	data, err := json.Marshal(canonical)
-	if err != nil {
-		return ""
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.policy.Validate()
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
-	sum := sha256.Sum256(data)
-	return SystemFingerprint(hex.EncodeToString(sum[:]))
 }
 
-func (s SystemSpec) Ref() SystemRef {
-	var policy *PolicyRef
-	if s.Policy != nil {
-		ref := s.Policy.Ref()
-		policy = &ref
+func TestSystemSpecFingerprintDeterminism(t *testing.T) {
+	t.Parallel()
+
+	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
+	base := SystemSpec{
+		ID:      SystemID("system-1"),
+		Name:    "Baseline Name",
+		Backend: BackendIterativeContext,
+		Model: ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-test",
+		},
+		PromptBundle: PromptBundleRef{
+			Name:    "default",
+			Version: "v1",
+		},
+		Policy: &policy,
+		Runtime: RuntimeConfig{
+			MaxSteps:        12,
+			MaxOutputTokens: 500,
+		},
 	}
 
-	return SystemRef{
-		ID:           s.ID,
-		Name:         s.Name,
-		Backend:      s.Backend,
-		Model:        s.Model,
-		PromptBundle: s.PromptBundle,
-		Policy:       policy,
-		Runtime:      s.Runtime,
-		Fingerprint:  s.Fingerprint(),
+	same := base
+	if got, want := base.Fingerprint(), same.Fingerprint(); got != want {
+		t.Fatalf("fingerprint mismatch for identical system: got %q want %q", got, want)
+	}
+
+	renamed := base
+	renamed.Name = "Candidate Display Name"
+	if got, want := base.Fingerprint(), renamed.Fingerprint(); got != want {
+		t.Fatalf("fingerprint should ignore cosmetic name: got %q want %q", got, want)
+	}
+
+	changedRuntime := base
+	changedRuntime.Runtime.MaxSteps = 99
+	if base.Fingerprint() == changedRuntime.Fingerprint() {
+		t.Fatal("fingerprint should change when behavior-affecting fields change")
+	}
+
+	changedEntrypoint := base
+	changedPolicy := *base.Policy
+	changedPolicy.Entrypoint = "alternate"
+	changedEntrypoint.Policy = &changedPolicy
+	if base.Fingerprint() == changedEntrypoint.Fingerprint() {
+		t.Fatal("fingerprint should change when policy entrypoint changes")
 	}
 }
 
-func hashPolicySource(source string) PolicyHash {
-	sum := sha256.Sum256([]byte(source))
-	return PolicyHash(hex.EncodeToString(sum[:]))
+func TestSystemSpecRefOmitsPolicySource(t *testing.T) {
+	t.Parallel()
+
+	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
+	spec := SystemSpec{
+		ID:      SystemID("system-1"),
+		Name:    "Candidate",
+		Backend: BackendIterativeContext,
+		Model: ModelSpec{
+			Provider: "openai",
+			Name:     "gpt-test",
+		},
+		PromptBundle: PromptBundleRef{Name: "default"},
+		Policy:       &policy,
+	}
+
+	ref := spec.Ref()
+	if ref.Policy == nil {
+		t.Fatal("expected policy ref")
+	}
+	if ref.Policy.Entrypoint != policy.Entrypoint {
+		t.Fatalf("Policy.Entrypoint = %q, want %q", ref.Policy.Entrypoint, policy.Entrypoint)
+	}
+	if ref.Fingerprint != spec.Fingerprint() {
+		t.Fatalf("Fingerprint = %q, want %q", ref.Fingerprint, spec.Fingerprint())
+	}
 }
 </file>
 
@@ -1518,6 +2097,471 @@ func (u UsageSummary) Empty() bool {
 }
 </file>
 
+<file path="internal/report/spec.go">
+package report
+
+import (
+	"errors"
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+// ComparisonSpec declares the systems and tasks being compared.
+//
+// This is the planned report boundary:
+//
+//	baseline system + candidate system + fixed task slice
+type ComparisonSpec struct {
+	Systems domain.Pair[domain.SystemRef]    `json:"systems"`
+	Tasks   domain.NonEmpty[domain.TaskSpec] `json:"tasks"`
+}
+
+func NewComparisonSpec(
+	systems domain.Pair[domain.SystemSpec],
+	tasks domain.NonEmpty[domain.TaskSpec],
+) ComparisonSpec {
+	return NewComparisonSpecFromRefs(domain.NewPair(systems.Baseline.Ref(), systems.Candidate.Ref()), tasks)
+}
+
+func NewComparisonSpecFromRefs(
+	systems domain.Pair[domain.SystemRef],
+	tasks domain.NonEmpty[domain.TaskSpec],
+) ComparisonSpec {
+	return ComparisonSpec{
+		Systems: systems,
+		Tasks:   tasks,
+	}
+}
+
+func (s ComparisonSpec) Validate() error {
+	if err := s.Tasks.Validate(); err != nil {
+		return err
+	}
+	if s.Systems.Baseline.ID.Empty() {
+		return errors.New("baseline system id is required")
+	}
+	if s.Systems.Candidate.ID.Empty() {
+		return errors.New("candidate system id is required")
+	}
+	if s.Systems.Baseline.Fingerprint == "" {
+		return fmt.Errorf("baseline system fingerprint is required")
+	}
+	if s.Systems.Candidate.Fingerprint == "" {
+		return fmt.Errorf("candidate system fingerprint is required")
+	}
+	return nil
+}
+</file>
+
+<file path="internal/report/task_run_set_test.go">
+package report
+
+import (
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+func TestNewTaskRunSetValidation(t *testing.T) {
+	t.Parallel()
+
+	task1 := domain.TaskID("task-1")
+	task2 := domain.TaskID("task-2")
+
+	tests := []struct {
+		name    string
+		items   map[domain.TaskID]string
+		order   []domain.TaskID
+		wantErr bool
+	}{
+		{
+			name:    "empty order",
+			items:   map[domain.TaskID]string{task1: "a"},
+			wantErr: true,
+		},
+		{
+			name:    "missing task",
+			items:   map[domain.TaskID]string{task1: "a"},
+			order:   []domain.TaskID{task1, task2},
+			wantErr: true,
+		},
+		{
+			name: "duplicate task id",
+			items: map[domain.TaskID]string{
+				task1: "a",
+				task2: "b",
+			},
+			order:   []domain.TaskID{task1, task1},
+			wantErr: true,
+		},
+		{
+			name: "valid",
+			items: map[domain.TaskID]string{
+				task1: "a",
+				task2: "b",
+			},
+			order: []domain.TaskID{task2, task1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			set, err := NewTaskRunSet(tt.items, tt.order)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got, want := set.Len(), len(tt.order); got != want {
+				t.Fatalf("Len() = %d, want %d", got, want)
+			}
+			if got := set.Values(); len(got) != len(tt.order) {
+				t.Fatalf("len(Values()) = %d, want %d", len(got), len(tt.order))
+			}
+		})
+	}
+}
+
+func TestTaskRunSetItems(t *testing.T) {
+	t.Parallel()
+
+	task1 := domain.TaskID("task-1")
+	task2 := domain.TaskID("task-2")
+	set, err := NewTaskRunSet(
+		map[domain.TaskID]string{
+			task1: "baseline",
+			task2: "candidate",
+		},
+		[]domain.TaskID{task2, task1},
+	)
+	if err != nil {
+		t.Fatalf("NewTaskRunSet() error = %v", err)
+	}
+
+	gotIDs := make([]domain.TaskID, 0)
+	gotVals := make([]string, 0)
+	for taskID, value := range set.Items() {
+		gotIDs = append(gotIDs, taskID)
+		gotVals = append(gotVals, value)
+	}
+
+	wantIDs := []domain.TaskID{task2, task1}
+	wantVals := []string{"candidate", "baseline"}
+	for i := range wantIDs {
+		if gotIDs[i] != wantIDs[i] {
+			t.Fatalf("gotIDs[%d] = %q, want %q", i, gotIDs[i], wantIDs[i])
+		}
+		if gotVals[i] != wantVals[i] {
+			t.Fatalf("gotVals[%d] = %q, want %q", i, gotVals[i], wantVals[i])
+		}
+	}
+}
+</file>
+
+<file path="internal/report/task_run_set.go">
+package report
+
+import (
+	"errors"
+	"fmt"
+	"iter"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+type TaskRunSet[T any] struct {
+	order  []domain.TaskID
+	byTask map[domain.TaskID]T
+}
+
+func NewTaskRunSet[T any](items map[domain.TaskID]T, order []domain.TaskID) (TaskRunSet[T], error) {
+	if len(order) == 0 {
+		return TaskRunSet[T]{}, errors.New("task order must be non-empty")
+	}
+
+	ordered := append([]domain.TaskID(nil), order...)
+	byTask := make(map[domain.TaskID]T, len(items))
+	for id, item := range items {
+		byTask[id] = item
+	}
+
+	seen := make(map[domain.TaskID]struct{}, len(ordered))
+	for _, id := range ordered {
+		if _, ok := seen[id]; ok {
+			return TaskRunSet[T]{}, fmt.Errorf("duplicate task id in order: %s", id)
+		}
+		seen[id] = struct{}{}
+		if _, ok := byTask[id]; !ok {
+			return TaskRunSet[T]{}, fmt.Errorf("missing item for task id: %s", id)
+		}
+	}
+
+	return TaskRunSet[T]{
+		order:  ordered,
+		byTask: byTask,
+	}, nil
+}
+
+func (s TaskRunSet[T]) Get(id domain.TaskID) (T, bool) {
+	value, ok := s.byTask[id]
+	return value, ok
+}
+
+func (s TaskRunSet[T]) Order() []domain.TaskID {
+	return append([]domain.TaskID(nil), s.order...)
+}
+
+func (s TaskRunSet[T]) Values() []T {
+	values := make([]T, 0, len(s.order))
+	for _, id := range s.order {
+		values = append(values, s.byTask[id])
+	}
+	return values
+}
+
+func (s TaskRunSet[T]) Items() iter.Seq2[domain.TaskID, T] {
+	return func(yield func(domain.TaskID, T) bool) {
+		for _, id := range s.order {
+			value := s.byTask[id]
+			if !yield(id, value) {
+				return
+			}
+		}
+	}
+}
+
+func (s TaskRunSet[T]) Len() int {
+	return len(s.order)
+}
+</file>
+
+<file path="internal/run/failure.go">
+package run
+
+import "github.com/becker63/searchbench-go/internal/domain"
+
+type FailureStage string
+
+const (
+	FailurePrepare FailureStage = "prepare"
+	FailureExecute FailureStage = "execute"
+	FailureScore   FailureStage = "score"
+	FailureReport  FailureStage = "report"
+)
+
+// RunFailure records a failed path for one task/system run.
+type RunFailure struct {
+	RunID   domain.RunID    `json:"run_id"`
+	TaskID  domain.TaskID   `json:"task_id"`
+	System  domain.SystemID `json:"system"`
+	Stage   FailureStage    `json:"stage"`
+	Message string          `json:"message"`
+}
+
+func NewFailure(spec Spec, stage FailureStage, message string) RunFailure {
+	return RunFailure{
+		RunID:   spec.ID,
+		TaskID:  spec.Task.ID,
+		System:  spec.System.ID,
+		Stage:   stage,
+		Message: message,
+	}
+}
+</file>
+
+<file path="internal/score/direction_test.go">
+package score
+
+import "testing"
+
+func TestImproved(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		direction Direction
+		baseline  float64
+		candidate float64
+		want      bool
+	}{
+		{
+			name:      "higher is better improves",
+			direction: HigherIsBetter,
+			baseline:  0.5,
+			candidate: 0.8,
+			want:      true,
+		},
+		{
+			name:      "higher is better regression",
+			direction: HigherIsBetter,
+			baseline:  0.8,
+			candidate: 0.5,
+			want:      false,
+		},
+		{
+			name:      "lower is better improves",
+			direction: LowerIsBetter,
+			baseline:  5,
+			candidate: 3,
+			want:      true,
+		},
+		{
+			name:      "lower is better regression",
+			direction: LowerIsBetter,
+			baseline:  3,
+			candidate: 5,
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := Improved(tt.direction, tt.baseline, tt.candidate); got != tt.want {
+				t.Fatalf("Improved(%q, %v, %v) = %v, want %v", tt.direction, tt.baseline, tt.candidate, got, tt.want)
+			}
+		})
+	}
+}
+</file>
+
+<file path="internal/score/direction.go">
+package score
+
+type Direction string
+
+const (
+	LowerIsBetter  Direction = "lower_is_better"
+	HigherIsBetter Direction = "higher_is_better"
+)
+
+type MetricDefinition[T any] struct {
+	Name      MetricName
+	Direction Direction
+}
+
+var GoldHopDefinition = MetricDefinition[HopDistance]{
+	Name:      MetricGoldHop,
+	Direction: LowerIsBetter,
+}
+
+var IssueHopDefinition = MetricDefinition[HopDistance]{
+	Name:      MetricIssueHop,
+	Direction: LowerIsBetter,
+}
+
+var TokenEfficiencyDefinition = MetricDefinition[EfficiencyScore]{
+	Name:      MetricTokenEfficiency,
+	Direction: HigherIsBetter,
+}
+
+var CostDefinition = MetricDefinition[CostScore]{
+	Name:      MetricCost,
+	Direction: LowerIsBetter,
+}
+
+var CompositeDefinition = MetricDefinition[CompositeScore]{
+	Name:      MetricComposite,
+	Direction: HigherIsBetter,
+}
+
+func Improved(def Direction, baseline, candidate float64) bool {
+	switch def {
+	case HigherIsBetter:
+		return candidate > baseline
+	case LowerIsBetter:
+		return candidate < baseline
+	default:
+		return false
+	}
+}
+
+func DirectionForMetric(name MetricName) (Direction, bool) {
+	switch name {
+	case MetricGoldHop:
+		return GoldHopDefinition.Direction, true
+	case MetricIssueHop:
+		return IssueHopDefinition.Direction, true
+	case MetricTokenEfficiency:
+		return TokenEfficiencyDefinition.Direction, true
+	case MetricCost:
+		return CostDefinition.Direction, true
+	case MetricComposite:
+		return CompositeDefinition.Direction, true
+	default:
+		return "", false
+	}
+}
+</file>
+
+<file path="internal/score/scoreset_test.go">
+package score
+
+import "testing"
+
+func TestScoreSetValidate(t *testing.T) {
+	t.Parallel()
+
+	valid := ScoreSet{
+		GoldHop:         Metric[HopDistance]{Name: MetricGoldHop, Value: 1},
+		IssueHop:        Metric[HopDistance]{Name: MetricIssueHop, Value: 2},
+		TokenEfficiency: Metric[EfficiencyScore]{Name: MetricTokenEfficiency, Value: 0.8},
+		Cost:            Metric[CostScore]{Name: MetricCost, Value: 0.2},
+		Composite:       Metric[CompositeScore]{Name: MetricComposite, Value: 0.9},
+	}
+
+	tests := []struct {
+		name    string
+		set     ScoreSet
+		wantErr bool
+	}{
+		{
+			name: "valid",
+			set:  valid,
+		},
+		{
+			name: "wrong gold hop name",
+			set: func() ScoreSet {
+				s := valid
+				s.GoldHop.Name = MetricComposite
+				return s
+			}(),
+			wantErr: true,
+		},
+		{
+			name: "wrong composite name",
+			set: func() ScoreSet {
+				s := valid
+				s.Composite.Name = MetricCost
+				return s
+			}(),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tt.set.Validate()
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+</file>
+
 <file path="testdata/fixtures/reports/.keep">
 
 </file>
@@ -1532,6 +2576,11 @@ func (u UsageSummary) Empty() bool {
 
 <file path="testdata/fixtures/.keep">
 
+</file>
+
+<file path=".gitignore">
+.codex
+.tmp/
 </file>
 
 <file path=".gitmodules">
@@ -1977,6 +3026,238 @@ func (p Path) Hops() int {
 }
 </file>
 
+<file path="internal/domain/system.go">
+package domain
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+)
+
+// BackendKind identifies the execution backend used by a system.
+//
+// A backend is not the whole system. It is only the runtime/tool adapter.
+// The full system also includes model, prompt bundle, policy, and runtime config.
+type BackendKind string
+
+const (
+	BackendIterativeContext BackendKind = "iterative-context"
+	BackendJCodeMunch       BackendKind = "jcodemunch"
+	BackendFake             BackendKind = "fake"
+)
+
+// ModelSpec identifies the model used by a system.
+type ModelSpec struct {
+	Provider string `json:"provider"`
+	Name     string `json:"name"`
+}
+
+// PromptBundleRef identifies the prompt bundle used by a system.
+//
+// Keep this as a reference rather than inline prompt text. Prompt text can live
+// in files/artifacts later.
+type PromptBundleRef struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+}
+
+// PolicyLanguage identifies the language/runtime for a policy artifact.
+type PolicyLanguage string
+
+const (
+	PolicyLanguagePython PolicyLanguage = "python"
+)
+
+// PolicyHash is the stable content hash for a policy source.
+type PolicyHash string
+
+type PolicyRef struct {
+	ID         PolicyID       `json:"id"`
+	Language   PolicyLanguage `json:"language"`
+	SHA256     PolicyHash     `json:"sha256"`
+	Entrypoint string         `json:"entrypoint"`
+}
+
+// PolicyArtifact is a replaceable policy used by a system.
+//
+// In the Go harness, policy source is data. For iterative-context, this can be
+// passed into the Python backend through the MCP/session API instead of being
+// written into a worktree.
+type PolicyArtifact struct {
+	ID         PolicyID       `json:"id"`
+	Language   PolicyLanguage `json:"language"`
+	SHA256     PolicyHash     `json:"sha256"`
+	Entrypoint string         `json:"entrypoint"`
+	Source     string         `json:"source,omitempty"`
+}
+
+func NewPythonPolicy(id PolicyID, source string, entrypoint string) PolicyArtifact {
+	return PolicyArtifact{
+		ID:         id,
+		Language:   PolicyLanguagePython,
+		SHA256:     hashPolicySource(source),
+		Entrypoint: entrypoint,
+		Source:     source,
+	}
+}
+
+func (p PolicyArtifact) Validate() error {
+	if p.ID.Empty() {
+		return errors.New("policy id is required")
+	}
+	switch p.Language {
+	case PolicyLanguagePython:
+	default:
+		return fmt.Errorf("unsupported policy language: %q", p.Language)
+	}
+	if p.Entrypoint == "" {
+		return errors.New("policy entrypoint is required")
+	}
+	if p.Source == "" {
+		return errors.New("policy source is required")
+	}
+	if p.SHA256 == "" {
+		return errors.New("policy sha256 is required")
+	}
+	expected := hashPolicySource(p.Source)
+	if p.SHA256 != expected {
+		return fmt.Errorf("policy sha256 does not match source: got %q want %q", p.SHA256, expected)
+	}
+	return nil
+}
+
+func (p PolicyArtifact) Ref() PolicyRef {
+	return PolicyRef{
+		ID:         p.ID,
+		Language:   p.Language,
+		SHA256:     p.SHA256,
+		Entrypoint: p.Entrypoint,
+	}
+}
+
+// RuntimeConfig captures behavior-affecting runtime limits.
+//
+// If changing a field could change the system's output, it belongs somewhere
+// under SystemSpec.
+type RuntimeConfig struct {
+	MaxSteps           int `json:"max_steps,omitempty"`
+	MaxToolCalls       int `json:"max_tool_calls,omitempty"`
+	MaxInputTokens     int `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens    int `json:"max_output_tokens,omitempty"`
+	MaxContextTokens   int `json:"max_context_tokens,omitempty"`
+	ToolResultMaxBytes int `json:"tool_result_max_bytes,omitempty"`
+}
+
+// SystemSpec is the complete recipe for an agentic code-search system.
+//
+// Baseline and candidate are not different types. They are roles that a
+// SystemSpec can occupy inside a comparison.
+type SystemSpec struct {
+	ID           SystemID        `json:"id"`
+	Name         string          `json:"name"`
+	Backend      BackendKind     `json:"backend"`
+	Model        ModelSpec       `json:"model"`
+	PromptBundle PromptBundleRef `json:"prompt_bundle"`
+	Policy       *PolicyArtifact `json:"policy,omitempty"`
+	Runtime      RuntimeConfig   `json:"runtime,omitempty"`
+}
+
+type SystemFingerprint string
+
+type SystemRef struct {
+	ID           SystemID          `json:"id"`
+	Name         string            `json:"name"`
+	Backend      BackendKind       `json:"backend"`
+	Model        ModelSpec         `json:"model"`
+	PromptBundle PromptBundleRef   `json:"prompt_bundle"`
+	Policy       *PolicyRef        `json:"policy,omitempty"`
+	Runtime      RuntimeConfig     `json:"runtime,omitempty"`
+	Fingerprint  SystemFingerprint `json:"fingerprint"`
+}
+
+func (s SystemSpec) Validate() error {
+	if s.ID.Empty() {
+		return errors.New("system id is required")
+	}
+	switch s.Backend {
+	case BackendIterativeContext, BackendJCodeMunch, BackendFake:
+	default:
+		return fmt.Errorf("unsupported backend: %q", s.Backend)
+	}
+	if s.Model.Provider == "" {
+		return errors.New("model provider is required")
+	}
+	if s.Model.Name == "" {
+		return errors.New("model name is required")
+	}
+	if s.PromptBundle.Name == "" {
+		return errors.New("prompt bundle name is required")
+	}
+	if s.Policy != nil {
+		if err := s.Policy.Validate(); err != nil {
+			return fmt.Errorf("policy: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s SystemSpec) Fingerprint() SystemFingerprint {
+	var policy *PolicyRef
+	if s.Policy != nil {
+		ref := s.Policy.Ref()
+		policy = &ref
+	}
+
+	canonical := struct {
+		Backend      BackendKind     `json:"backend"`
+		Model        ModelSpec       `json:"model"`
+		PromptBundle PromptBundleRef `json:"prompt_bundle"`
+		Policy       *PolicyRef      `json:"policy,omitempty"`
+		Runtime      RuntimeConfig   `json:"runtime,omitempty"`
+	}{
+		Backend:      s.Backend,
+		Model:        s.Model,
+		PromptBundle: s.PromptBundle,
+		Policy:       policy,
+		Runtime:      s.Runtime,
+	}
+
+	data, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return SystemFingerprint(hex.EncodeToString(sum[:]))
+}
+
+func (s SystemSpec) Ref() SystemRef {
+	var policy *PolicyRef
+	if s.Policy != nil {
+		ref := s.Policy.Ref()
+		policy = &ref
+	}
+
+	return SystemRef{
+		ID:           s.ID,
+		Name:         s.Name,
+		Backend:      s.Backend,
+		Model:        s.Model,
+		PromptBundle: s.PromptBundle,
+		Policy:       policy,
+		Runtime:      s.Runtime,
+		Fingerprint:  s.Fingerprint(),
+	}
+}
+
+func hashPolicySource(source string) PolicyHash {
+	sum := sha256.Sum256([]byte(source))
+	return PolicyHash(hex.EncodeToString(sum[:]))
+}
+</file>
+
 <file path="internal/report/comparison.go">
 package report
 
@@ -2001,6 +3282,15 @@ func NewScoreComparison(metric score.MetricName, baseline, candidate float64) Sc
 		Baseline:  baseline,
 		Candidate: candidate,
 		Delta:     candidate - baseline,
+	}
+}
+
+func NewScoreComparisonFromMetric(c score.MetricComparison) ScoreComparison {
+	return ScoreComparison{
+		Metric:    c.Metric,
+		Baseline:  c.Baseline,
+		Candidate: c.Candidate,
+		Delta:     c.Delta,
 	}
 }
 </file>
@@ -2052,59 +3342,38 @@ type Regression struct {
 	Severity RegressionSeverity `json:"severity"`
 	Reason   string             `json:"reason"`
 }
-</file>
 
-<file path="internal/report/report.go">
-package report
-
-import (
-	"time"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/run"
-	"github.com/becker63/searchbench-go/internal/score"
-)
-
-// CandidateReport is the central Searchbench product object.
-//
-// It compares two systems over the same task slice and records whether the
-// candidate should promote, be reviewed, or be rejected.
-type CandidateReport struct {
-	ID        domain.ReportID `json:"id"`
-	CreatedAt time.Time       `json:"created_at"`
-
-	Spec ComparisonSpec `json:"spec"`
-
-	Runs     domain.Pair[[]score.ScoredRun] `json:"runs"`
-	Failures domain.Pair[[]run.RunFailure]  `json:"failures,omitempty"`
-
-	Comparisons []ScoreComparison `json:"comparisons"`
-	Regressions []Regression      `json:"regressions"`
-	Decision    PromotionDecision `json:"decision"`
-
-	Artifacts []domain.ReportArtifactRef `json:"artifacts,omitempty"`
+func NewRegressionFromMetricComparison(
+	taskID domain.TaskID,
+	comparison score.MetricComparison,
+	severity RegressionSeverity,
+	reason string,
+) Regression {
+	return Regression{
+		TaskID:    taskID,
+		Metric:    comparison.Metric,
+		Baseline:  comparison.Baseline,
+		Candidate: comparison.Candidate,
+		Delta:     comparison.Delta,
+		Severity:  severity,
+		Reason:    reason,
+	}
 }
 
-// NewCandidateReport constructs a report from already-scored run sets.
-func NewCandidateReport(
-	id domain.ReportID,
-	spec ComparisonSpec,
-	runs domain.Pair[[]score.ScoredRun],
-	failures domain.Pair[[]run.RunFailure],
-	comparisons []ScoreComparison,
-	regressions []Regression,
-	decision PromotionDecision,
-) CandidateReport {
-	return CandidateReport{
-		ID:          id,
-		CreatedAt:   time.Now().UTC(),
-		Spec:        spec,
-		Runs:        runs,
-		Failures:    failures,
-		Comparisons: comparisons,
-		Regressions: regressions,
-		Decision:    decision,
+func RegressionsForTask(taskID domain.TaskID, comparisons []score.MetricComparison) []Regression {
+	out := make([]Regression, 0)
+	for _, comparison := range comparisons {
+		if !comparison.Regressed {
+			continue
+		}
+		out = append(out, NewRegressionFromMetricComparison(
+			taskID,
+			comparison,
+			RegressionMinor,
+			"candidate score is worse than baseline",
+		))
 	}
+	return out
 }
 </file>
 
@@ -2354,6 +3623,79 @@ type Metric[T any] struct {
 }
 </file>
 
+<file path="internal/score/scorer.go">
+package score
+
+import "context"
+
+// Engine computes the complete required ScoreSet for one executed run.
+type Engine interface {
+	Score(ctx context.Context, input Input) (ScoreSet, error)
+}
+</file>
+
+<file path="go.mod">
+module github.com/becker63/searchbench-go
+
+go 1.26.2
+
+require github.com/hmdsefi/gograph v0.7.0 // indirect
+</file>
+
+<file path="internal/report/report.go">
+package report
+
+import (
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/run"
+	"github.com/becker63/searchbench-go/internal/score"
+)
+
+// CandidateReport is the central Searchbench product object.
+//
+// It compares two systems over the same task slice and records whether the
+// candidate should promote, be reviewed, or be rejected.
+type CandidateReport struct {
+	ID        domain.ReportID `json:"id"`
+	CreatedAt time.Time       `json:"created_at"`
+
+	Spec ComparisonSpec `json:"spec"`
+
+	Runs     domain.Pair[[]score.ScoredRun] `json:"runs"`
+	Failures domain.Pair[[]run.RunFailure]  `json:"failures,omitempty"`
+
+	Comparisons []ScoreComparison `json:"comparisons"`
+	Regressions []Regression      `json:"regressions"`
+	Decision    PromotionDecision `json:"decision"`
+
+	Artifacts []domain.ReportArtifactRef `json:"artifacts,omitempty"`
+}
+
+// NewCandidateReport constructs a report from already-scored run sets.
+func NewCandidateReport(
+	id domain.ReportID,
+	spec ComparisonSpec,
+	runs domain.Pair[[]score.ScoredRun],
+	failures domain.Pair[[]run.RunFailure],
+	comparisons []ScoreComparison,
+	regressions []Regression,
+	decision PromotionDecision,
+) CandidateReport {
+	return CandidateReport{
+		ID:          id,
+		CreatedAt:   time.Now().UTC(),
+		Spec:        spec,
+		Runs:        runs,
+		Failures:    failures,
+		Comparisons: comparisons,
+		Regressions: regressions,
+		Decision:    decision,
+	}
+}
+</file>
+
 <file path="internal/score/scored_run.go">
 package score
 
@@ -2376,17 +3718,6 @@ func NewScoredRun(execution run.ExecutedRun, scores ScoreSet) (ScoredRun, error)
 		Execution: execution,
 		Scores:    scores,
 	}, nil
-}
-</file>
-
-<file path="internal/score/scorer.go">
-package score
-
-import "context"
-
-// Engine computes the complete required ScoreSet for one executed run.
-type Engine interface {
-	Score(ctx context.Context, input Input) (ScoreSet, error)
 }
 </file>
 
@@ -2495,14 +3826,6 @@ type AnyMetric struct {
 	Explanation string        `json:"explanation,omitempty"`
 	Evidence    []EvidenceRef `json:"evidence,omitempty"`
 }
-</file>
-
-<file path="go.mod">
-module github.com/becker63/searchbench-go
-
-go 1.26.2
-
-require github.com/hmdsefi/gograph v0.7.0 // indirect
 </file>
 
 </files>

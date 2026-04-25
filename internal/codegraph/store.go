@@ -7,6 +7,9 @@ import (
 	"github.com/hmdsefi/gograph"
 )
 
+var _ Builder = (*Store)(nil)
+var _ Graph = (*Store)(nil)
+
 type Store struct {
 	graph gograph.Graph[NodeID]
 

@@ -71,3 +71,38 @@ func TestNewTaskRunSetValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestTaskRunSetItems(t *testing.T) {
+	t.Parallel()
+
+	task1 := domain.TaskID("task-1")
+	task2 := domain.TaskID("task-2")
+	set, err := NewTaskRunSet(
+		map[domain.TaskID]string{
+			task1: "baseline",
+			task2: "candidate",
+		},
+		[]domain.TaskID{task2, task1},
+	)
+	if err != nil {
+		t.Fatalf("NewTaskRunSet() error = %v", err)
+	}
+
+	gotIDs := make([]domain.TaskID, 0)
+	gotVals := make([]string, 0)
+	for taskID, value := range set.Items() {
+		gotIDs = append(gotIDs, taskID)
+		gotVals = append(gotVals, value)
+	}
+
+	wantIDs := []domain.TaskID{task2, task1}
+	wantVals := []string{"candidate", "baseline"}
+	for i := range wantIDs {
+		if gotIDs[i] != wantIDs[i] {
+			t.Fatalf("gotIDs[%d] = %q, want %q", i, gotIDs[i], wantIDs[i])
+		}
+		if gotVals[i] != wantVals[i] {
+			t.Fatalf("gotVals[%d] = %q, want %q", i, gotVals[i], wantVals[i])
+		}
+	}
+}

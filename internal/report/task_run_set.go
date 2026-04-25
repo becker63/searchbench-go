@@ -3,6 +3,7 @@ package report
 import (
 	"errors"
 	"fmt"
+	"iter"
 
 	"github.com/becker63/searchbench-go/internal/domain"
 )
@@ -55,6 +56,17 @@ func (s TaskRunSet[T]) Values() []T {
 		values = append(values, s.byTask[id])
 	}
 	return values
+}
+
+func (s TaskRunSet[T]) Items() iter.Seq2[domain.TaskID, T] {
+	return func(yield func(domain.TaskID, T) bool) {
+		for _, id := range s.order {
+			value := s.byTask[id]
+			if !yield(id, value) {
+				return
+			}
+		}
+	}
 }
 
 func (s TaskRunSet[T]) Len() int {

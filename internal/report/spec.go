@@ -1,6 +1,11 @@
 package report
 
-import "github.com/becker63/searchbench-go/internal/domain"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
 
 // ComparisonSpec declares the systems and tasks being compared.
 //
@@ -27,4 +32,23 @@ func NewComparisonSpecFromRefs(
 		Systems: systems,
 		Tasks:   tasks,
 	}
+}
+
+func (s ComparisonSpec) Validate() error {
+	if err := s.Tasks.Validate(); err != nil {
+		return err
+	}
+	if s.Systems.Baseline.ID.Empty() {
+		return errors.New("baseline system id is required")
+	}
+	if s.Systems.Candidate.ID.Empty() {
+		return errors.New("candidate system id is required")
+	}
+	if s.Systems.Baseline.Fingerprint == "" {
+		return fmt.Errorf("baseline system fingerprint is required")
+	}
+	if s.Systems.Candidate.Fingerprint == "" {
+		return fmt.Errorf("candidate system fingerprint is required")
+	}
+	return nil
 }

@@ -23,3 +23,12 @@ func NewScoreComparison(metric score.MetricName, baseline, candidate float64) Sc
 		Delta:     candidate - baseline,
 	}
 }
+
+func NewScoreComparisonFromMetric(c score.MetricComparison) ScoreComparison {
+	return ScoreComparison{
+		Metric:    c.Metric,
+		Baseline:  c.Baseline,
+		Candidate: c.Candidate,
+		Delta:     c.Delta,
+	}
+}
