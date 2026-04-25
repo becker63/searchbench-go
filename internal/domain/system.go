@@ -45,6 +45,10 @@ const (
 // PolicyHash is the stable content hash for a policy source.
 type PolicyHash string
 
+// PolicyRef is the report-safe identity for a policy artifact.
+//
+// It intentionally omits policy source so reports and comparisons can refer to
+// the policy without embedding executable code.
 type PolicyRef struct {
 	ID         PolicyID       `json:"id"`
 	Language   PolicyLanguage `json:"language"`
@@ -75,6 +79,10 @@ func NewPythonPolicy(id PolicyID, source string, entrypoint string) PolicyArtifa
 	}
 }
 
+// Validate checks that the policy is executable and self-consistent.
+//
+// In particular, Validate ensures the stored content hash matches Source so the
+// policy cannot silently drift away from its identity.
 func (p PolicyArtifact) Validate() error {
 	if p.ID.Empty() {
 		return errors.New("policy id is required")
@@ -100,6 +108,7 @@ func (p PolicyArtifact) Validate() error {
 	return nil
 }
 
+// Ref returns the report-safe identity for the policy without source text.
 func (p PolicyArtifact) Ref() PolicyRef {
 	return PolicyRef{
 		ID:         p.ID,
@@ -136,8 +145,14 @@ type SystemSpec struct {
 	Runtime      RuntimeConfig   `json:"runtime,omitempty"`
 }
 
+// SystemFingerprint is the stable hash of a system's behavior-affecting
+// configuration.
 type SystemFingerprint string
 
+// SystemRef is the report-safe identity for an executable system.
+//
+// It contains all fields needed to explain what was compared, but it omits
+// executable-only data such as policy source.
 type SystemRef struct {
 	ID           SystemID          `json:"id"`
 	Name         string            `json:"name"`
@@ -149,6 +164,7 @@ type SystemRef struct {
 	Fingerprint  SystemFingerprint `json:"fingerprint"`
 }
 
+// Validate checks that the executable system recipe is usable.
 func (s SystemSpec) Validate() error {
 	if s.ID.Empty() {
 		return errors.New("system id is required")
@@ -175,6 +191,11 @@ func (s SystemSpec) Validate() error {
 	return nil
 }
 
+// Fingerprint returns a deterministic hash over the system's
+// behavior-affecting configuration.
+//
+// Cosmetic display fields such as Name are intentionally excluded, while
+// PolicyRef is included so language, entrypoint, and hash all affect identity.
 func (s SystemSpec) Fingerprint() SystemFingerprint {
 	var policy *PolicyRef
 	if s.Policy != nil {
@@ -182,6 +203,8 @@ func (s SystemSpec) Fingerprint() SystemFingerprint {
 		policy = &ref
 	}
 
+	// Name is intentionally excluded because it is cosmetic; prompt/model/policy
+	// selection and runtime limits are the fields that affect behavior.
 	canonical := struct {
 		Backend      BackendKind     `json:"backend"`
 		Model        ModelSpec       `json:"model"`
@@ -204,6 +227,9 @@ func (s SystemSpec) Fingerprint() SystemFingerprint {
 	return SystemFingerprint(hex.EncodeToString(sum[:]))
 }
 
+// Ref converts the executable system recipe into its report-safe identity.
+//
+// Reports should prefer SystemRef so policy source does not leak by default.
 func (s SystemSpec) Ref() SystemRef {
 	var policy *PolicyRef
 	if s.Policy != nil {

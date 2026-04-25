@@ -49,12 +49,23 @@ type Decider interface {
 	Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision
 }
 
+// RunIDFunc derives a run identifier for one role/task/system combination.
 type RunIDFunc func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID
 
+// ReportIDFunc derives a report identifier for one completed comparison.
 type ReportIDFunc func() domain.ReportID
 
+// ClockFunc provides the current time for emitted report timestamps.
 type ClockFunc func() time.Time
 
+// Runner coordinates a full baseline/candidate comparison.
+//
+// Its flow is:
+//
+//	Plan -> RunTasks -> CompareTask -> ExecuteAndScore -> Results -> CandidateReport
+//
+// Runner owns orchestration policy only. Concrete execution, graph loading,
+// scoring, and final release decisions enter through injected interfaces.
 type Runner struct {
 	Executor      Executor
 	GraphProvider GraphProvider
@@ -66,12 +77,23 @@ type Runner struct {
 	Parallelism   Parallelism
 }
 
+// TaskComparisonResult is the per-task outcome produced by CompareTask.
+//
+// Most execution and scoring failures remain here as run.RunFailure values
+// rather than escaping as top-level errors from Runner.
 type TaskComparisonResult struct {
 	Runs        domain.Pair[*score.ScoredRun]
 	Failures    domain.Pair[*run.RunFailure]
 	Regressions []report.Regression
 }
 
+// Run executes a complete baseline/candidate comparison and returns the
+// candidate report.
+//
+// It validates the executable plan, runs task comparisons according to the
+// configured Parallelism policy, accumulates successful runs and failures,
+// summarizes metric comparisons, asks the Decider for a promotion decision,
+// and emits a report-safe CandidateReport.
 func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, error) {
 	if err := plan.Validate(); err != nil {
 		return report.CandidateReport{}, err
@@ -107,6 +129,8 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 	return out, nil
 }
 
+// Validate checks that Runner has the injected dependencies needed to
+// orchestrate a comparison.
 func (r Runner) Validate() error {
 	if r.Executor == nil {
 		return errors.New("compare: executor is required")
@@ -136,6 +160,17 @@ func (r Runner) normalizedParallelism() Parallelism {
 	return r.Parallelism.Normalize()
 }
 
+// RunTasks executes task comparisons according to the configured task-level
+// parallelism policy.
+//
+// Parallelism is over tasks only. Baseline and candidate work for one task are
+// still coordinated inside CompareTask. Results are always returned in original
+// plan order, and the shared Results accumulator is intentionally not mutated
+// from worker goroutines.
+//
+// Context cancellation aborts orchestration with a top-level error. Ordinary
+// task-level execution and scoring failures stay inside TaskComparisonResult as
+// run.RunFailure values.
 func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, error) {
 	tasks := plan.Tasks.All()
 	parallelism := r.normalizedParallelism()
@@ -242,6 +277,8 @@ func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, erro
 	return ordered, nil
 }
 
+// CompareTask runs both systems against one task and interprets any resulting
+// score regressions at the report level.
 func (r Runner) CompareTask(
 	ctx context.Context,
 	systems domain.Pair[domain.SystemSpec],
@@ -288,6 +325,11 @@ func (r Runner) CompareTask(
 	return out
 }
 
+// ExecuteAndScore runs one system on one task and attempts to compute a
+// complete ScoredRun.
+//
+// Execute and score failures are classified internally with StageError and then
+// converted into report-facing run.RunFailure values.
 func (r Runner) ExecuteAndScore(
 	ctx context.Context,
 	role domain.Role,

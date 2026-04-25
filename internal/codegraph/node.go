@@ -60,6 +60,7 @@ type Node struct {
 	Import   *ImportNode   `json:"import,omitempty"`
 }
 
+// NewFileNode constructs a file node.
 func NewFileNode(id NodeID, path domain.RepoRelPath) Node {
 	return Node{
 		ID:   id,
@@ -68,6 +69,7 @@ func NewFileNode(id NodeID, path domain.RepoRelPath) Node {
 	}
 }
 
+// NewFunctionNode constructs a function node.
 func NewFunctionNode(id NodeID, file domain.RepoRelPath, name string, startLine, endLine int) Node {
 	return Node{
 		ID:   id,
@@ -81,6 +83,7 @@ func NewFunctionNode(id NodeID, file domain.RepoRelPath, name string, startLine,
 	}
 }
 
+// NewSymbolNode constructs a symbol node.
 func NewSymbolNode(id NodeID, file domain.RepoRelPath, name string) Node {
 	return Node{
 		ID:   id,
@@ -92,6 +95,7 @@ func NewSymbolNode(id NodeID, file domain.RepoRelPath, name string) Node {
 	}
 }
 
+// NewImportNode constructs an import node.
 func NewImportNode(id NodeID, file domain.RepoRelPath, module string) Node {
 	return Node{
 		ID:   id,

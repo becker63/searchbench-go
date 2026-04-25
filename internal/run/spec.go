@@ -16,6 +16,8 @@ type Spec struct {
 	System domain.SystemSpec `json:"system"`
 }
 
+// NewSpec constructs a planned run request from one task and one executable
+// system.
 func NewSpec(id domain.RunID, task domain.TaskSpec, system domain.SystemSpec) Spec {
 	return Spec{
 		ID:     id,

@@ -19,6 +19,7 @@ type Pair[T any] struct {
 	Candidate T `json:"candidate"`
 }
 
+// NewPair constructs the baseline/candidate pair for a value type.
 func NewPair[T any](baseline T, candidate T) Pair[T] {
 	return Pair[T]{
 		Baseline:  baseline,
@@ -26,6 +27,8 @@ func NewPair[T any](baseline T, candidate T) Pair[T] {
 	}
 }
 
+// MapPair maps both sides of the pair while preserving baseline/candidate
+// roles.
 func MapPair[A, B any](p Pair[A], f func(Role, A) B) Pair[B] {
 	return Pair[B]{
 		Baseline:  f(RoleBaseline, p.Baseline),
@@ -33,6 +36,7 @@ func MapPair[A, B any](p Pair[A], f func(Role, A) B) Pair[B] {
 	}
 }
 
+// All iterates baseline first and then candidate together with their roles.
 func (p Pair[T]) All() iter.Seq2[Role, T] {
 	return func(yield func(Role, T) bool) {
 		if !yield(RoleBaseline, p.Baseline) {
@@ -42,6 +46,7 @@ func (p Pair[T]) All() iter.Seq2[Role, T] {
 	}
 }
 
+// ByRole returns the value for the requested comparison role.
 func (p Pair[T]) ByRole(role Role) T {
 	switch role {
 	case RoleBaseline:

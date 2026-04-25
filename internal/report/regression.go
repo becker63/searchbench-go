@@ -26,6 +26,8 @@ type Regression struct {
 	Reason   string             `json:"reason"`
 }
 
+// NewRegressionFromMetricComparison converts a score-level regression into a
+// report-facing regression record.
 func NewRegressionFromMetricComparison(
 	taskID domain.TaskID,
 	comparison score.MetricComparison,
@@ -43,6 +45,8 @@ func NewRegressionFromMetricComparison(
 	}
 }
 
+// RegressionsForTask converts metric comparisons into report-level regressions
+// for one task.
 func RegressionsForTask(taskID domain.TaskID, comparisons []score.MetricComparison) []Regression {
 	out := make([]Regression, 0)
 	for _, comparison := range comparisons {

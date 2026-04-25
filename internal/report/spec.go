@@ -17,6 +17,11 @@ type ComparisonSpec struct {
 	Tasks   domain.NonEmpty[domain.TaskSpec] `json:"tasks"`
 }
 
+// NewComparisonSpec constructs a report-safe comparison boundary from full
+// executable systems.
+//
+// The returned spec stores SystemRef values rather than SystemSpec values so
+// reports do not carry policy source.
 func NewComparisonSpec(
 	systems domain.Pair[domain.SystemSpec],
 	tasks domain.NonEmpty[domain.TaskSpec],
@@ -24,6 +29,8 @@ func NewComparisonSpec(
 	return NewComparisonSpecFromRefs(domain.NewPair(systems.Baseline.Ref(), systems.Candidate.Ref()), tasks)
 }
 
+// NewComparisonSpecFromRefs constructs a report-safe comparison boundary from
+// report-safe system identities.
 func NewComparisonSpecFromRefs(
 	systems domain.Pair[domain.SystemRef],
 	tasks domain.NonEmpty[domain.TaskSpec],
@@ -34,6 +41,7 @@ func NewComparisonSpecFromRefs(
 	}
 }
 
+// Validate checks that the report boundary is structurally meaningful.
 func (s ComparisonSpec) Validate() error {
 	if err := s.Tasks.Validate(); err != nil {
 		return err

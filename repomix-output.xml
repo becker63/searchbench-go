@@ -47,18 +47,23 @@ cmd/
 internal/
   backend/
     backend.go
+    doc.go
     errors.go
     session.go
   codegraph/
     builder.go
+    doc.go
     edge.go
     graph.go
     node.go
     path.go
     store.go
   compare/
+    doc.go
     errors_test.go
     errors.go
+    parallelism_test.go
+    parallelism.go
     plan.go
     results.go
     runner_example_test.go
@@ -66,6 +71,7 @@ internal/
     runner.go
   domain/
     artifact.go
+    doc.go
     ids.go
     nonempty_test.go
     nonempty.go
@@ -79,6 +85,7 @@ internal/
     usage.go
   report/
     comparison.go
+    doc.go
     promotion.go
     regression.go
     report.go
@@ -86,6 +93,7 @@ internal/
     task_run_set_test.go
     task_run_set.go
   run/
+    doc.go
     failure.go
     phases.go
     record.go
@@ -95,6 +103,7 @@ internal/
     comparison.go
     direction_test.go
     direction.go
+    doc.go
     input.go
     metric.go
     scored_run.go
@@ -121,6 +130,106 @@ init.sh
 <files>
 This section contains the contents of the repository's files.
 
+<file path="internal/backend/doc.go">
+// Package backend defines the future runtime/session boundary for Searchbench.
+//
+// It owns abstract backend and session interfaces plus small tool protocol
+// shapes that can later be implemented by integrations such as iterative
+// context or jCodeMunch adapters.
+//
+// It does not implement real backend behavior in this repository pass. The
+// package exists to make the eventual session boundary explicit and context-
+// aware without coupling orchestration to a concrete runtime.
+package backend
+</file>
+
+<file path="internal/codegraph/doc.go">
+// Package codegraph defines the Searchbench code graph model.
+//
+// It owns graph nodes, edges, paths, the mutable Builder interface used during
+// ingestion, and the read-only Graph interface used during scoring.
+//
+// It does not own tree-sitter ingestion logic or scoring policy. Those higher-
+// level concerns should depend on Builder or Graph rather than on the Store
+// implementation or its gograph backing.
+package codegraph
+</file>
+
+<file path="internal/compare/doc.go">
+// Package compare coordinates baseline/candidate comparisons.
+//
+// It owns orchestration only: validating executable plans, running task
+// comparisons, applying task-level parallelism policy, accumulating results,
+// and emitting candidate reports.
+//
+// It does not own concrete backend sessions, graph ingestion, metric
+// algorithms, prompt construction, or telemetry integrations. Those enter
+// through small interfaces such as Executor, GraphProvider, Scorer, and
+// Decider.
+package compare
+</file>
+
+<file path="internal/domain/doc.go">
+// Package domain defines the stable Searchbench vocabulary.
+//
+// It owns identifiers, tasks, systems, policy refs, repo snapshots,
+// predictions, usage summaries, artifact references, and other value types that
+// are shared across execution, scoring, and reporting.
+//
+// It does not own run lifecycle, score computation, report generation,
+// orchestration, backend sessions, or graph ingestion. Those higher-level
+// concerns build on the domain model rather than living inside it.
+package domain
+</file>
+
+<file path="internal/report/doc.go">
+// Package report defines the Searchbench release artifact model.
+//
+// It owns report-safe comparison specs, metric comparisons, regressions,
+// promotion decisions, task-aligned run sets, and CandidateReport, the central
+// product emitted after a baseline/candidate comparison.
+//
+// It does not own executable system configuration or runtime orchestration.
+// Executable inputs are modeled in package compare and package domain; reports
+// intentionally operate on report-safe identities instead.
+package report
+</file>
+
+<file path="internal/run/doc.go">
+// Package run defines the Searchbench run lifecycle.
+//
+// It owns planned, prepared, and executed run records plus the report-facing
+// failure model used when execution or scoring cannot produce a successful run.
+//
+// It does not own metric computation or release decisions. A run becomes a
+// scored run in package score, and a comparison becomes a release artifact in
+// package report.
+package run
+</file>
+
+<file path="internal/score/doc.go">
+// Package score defines Searchbench scoring vocabulary and helpers.
+//
+// It owns typed metric values, complete ScoreSet validation, metric direction
+// semantics, score comparisons, and ScoredRun, which represents a run whose
+// required metrics were computed successfully.
+//
+// It does not own backend execution, report generation, or concrete scoring
+// algorithms beyond the stable interfaces and helper shapes used by the rest of
+// the system.
+package score
+</file>
+
+<file path="cmd/searchbench/main.go">
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("searchbench-go")
+}
+</file>
+
 <file path="internal/backend/errors.go">
 package backend
 
@@ -133,24 +242,46 @@ import (
 type Operation string
 
 const (
+	// OperationStartSession identifies backend session creation.
 	OperationStartSession Operation = "start_session"
-	OperationListTools    Operation = "list_tools"
-	OperationCallTool     Operation = "call_tool"
+	// OperationListTools identifies backend tool discovery.
+	OperationListTools Operation = "list_tools"
+	// OperationCallTool identifies one backend tool invocation.
+	OperationCallTool Operation = "call_tool"
+	// OperationCloseSession identifies backend session teardown.
 	OperationCloseSession Operation = "close_session"
 )
 
+// Error classifies backend failures by backend kind and operation.
 type Error struct {
 	Backend domain.BackendKind
 	Op      Operation
 	Err     error
 }
 
+// Error formats the backend operation plus the wrapped cause.
 func (e Error) Error() string {
 	return fmt.Sprintf("backend=%s op=%s: %v", e.Backend, e.Op, e.Err)
 }
 
+// Unwrap returns the underlying backend cause.
 func (e Error) Unwrap() error {
 	return e.Err
+}
+</file>
+
+<file path="internal/codegraph/builder.go">
+package codegraph
+
+// Builder is the mutable construction-time interface used while creating a
+// graph.
+//
+// Tree-sitter ingestion should receive Builder. Scoring should depend on Graph
+// instead so it does not rely on a concrete mutable store.
+type Builder interface {
+	AddNode(node Node) error
+	AddEdge(edge Edge) error
+	Build() (Graph, error)
 }
 </file>
 
@@ -254,6 +385,11 @@ type StageError struct {
 	Err      error
 }
 
+// NewStageError constructs a typed orchestration error for one run stage.
+//
+// StageError is an internal classification helper. Runner eventually converts
+// it into the report-facing run.RunFailure artifact once comparison work is
+// summarized.
 func NewStageError(spec run.Spec, stage run.FailureStage, err error) StageError {
 	if err == nil {
 		err = errors.New("unknown error")
@@ -267,6 +403,7 @@ func NewStageError(spec run.Spec, stage run.FailureStage, err error) StageError 
 	}
 }
 
+// Error formats the stage classification together with the wrapped cause.
 func (e StageError) Error() string {
 	return fmt.Sprintf(
 		"stage=%s run_id=%s task_id=%s system_id=%s: %v",
@@ -278,11 +415,14 @@ func (e StageError) Error() string {
 	)
 }
 
+// Unwrap returns the underlying stage cause for errors.Is/errors.As.
 func (e StageError) Unwrap() error {
 	return e.Err
 }
 
 func failureFromError(spec run.Spec, stage run.FailureStage, err error) run.RunFailure {
+	// StageError is the internal classification shape; RunFailure is the
+	// report-facing artifact stored in CandidateReport.
 	var stageErr StageError
 	if errors.As(err, &stageErr) {
 		return run.RunFailure{
@@ -301,6 +441,171 @@ func failureFromError(spec run.Spec, stage run.FailureStage, err error) run.RunF
 }
 </file>
 
+<file path="internal/compare/parallelism_test.go">
+package compare
+
+import "testing"
+
+func TestParallelismNormalizeAndValidate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   Parallelism
+		want    Parallelism
+		wantErr bool
+	}{
+		{
+			name:  "zero value normalizes to sequential",
+			input: Parallelism{},
+			want: Parallelism{
+				Mode:       ExecutionSequential,
+				MaxWorkers: 1,
+			},
+		},
+		{
+			name: "sequential ignores high max workers",
+			input: Parallelism{
+				Mode:       ExecutionSequential,
+				MaxWorkers: 99,
+				FailFast:   true,
+			},
+			want: Parallelism{
+				Mode:       ExecutionSequential,
+				MaxWorkers: 1,
+				FailFast:   true,
+			},
+		},
+		{
+			name: "parallel with workers validates",
+			input: Parallelism{
+				Mode:       ExecutionParallel,
+				MaxWorkers: 2,
+			},
+			want: Parallelism{
+				Mode:       ExecutionParallel,
+				MaxWorkers: 2,
+			},
+		},
+		{
+			name: "parallel zero workers fails validation",
+			input: Parallelism{
+				Mode: ExecutionParallel,
+			},
+			wantErr: true,
+		},
+		{
+			name: "unknown mode fails validation",
+			input: Parallelism{
+				Mode: ExecutionMode("weird"),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			normalized := tt.input.Normalize()
+			if tt.wantErr {
+				if err := tt.input.Validate(); err == nil {
+					t.Fatal("expected validation error")
+				}
+				return
+			}
+
+			if err := normalized.Validate(); err != nil {
+				t.Fatalf("Validate() error = %v", err)
+			}
+			if normalized != tt.want {
+				t.Fatalf("Normalize() = %#v, want %#v", normalized, tt.want)
+			}
+		})
+	}
+}
+</file>
+
+<file path="internal/compare/parallelism.go">
+package compare
+
+import (
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+type ExecutionMode string
+
+const (
+	// ExecutionSequential compares tasks one at a time in plan order.
+	ExecutionSequential ExecutionMode = "sequential"
+	// ExecutionParallel compares tasks concurrently while preserving report order.
+	ExecutionParallel ExecutionMode = "parallel"
+)
+
+// Parallelism configures task-level orchestration policy for Runner.
+//
+// It does not introduce concurrency into the domain model itself. Only task
+// execution in compare.RunTasks may run concurrently.
+type Parallelism struct {
+	Mode       ExecutionMode `json:"mode"`
+	MaxWorkers int           `json:"max_workers"`
+	FailFast   bool          `json:"fail_fast"`
+}
+
+// TaskWorkResult captures one completed task comparison together with its
+// original task index.
+//
+// Runner uses the index to restore plan order after parallel work completes.
+type TaskWorkResult struct {
+	Index  int
+	TaskID domain.TaskID
+	Result TaskComparisonResult
+}
+
+// DefaultParallelism returns the default runner policy: sequential task
+// execution with a single worker.
+func DefaultParallelism() Parallelism {
+	return Parallelism{
+		Mode:       ExecutionSequential,
+		MaxWorkers: 1,
+	}
+}
+
+// Normalize fills in default values while preserving the requested execution
+// mode semantics.
+//
+// Sequential execution always normalizes to one worker. Parallel execution
+// preserves the caller's worker count so validation can reject invalid values.
+func (p Parallelism) Normalize() Parallelism {
+	if p.Mode == "" {
+		p.Mode = ExecutionSequential
+	}
+
+	if p.Mode == ExecutionSequential {
+		p.MaxWorkers = 1
+	}
+
+	return p
+}
+
+// Validate checks that the requested execution policy is internally coherent.
+func (p Parallelism) Validate() error {
+	switch p.Mode {
+	case "", ExecutionSequential:
+		return nil
+	case ExecutionParallel:
+		if p.MaxWorkers <= 0 {
+			return fmt.Errorf("compare: parallel execution requires max_workers > 0")
+		}
+		return nil
+	default:
+		return fmt.Errorf("compare: unknown execution mode %q", p.Mode)
+	}
+}
+</file>
+
 <file path="internal/compare/plan.go">
 package compare
 
@@ -316,6 +621,7 @@ type Plan struct {
 	Tasks   domain.NonEmpty[domain.TaskSpec]
 }
 
+// NewPlan constructs an executable baseline/candidate comparison request.
 func NewPlan(
 	systems domain.Pair[domain.SystemSpec],
 	tasks domain.NonEmpty[domain.TaskSpec],
@@ -326,6 +632,10 @@ func NewPlan(
 	}
 }
 
+// Validate checks the executable comparison inputs before orchestration starts.
+//
+// It requires a non-empty task slice plus individually valid baseline and
+// candidate systems, wrapping system errors with their comparison role.
 func (p Plan) Validate() error {
 	if err := p.Tasks.Validate(); err != nil {
 		return err
@@ -339,6 +649,11 @@ func (p Plan) Validate() error {
 	return nil
 }
 
+// ReportSpec converts the executable plan into its report-safe identity.
+//
+// The resulting ComparisonSpec contains SystemRef values rather than full
+// executable SystemSpec values so reports do not carry policy source by
+// default.
 func (p Plan) ReportSpec() report.ComparisonSpec {
 	return report.NewComparisonSpec(p.Systems, p.Tasks)
 }
@@ -360,6 +675,8 @@ type Results struct {
 	regressions []report.Regression
 }
 
+// Summary is the aggregated comparison view produced after all task work has
+// finished.
 type Summary struct {
 	Runs        domain.Pair[[]score.ScoredRun]
 	Failures    domain.Pair[[]run.RunFailure]
@@ -367,6 +684,8 @@ type Summary struct {
 	Regressions []report.Regression
 }
 
+// NewResults constructs the single-threaded comparison accumulator used by
+// Runner after task work has been collected in deterministic order.
 func NewResults(capacity int) Results {
 	return Results{
 		runs: domain.NewPair(
@@ -381,6 +700,11 @@ func NewResults(capacity int) Results {
 	}
 }
 
+// AddTaskResult appends one task comparison outcome into the aggregate result.
+//
+// Results is intentionally single-threaded. Runner collects task work first and
+// then feeds the accumulator on the main goroutine to preserve deterministic
+// ordering without locks.
 func (r *Results) AddTaskResult(result TaskComparisonResult) {
 	if result.Runs.Baseline != nil {
 		r.runs.Baseline = append(r.runs.Baseline, *result.Runs.Baseline)
@@ -397,6 +721,8 @@ func (r *Results) AddTaskResult(result TaskComparisonResult) {
 	r.regressions = append(r.regressions, result.Regressions...)
 }
 
+// Summary reduces the accumulated runs and failures into report-facing
+// comparisons plus the collected regressions.
 func (r Results) Summary() Summary {
 	metricComparisons := score.CompareAverages(r.runs.Baseline, r.runs.Candidate)
 	comparisons := make([]report.ScoreComparison, 0, len(metricComparisons))
@@ -630,6 +956,76 @@ func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
 	}
 }
 
+func TestRunnerParallelTasksPreservesPlanOrder(t *testing.T) {
+	t.Parallel()
+
+	runner := exampleRunner(fixedTestTime())
+	runner.Executor = delayedExecutor{
+		now: fixedTestTime(),
+		delays: map[domain.TaskID]time.Duration{
+			domain.TaskID("task-1"): 30 * time.Millisecond,
+			domain.TaskID("task-2"): 10 * time.Millisecond,
+			domain.TaskID("task-3"): 1 * time.Millisecond,
+		},
+	}
+	runner.Parallelism = Parallelism{
+		Mode:       ExecutionParallel,
+		MaxWorkers: 2,
+	}
+
+	plan := NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+		),
+		domain.NewNonEmpty(
+			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+			exampleTask(domain.TaskID("task-3"), domain.RepoRelPath("pkg/bug3.go")),
+		),
+	)
+
+	got, err := runner.Run(context.Background(), plan)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	wantOrder := []domain.TaskID{
+		domain.TaskID("task-1"),
+		domain.TaskID("task-2"),
+		domain.TaskID("task-3"),
+	}
+	assertRunOrder(t, got.Runs.Baseline, wantOrder)
+	assertRunOrder(t, got.Runs.Candidate, wantOrder)
+}
+
+func TestRunnerParallelTasksRespectsContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	runner := exampleRunner(fixedTestTime())
+	runner.Parallelism = Parallelism{
+		Mode:       ExecutionParallel,
+		MaxWorkers: 2,
+	}
+
+	_, err := runner.Run(ctx, NewPlan(
+		domain.NewPair(
+			exampleBaselineSystem(),
+			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+		),
+		domain.NewNonEmpty(
+			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+		),
+	))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want %v", err, context.Canceled)
+	}
+}
+
 type fakeExecutor struct {
 	now time.Time
 }
@@ -661,6 +1057,27 @@ func (f fakeExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun
 		f.now,
 		f.now.Add(2*time.Second),
 	), nil
+}
+
+type delayedExecutor struct {
+	now    time.Time
+	delays map[domain.TaskID]time.Duration
+}
+
+var _ Executor = delayedExecutor{}
+
+func (d delayedExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
+	if delay := d.delays[spec.Task.ID]; delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+
+		select {
+		case <-ctx.Done():
+			return run.ExecutedRun{}, ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return fakeExecutor{now: d.now}.Execute(ctx, spec)
 }
 
 type failingExecutor struct {
@@ -735,6 +1152,19 @@ func (fakeDecider) Decide(_ []report.ScoreComparison, regressions []report.Regre
 		Reason:   "candidate has regressions",
 	}
 }
+
+func assertRunOrder(t *testing.T, runs []score.ScoredRun, want []domain.TaskID) {
+	t.Helper()
+
+	if len(runs) != len(want) {
+		t.Fatalf("len(runs) = %d, want %d", len(runs), len(want))
+	}
+	for i, taskID := range want {
+		if got := runs[i].Execution.Spec().Task.ID; got != taskID {
+			t.Fatalf("runs[%d].Task.ID = %q, want %q", i, got, taskID)
+		}
+	}
+}
 </file>
 
 <file path="internal/compare/runner.go">
@@ -755,18 +1185,30 @@ import (
 
 // Executor is the orchestration seam for turning one planned run spec into a
 // successful executed run without binding compare to a concrete runtime.
+//
+// Implementations used with parallel execution must be safe for concurrent
+// calls. Parallel-safe executors should create isolated per-run state. They
+// must not share mutable backend/session state across concurrent Execute calls
+// unless they provide their own synchronization.
 type Executor interface {
 	Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
 }
 
 // GraphProvider is the orchestration seam for loading a scoring graph for one
 // task without binding compare to a concrete graph source.
+//
+// Implementations used with parallel execution must be safe for concurrent
+// calls, or the runner must be configured with sequential execution.
 type GraphProvider interface {
 	GraphForTask(ctx context.Context, task domain.TaskSpec) (codegraph.Graph, error)
 }
 
 // Scorer is the orchestration seam for turning one executed run plus graph
 // input into a complete required ScoreSet.
+//
+// Implementations used with parallel execution must be safe for concurrent
+// calls. Parallel-safe scorers should not mutate shared scoring state without
+// synchronization.
 type Scorer interface {
 	Score(ctx context.Context, input score.Input) (score.ScoreSet, error)
 }
@@ -777,12 +1219,23 @@ type Decider interface {
 	Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision
 }
 
+// RunIDFunc derives a run identifier for one role/task/system combination.
 type RunIDFunc func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID
 
+// ReportIDFunc derives a report identifier for one completed comparison.
 type ReportIDFunc func() domain.ReportID
 
+// ClockFunc provides the current time for emitted report timestamps.
 type ClockFunc func() time.Time
 
+// Runner coordinates a full baseline/candidate comparison.
+//
+// Its flow is:
+//
+//	Plan -> RunTasks -> CompareTask -> ExecuteAndScore -> Results -> CandidateReport
+//
+// Runner owns orchestration policy only. Concrete execution, graph loading,
+// scoring, and final release decisions enter through injected interfaces.
 type Runner struct {
 	Executor      Executor
 	GraphProvider GraphProvider
@@ -791,14 +1244,26 @@ type Runner struct {
 	NewRunID      RunIDFunc
 	NewReportID   ReportIDFunc
 	Now           ClockFunc
+	Parallelism   Parallelism
 }
 
+// TaskComparisonResult is the per-task outcome produced by CompareTask.
+//
+// Most execution and scoring failures remain here as run.RunFailure values
+// rather than escaping as top-level errors from Runner.
 type TaskComparisonResult struct {
 	Runs        domain.Pair[*score.ScoredRun]
 	Failures    domain.Pair[*run.RunFailure]
 	Regressions []report.Regression
 }
 
+// Run executes a complete baseline/candidate comparison and returns the
+// candidate report.
+//
+// It validates the executable plan, runs task comparisons according to the
+// configured Parallelism policy, accumulates successful runs and failures,
+// summarizes metric comparisons, asks the Decider for a promotion decision,
+// and emits a report-safe CandidateReport.
 func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, error) {
 	if err := plan.Validate(); err != nil {
 		return report.CandidateReport{}, err
@@ -807,9 +1272,14 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 		return report.CandidateReport{}, err
 	}
 
+	taskResults, err := r.RunTasks(ctx, plan)
+	if err != nil {
+		return report.CandidateReport{}, err
+	}
+
 	results := NewResults(plan.Tasks.Len())
-	for task := range plan.Tasks.Values() {
-		results.AddTaskResult(r.CompareTask(ctx, plan.Systems, task))
+	for _, taskResult := range taskResults {
+		results.AddTaskResult(taskResult.Result)
 	}
 
 	summary := results.Summary()
@@ -829,6 +1299,8 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 	return out, nil
 }
 
+// Validate checks that Runner has the injected dependencies needed to
+// orchestrate a comparison.
 func (r Runner) Validate() error {
 	if r.Executor == nil {
 		return errors.New("compare: executor is required")
@@ -848,9 +1320,135 @@ func (r Runner) Validate() error {
 	if r.NewReportID == nil {
 		return errors.New("compare: report id function is required")
 	}
+	if err := r.normalizedParallelism().Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
+func (r Runner) normalizedParallelism() Parallelism {
+	return r.Parallelism.Normalize()
+}
+
+// RunTasks executes task comparisons according to the configured task-level
+// parallelism policy.
+//
+// Parallelism is over tasks only. Baseline and candidate work for one task are
+// still coordinated inside CompareTask. Results are always returned in original
+// plan order, and the shared Results accumulator is intentionally not mutated
+// from worker goroutines.
+//
+// Context cancellation aborts orchestration with a top-level error. Ordinary
+// task-level execution and scoring failures stay inside TaskComparisonResult as
+// run.RunFailure values.
+func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, error) {
+	tasks := plan.Tasks.All()
+	parallelism := r.normalizedParallelism()
+
+	if parallelism.Mode == ExecutionSequential {
+		results := make([]TaskWorkResult, 0, len(tasks))
+		for index, task := range tasks {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
+			result := r.CompareTask(ctx, plan.Systems, task)
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+
+			results = append(results, TaskWorkResult{
+				Index:  index,
+				TaskID: task.ID,
+				Result: result,
+			})
+		}
+		return results, nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	type taskJob struct {
+		index int
+		task  domain.TaskSpec
+	}
+
+	type workerResult struct {
+		work TaskWorkResult
+		err  error
+	}
+
+	workerCount := parallelism.MaxWorkers
+	if workerCount > len(tasks) {
+		workerCount = len(tasks)
+	}
+	if workerCount == 0 {
+		return nil, nil
+	}
+
+	jobs := make(chan taskJob)
+	resultsCh := make(chan workerResult, len(tasks))
+
+	for range workerCount {
+		go func() {
+			for job := range jobs {
+				if err := ctx.Err(); err != nil {
+					resultsCh <- workerResult{err: err}
+					return
+				}
+
+				result := r.CompareTask(ctx, plan.Systems, job.task)
+				if err := ctx.Err(); err != nil {
+					resultsCh <- workerResult{err: err}
+					return
+				}
+
+				resultsCh <- workerResult{
+					work: TaskWorkResult{
+						Index:  job.index,
+						TaskID: job.task.ID,
+						Result: result,
+					},
+				}
+			}
+		}()
+	}
+
+	go func() {
+		defer close(jobs)
+		for index, task := range tasks {
+			select {
+			case <-ctx.Done():
+				return
+			case jobs <- taskJob{index: index, task: task}:
+			}
+		}
+	}()
+
+	ordered := make([]TaskWorkResult, len(tasks))
+	received := 0
+	for received < len(tasks) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-resultsCh:
+			if result.err != nil {
+				if parallelism.FailFast {
+					cancel()
+				}
+				return nil, result.err
+			}
+			ordered[result.work.Index] = result.work
+			received++
+		}
+	}
+
+	return ordered, nil
+}
+
+// CompareTask runs both systems against one task and interprets any resulting
+// score regressions at the report level.
 func (r Runner) CompareTask(
 	ctx context.Context,
 	systems domain.Pair[domain.SystemSpec],
@@ -897,6 +1495,11 @@ func (r Runner) CompareTask(
 	return out
 }
 
+// ExecuteAndScore runs one system on one task and attempts to compute a
+// complete ScoredRun.
+//
+// Execute and score failures are classified internally with StageError and then
+// converted into report-facing run.RunFailure values.
 func (r Runner) ExecuteAndScore(
 	ctx context.Context,
 	role domain.Role,
@@ -932,6 +1535,97 @@ func (r Runner) ExecuteAndScore(
 
 	return &scoredRun, nil
 }
+</file>
+
+<file path="internal/domain/artifact.go">
+package domain
+
+// ArtifactRef is a typed reference to an emitted or consumed artifact.
+//
+// The type parameter is a phantom tag used to prevent mixing artifact kinds.
+type ArtifactRef[T any] struct {
+	ID     ArtifactID `json:"id"`
+	Path   HostPath   `json:"path,omitempty"`
+	SHA256 string     `json:"sha256,omitempty"`
+}
+
+type reportArtifactTag struct{}
+type traceArtifactTag struct{}
+type graphArtifactTag struct{}
+type policyArtifactTag struct{}
+type datasetArtifactTag struct{}
+
+// ReportArtifactRef is a typed reference to a report artifact.
+type ReportArtifactRef = ArtifactRef[reportArtifactTag]
+
+// TraceArtifactRef is a typed reference to a trace artifact.
+type TraceArtifactRef = ArtifactRef[traceArtifactTag]
+
+// GraphArtifactRef is a typed reference to a graph artifact.
+type GraphArtifactRef = ArtifactRef[graphArtifactTag]
+
+// PolicyArtifactRef is a typed reference to a policy artifact.
+type PolicyArtifactRef = ArtifactRef[policyArtifactTag]
+
+// DatasetArtifactRef is a typed reference to a dataset artifact.
+type DatasetArtifactRef = ArtifactRef[datasetArtifactTag]
+</file>
+
+<file path="internal/domain/ids.go">
+package domain
+
+// ID is a strongly typed identifier.
+//
+// The type parameter is a phantom tag used to prevent accidentally mixing
+// IDs from different domains, such as TaskID and RunID.
+type ID[T any] string
+
+// String returns the identifier as its raw string value.
+func (id ID[T]) String() string {
+	return string(id)
+}
+
+// Empty reports whether the identifier has no value.
+func (id ID[T]) Empty() bool {
+	return id == ""
+}
+
+type taskTag struct{}
+type runTag struct{}
+type systemTag struct{}
+type sessionTag struct{}
+type policyTag struct{}
+type traceTag struct{}
+type artifactTag struct{}
+type reportTag struct{}
+type nodeTag struct{}
+
+// TaskID identifies one benchmark task.
+type TaskID = ID[taskTag]
+
+// RunID identifies one planned/executed comparison run.
+type RunID = ID[runTag]
+
+// SystemID identifies one executable system configuration.
+type SystemID = ID[systemTag]
+
+// SessionID identifies one backend session.
+type SessionID = ID[sessionTag]
+
+// PolicyID identifies one policy artifact.
+type PolicyID = ID[policyTag]
+
+// TraceID identifies one trace or observability artifact.
+type TraceID = ID[traceTag]
+
+// ArtifactID identifies one emitted or consumed artifact.
+type ArtifactID = ID[artifactTag]
+
+// ReportID identifies one candidate report.
+type ReportID = ID[reportTag]
+
+// NodeID identifies one domain-level node reference.
+type NodeID = ID[nodeTag]
 </file>
 
 <file path="internal/domain/pair_test.go">
@@ -993,853 +1687,6 @@ func TestPairAll(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-</file>
-
-<file path="internal/score/comparison_test.go">
-package score
-
-import "testing"
-
-func TestScoreSetPoints(t *testing.T) {
-	t.Parallel()
-
-	set := ScoreSet{
-		GoldHop:         Metric[HopDistance]{Name: MetricGoldHop, Value: 1},
-		IssueHop:        Metric[HopDistance]{Name: MetricIssueHop, Value: 2},
-		TokenEfficiency: Metric[EfficiencyScore]{Name: MetricTokenEfficiency, Value: 0.7},
-		Cost:            Metric[CostScore]{Name: MetricCost, Value: 0.2},
-		Composite:       Metric[CompositeScore]{Name: MetricComposite, Value: 0.9},
-	}
-
-	got := make([]MetricPoint, 0)
-	for point := range set.Points() {
-		got = append(got, point)
-	}
-
-	wantNames := []MetricName{
-		MetricGoldHop,
-		MetricIssueHop,
-		MetricTokenEfficiency,
-		MetricCost,
-		MetricComposite,
-	}
-	wantDirections := []Direction{
-		LowerIsBetter,
-		LowerIsBetter,
-		HigherIsBetter,
-		LowerIsBetter,
-		HigherIsBetter,
-	}
-
-	if len(got) != len(wantNames) {
-		t.Fatalf("len(got) = %d, want %d", len(got), len(wantNames))
-	}
-	for i := range wantNames {
-		if got[i].Name != wantNames[i] {
-			t.Fatalf("got[%d].Name = %q, want %q", i, got[i].Name, wantNames[i])
-		}
-		if got[i].Direction != wantDirections[i] {
-			t.Fatalf("got[%d].Direction = %q, want %q", i, got[i].Direction, wantDirections[i])
-		}
-	}
-}
-</file>
-
-<file path="internal/score/comparison.go">
-package score
-
-import "iter"
-
-type MetricPoint struct {
-	Name      MetricName
-	Value     float64
-	Direction Direction
-}
-
-type MetricComparison struct {
-	Metric    MetricName
-	Baseline  float64
-	Candidate float64
-	Delta     float64
-	Direction Direction
-	Improved  bool
-	Regressed bool
-}
-
-// Points returns the full required metric set in stable metric order.
-func (s ScoreSet) Points() iter.Seq[MetricPoint] {
-	return func(yield func(MetricPoint) bool) {
-		if !yield(MetricPoint{
-			Name:      MetricGoldHop,
-			Value:     float64(s.GoldHop.Value),
-			Direction: GoldHopDefinition.Direction,
-		}) {
-			return
-		}
-		if !yield(MetricPoint{
-			Name:      MetricIssueHop,
-			Value:     float64(s.IssueHop.Value),
-			Direction: IssueHopDefinition.Direction,
-		}) {
-			return
-		}
-		if !yield(MetricPoint{
-			Name:      MetricTokenEfficiency,
-			Value:     float64(s.TokenEfficiency.Value),
-			Direction: TokenEfficiencyDefinition.Direction,
-		}) {
-			return
-		}
-		if !yield(MetricPoint{
-			Name:      MetricCost,
-			Value:     float64(s.Cost.Value),
-			Direction: CostDefinition.Direction,
-		}) {
-			return
-		}
-		yield(MetricPoint{
-			Name:      MetricComposite,
-			Value:     float64(s.Composite.Value),
-			Direction: CompositeDefinition.Direction,
-		})
-	}
-}
-
-func CompareSets(baseline ScoreSet, candidate ScoreSet) []MetricComparison {
-	candidateByName := make(map[MetricName]MetricPoint, 5)
-	for point := range candidate.Points() {
-		candidateByName[point.Name] = point
-	}
-
-	out := make([]MetricComparison, 0, 5)
-	for base := range baseline.Points() {
-		cand, ok := candidateByName[base.Name]
-		if !ok {
-			continue
-		}
-		delta := cand.Value - base.Value
-		improved := Improved(base.Direction, base.Value, cand.Value)
-		out = append(out, MetricComparison{
-			Metric:    base.Name,
-			Baseline:  base.Value,
-			Candidate: cand.Value,
-			Delta:     delta,
-			Direction: base.Direction,
-			Improved:  improved,
-			Regressed: base.Value != cand.Value && !improved,
-		})
-	}
-	return out
-}
-
-// AverageByMetric returns averages for every required metric name.
-//
-// Empty slices produce all required metrics with zero values so callers can
-// still build a complete comparison shape.
-func AverageByMetric(runs []ScoredRun) map[MetricName]float64 {
-	totals := map[MetricName]float64{
-		MetricGoldHop:         0,
-		MetricIssueHop:        0,
-		MetricTokenEfficiency: 0,
-		MetricCost:            0,
-		MetricComposite:       0,
-	}
-	if len(runs) == 0 {
-		return totals
-	}
-
-	for _, run := range runs {
-		for point := range run.Scores.Points() {
-			totals[point.Name] += point.Value
-		}
-	}
-	for name, total := range totals {
-		totals[name] = total / float64(len(runs))
-	}
-	return totals
-}
-
-func CompareAverages(baseline []ScoredRun, candidate []ScoredRun) []MetricComparison {
-	baselineAverages := AverageByMetric(baseline)
-	candidateAverages := AverageByMetric(candidate)
-
-	return []MetricComparison{
-		newMetricComparison(MetricGoldHop, baselineAverages[MetricGoldHop], candidateAverages[MetricGoldHop]),
-		newMetricComparison(MetricIssueHop, baselineAverages[MetricIssueHop], candidateAverages[MetricIssueHop]),
-		newMetricComparison(MetricTokenEfficiency, baselineAverages[MetricTokenEfficiency], candidateAverages[MetricTokenEfficiency]),
-		newMetricComparison(MetricCost, baselineAverages[MetricCost], candidateAverages[MetricCost]),
-		newMetricComparison(MetricComposite, baselineAverages[MetricComposite], candidateAverages[MetricComposite]),
-	}
-}
-
-func newMetricComparison(name MetricName, baseline float64, candidate float64) MetricComparison {
-	direction, _ := DirectionForMetric(name)
-	delta := candidate - baseline
-	improved := Improved(direction, baseline, candidate)
-	return MetricComparison{
-		Metric:    name,
-		Baseline:  baseline,
-		Candidate: candidate,
-		Delta:     delta,
-		Direction: direction,
-		Improved:  improved,
-		Regressed: baseline != candidate && !improved,
-	}
-}
-</file>
-
-<file path="cmd/searchbench/main.go">
-package main
-
-import "fmt"
-
-func main() {
-	fmt.Println("searchbench-go")
-}
-</file>
-
-<file path="internal/backend/backend.go">
-package backend
-
-import "context"
-
-type Backend interface {
-	StartSession(ctx context.Context, spec SessionSpec) (Session, error)
-}
-</file>
-
-<file path="internal/backend/session.go">
-package backend
-
-import (
-	"context"
-	"encoding/json"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-)
-
-type ToolSpec struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	Schema      json.RawMessage `json:"schema,omitempty"`
-}
-
-type ToolResult struct {
-	Name   string          `json:"name"`
-	Output json.RawMessage `json:"output"`
-}
-
-type SessionSpec struct {
-	ID     domain.SessionID  `json:"id"`
-	Task   domain.TaskSpec   `json:"task"`
-	System domain.SystemSpec `json:"system"`
-}
-
-type Session interface {
-	ID() domain.SessionID
-	Tools(ctx context.Context) ([]ToolSpec, error)
-	CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)
-	Close(ctx context.Context) error
-}
-</file>
-
-<file path="internal/codegraph/builder.go">
-package codegraph
-
-// Builder is the mutation interface used while constructing a graph.
-//
-// Tree-sitter ingestion should receive Builder. Scoring should receive Graph.
-type Builder interface {
-	AddNode(node Node) error
-	AddEdge(edge Edge) error
-	Build() (Graph, error)
-}
-</file>
-
-<file path="internal/codegraph/store.go">
-package codegraph
-
-import (
-	"fmt"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/hmdsefi/gograph"
-)
-
-var _ Builder = (*Store)(nil)
-var _ Graph = (*Store)(nil)
-
-type Store struct {
-	graph gograph.Graph[NodeID]
-
-	nodes map[NodeID]Node
-	edges []Edge
-
-	nodesByFile     map[domain.RepoRelPath][]NodeID
-	functionsByName map[string][]NodeID
-}
-
-func NewStore() *Store {
-	return &Store{
-		graph:           gograph.New[NodeID](gograph.Directed()),
-		nodes:           make(map[NodeID]Node),
-		edges:           make([]Edge, 0),
-		nodesByFile:     make(map[domain.RepoRelPath][]NodeID),
-		functionsByName: make(map[string][]NodeID),
-	}
-}
-
-func (s *Store) AddNode(node Node) error {
-	if node.ID == "" {
-		return fmt.Errorf("codegraph: node id is required")
-	}
-
-	if _, exists := s.nodes[node.ID]; exists {
-		return fmt.Errorf("codegraph: duplicate node id %q", node.ID)
-	}
-
-	s.nodes[node.ID] = node
-	s.graph.AddVertexByLabel(node.ID)
-
-	if file, ok := node.RepoFile(); ok {
-		s.nodesByFile[file] = append(s.nodesByFile[file], node.ID)
-	}
-
-	if node.Kind == NodeFunction && node.Function != nil {
-		s.functionsByName[node.Function.Name] = append(s.functionsByName[node.Function.Name], node.ID)
-	}
-
-	return nil
-}
-
-func (s *Store) AddEdge(edge Edge) error {
-	if edge.From == "" || edge.To == "" {
-		return fmt.Errorf("codegraph: edge endpoints are required")
-	}
-	if _, ok := s.nodes[edge.From]; !ok {
-		return fmt.Errorf("codegraph: missing from node %q", edge.From)
-	}
-	if _, ok := s.nodes[edge.To]; !ok {
-		return fmt.Errorf("codegraph: missing to node %q", edge.To)
-	}
-	if edge.Weight == 0 {
-		edge.Weight = 1
-	}
-
-	from := s.graph.GetVertexByID(edge.From)
-	to := s.graph.GetVertexByID(edge.To)
-	if from == nil || to == nil {
-		return fmt.Errorf("codegraph: missing graph vertex for edge %q -> %q", edge.From, edge.To)
-	}
-
-	_, err := s.graph.AddEdge(from, to, gograph.WithEdgeWeight(edge.Weight))
-	if err != nil {
-		return err
-	}
-
-	s.edges = append(s.edges, edge)
-	return nil
-}
-
-func (s *Store) Build() (Graph, error) {
-	return s, nil
-}
-
-func (s *Store) Node(id NodeID) (Node, bool) {
-	node, ok := s.nodes[id]
-	return node, ok
-}
-
-func (s *Store) Nodes() []Node {
-	out := make([]Node, 0, len(s.nodes))
-	for _, node := range s.nodes {
-		out = append(out, node)
-	}
-	return out
-}
-
-func (s *Store) Edges() []Edge {
-	out := make([]Edge, len(s.edges))
-	copy(out, s.edges)
-	return out
-}
-
-func (s *Store) Neighbors(id NodeID, filter EdgeFilter) []NodeID {
-	out := make([]NodeID, 0)
-	for _, edge := range s.edges {
-		if edge.From == id && filter.Allows(edge.Kind) {
-			out = append(out, edge.To)
-		}
-	}
-	return out
-}
-
-func (s *Store) ShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool) {
-	if _, ok := s.nodes[from]; !ok {
-		return Path{}, false
-	}
-	if _, ok := s.nodes[to]; !ok {
-		return Path{}, false
-	}
-
-	return s.filteredShortestPath(from, to, filter)
-}
-
-func (s *Store) NodesByFile(file domain.RepoRelPath) []NodeID {
-	ids := s.nodesByFile[file]
-	out := make([]NodeID, len(ids))
-	copy(out, ids)
-	return out
-}
-
-func (s *Store) FunctionsByName(name string) []NodeID {
-	ids := s.functionsByName[name]
-	out := make([]NodeID, len(ids))
-	copy(out, ids)
-	return out
-}
-
-func (s *Store) filteredShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool) {
-	type item struct {
-		ID   NodeID
-		Path []NodeID
-	}
-
-	seen := map[NodeID]bool{from: true}
-	queue := []item{{ID: from, Path: []NodeID{from}}}
-
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-
-		if cur.ID == to {
-			return Path{
-				Nodes: cur.Path,
-				Edges: s.pathEdges(cur.Path),
-				Cost:  float64(max(0, len(cur.Path)-1)),
-			}, true
-		}
-
-		for _, next := range s.Neighbors(cur.ID, filter) {
-			if seen[next] {
-				continue
-			}
-
-			seen[next] = true
-
-			nextPath := make([]NodeID, 0, len(cur.Path)+1)
-			nextPath = append(nextPath, cur.Path...)
-			nextPath = append(nextPath, next)
-
-			queue = append(queue, item{
-				ID:   next,
-				Path: nextPath,
-			})
-		}
-	}
-
-	return Path{}, false
-}
-
-func (s *Store) pathEdges(nodes []NodeID) []Edge {
-	if len(nodes) < 2 {
-		return nil
-	}
-
-	out := make([]Edge, 0, len(nodes)-1)
-	for i := 0; i < len(nodes)-1; i++ {
-		from := nodes[i]
-		to := nodes[i+1]
-		for _, edge := range s.edges {
-			if edge.From == from && edge.To == to {
-				out = append(out, edge)
-				break
-			}
-		}
-	}
-
-	return out
-}
-</file>
-
-<file path="internal/domain/artifact.go">
-package domain
-
-// ArtifactRef is a typed reference to an emitted or consumed artifact.
-//
-// The type parameter is a phantom tag used to prevent mixing artifact kinds.
-type ArtifactRef[T any] struct {
-	ID     ArtifactID `json:"id"`
-	Path   HostPath   `json:"path,omitempty"`
-	SHA256 string     `json:"sha256,omitempty"`
-}
-
-type reportArtifactTag struct{}
-type traceArtifactTag struct{}
-type graphArtifactTag struct{}
-type policyArtifactTag struct{}
-type datasetArtifactTag struct{}
-
-type ReportArtifactRef = ArtifactRef[reportArtifactTag]
-type TraceArtifactRef = ArtifactRef[traceArtifactTag]
-type GraphArtifactRef = ArtifactRef[graphArtifactTag]
-type PolicyArtifactRef = ArtifactRef[policyArtifactTag]
-type DatasetArtifactRef = ArtifactRef[datasetArtifactTag]
-</file>
-
-<file path="internal/domain/ids.go">
-package domain
-
-// ID is a strongly typed identifier.
-//
-// The type parameter is a phantom tag used to prevent accidentally mixing
-// IDs from different domains, such as TaskID and RunID.
-type ID[T any] string
-
-func (id ID[T]) String() string {
-	return string(id)
-}
-
-func (id ID[T]) Empty() bool {
-	return id == ""
-}
-
-type taskTag struct{}
-type runTag struct{}
-type systemTag struct{}
-type sessionTag struct{}
-type policyTag struct{}
-type traceTag struct{}
-type artifactTag struct{}
-type reportTag struct{}
-type nodeTag struct{}
-
-type TaskID = ID[taskTag]
-type RunID = ID[runTag]
-type SystemID = ID[systemTag]
-type SessionID = ID[sessionTag]
-type PolicyID = ID[policyTag]
-type TraceID = ID[traceTag]
-type ArtifactID = ID[artifactTag]
-type ReportID = ID[reportTag]
-type NodeID = ID[nodeTag]
-</file>
-
-<file path="internal/domain/nonempty_test.go">
-package domain
-
-import (
-	"encoding/json"
-	"testing"
-)
-
-func TestNonEmptyFromSlice(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		items   []int
-		wantErr bool
-	}{
-		{
-			name:    "empty",
-			items:   nil,
-			wantErr: true,
-		},
-		{
-			name:  "single item",
-			items: []int{7},
-		},
-		{
-			name:  "multiple items",
-			items: []int{1, 2, 3},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := NonEmptyFromSlice(tt.items)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			all := got.All()
-			if len(all) != len(tt.items) {
-				t.Fatalf("len(all) = %d, want %d", len(all), len(tt.items))
-			}
-			for i := range all {
-				if all[i] != tt.items[i] {
-					t.Fatalf("all[%d] = %d, want %d", i, all[i], tt.items[i])
-				}
-			}
-
-			if len(tt.items) > 1 {
-				tail := got.Tail()
-				tail[0] = 999
-				if got.Tail()[0] == 999 {
-					t.Fatal("Tail exposed internal slice")
-				}
-			}
-		})
-	}
-}
-
-func TestNonEmptyZeroValue(t *testing.T) {
-	t.Parallel()
-
-	var n NonEmpty[int]
-
-	if n.Valid() {
-		t.Fatal("zero-value NonEmpty should be invalid")
-	}
-	if got := n.Len(); got != 0 {
-		t.Fatalf("Len() = %d, want 0", got)
-	}
-	if got := n.All(); got != nil {
-		t.Fatalf("All() = %#v, want nil", got)
-	}
-	if got := n.Tail(); got != nil {
-		t.Fatalf("Tail() = %#v, want nil", got)
-	}
-	if err := n.Validate(); err == nil {
-		t.Fatal("expected validation error")
-	}
-	if _, err := json.Marshal(n); err == nil {
-		t.Fatal("expected marshal error")
-	}
-
-	var values []int
-	for value := range n.Values() {
-		values = append(values, value)
-	}
-	if len(values) != 0 {
-		t.Fatalf("len(Values()) = %d, want 0", len(values))
-	}
-}
-
-func TestNonEmptyValues(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name  string
-		input NonEmpty[int]
-		want  []int
-		stop  int
-	}{
-		{
-			name:  "all values",
-			input: NewNonEmpty(1, 2, 3),
-			want:  []int{1, 2, 3},
-			stop:  3,
-		},
-		{
-			name:  "early stop",
-			input: NewNonEmpty(4, 5, 6),
-			want:  []int{4, 5},
-			stop:  2,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got := make([]int, 0)
-			for value := range tt.input.Values() {
-				got = append(got, value)
-				if len(got) >= tt.stop {
-					break
-				}
-			}
-			if len(got) != len(tt.want) {
-				t.Fatalf("len(got) = %d, want %d", len(got), len(tt.want))
-			}
-			for i := range tt.want {
-				if got[i] != tt.want[i] {
-					t.Fatalf("got[%d] = %d, want %d", i, got[i], tt.want[i])
-				}
-			}
-		})
-	}
-}
-</file>
-
-<file path="internal/domain/nonempty.go">
-package domain
-
-import (
-	"encoding/json"
-	"errors"
-	"iter"
-)
-
-var errEmptyNonEmpty = errors.New("non-empty slice is required")
-
-// NonEmpty represents a slice with at least one element.
-//
-// The zero value can still exist because of Go, so callers should prefer the
-// constructors for meaningful values.
-type NonEmpty[T any] struct {
-	head  T
-	tail  []T
-	valid bool
-}
-
-func NewNonEmpty[T any](head T, tail ...T) NonEmpty[T] {
-	return NonEmpty[T]{
-		head:  head,
-		tail:  append([]T(nil), tail...),
-		valid: true,
-	}
-}
-
-func NonEmptyFromSlice[T any](items []T) (NonEmpty[T], error) {
-	if len(items) == 0 {
-		return NonEmpty[T]{}, errEmptyNonEmpty
-	}
-	return NewNonEmpty(items[0], items[1:]...), nil
-}
-
-func (n NonEmpty[T]) Head() T {
-	return n.head
-}
-
-func (n NonEmpty[T]) Tail() []T {
-	if !n.valid {
-		return nil
-	}
-	return append([]T(nil), n.tail...)
-}
-
-func (n NonEmpty[T]) All() []T {
-	if !n.valid {
-		return nil
-	}
-	items := make([]T, 1+len(n.tail))
-	items[0] = n.head
-	copy(items[1:], n.tail)
-	return items
-}
-
-func (n NonEmpty[T]) Values() iter.Seq[T] {
-	return func(yield func(T) bool) {
-		if !n.valid {
-			return
-		}
-		if !yield(n.head) {
-			return
-		}
-		for _, item := range n.tail {
-			if !yield(item) {
-				return
-			}
-		}
-	}
-}
-
-func (n NonEmpty[T]) Len() int {
-	if !n.valid {
-		return 0
-	}
-	return 1 + len(n.tail)
-}
-
-func (n NonEmpty[T]) Valid() bool {
-	return n.valid
-}
-
-func (n NonEmpty[T]) Validate() error {
-	if !n.valid {
-		return errEmptyNonEmpty
-	}
-	return nil
-}
-
-func (n NonEmpty[T]) MarshalJSON() ([]byte, error) {
-	if err := n.Validate(); err != nil {
-		return nil, err
-	}
-	return json.Marshal(n.All())
-}
-
-func (n *NonEmpty[T]) UnmarshalJSON(data []byte) error {
-	var items []T
-	if err := json.Unmarshal(data, &items); err != nil {
-		return err
-	}
-	value, err := NonEmptyFromSlice(items)
-	if err != nil {
-		return err
-	}
-	*n = value
-	return nil
-}
-</file>
-
-<file path="internal/domain/pair.go">
-package domain
-
-import "iter"
-
-// Role names the two sides of a Searchbench comparison.
-type Role string
-
-const (
-	RoleBaseline  Role = "baseline"
-	RoleCandidate Role = "candidate"
-)
-
-// Pair stores the baseline and candidate versions of the same kind of value.
-//
-// Searchbench is fundamentally comparative, so this type should appear often:
-// Pair[SystemSpec], Pair[[]ScoredRun], Pair[ScoreSummary], etc.
-type Pair[T any] struct {
-	Baseline  T `json:"baseline"`
-	Candidate T `json:"candidate"`
-}
-
-func NewPair[T any](baseline T, candidate T) Pair[T] {
-	return Pair[T]{
-		Baseline:  baseline,
-		Candidate: candidate,
-	}
-}
-
-func MapPair[A, B any](p Pair[A], f func(Role, A) B) Pair[B] {
-	return Pair[B]{
-		Baseline:  f(RoleBaseline, p.Baseline),
-		Candidate: f(RoleCandidate, p.Candidate),
-	}
-}
-
-func (p Pair[T]) All() iter.Seq2[Role, T] {
-	return func(yield func(Role, T) bool) {
-		if !yield(RoleBaseline, p.Baseline) {
-			return
-		}
-		yield(RoleCandidate, p.Candidate)
-	}
-}
-
-func (p Pair[T]) ByRole(role Role) T {
-	switch role {
-	case RoleBaseline:
-		return p.Baseline
-	case RoleCandidate:
-		return p.Candidate
-	default:
-		var zero T
-		return zero
 	}
 }
 </file>
@@ -2032,6 +1879,7 @@ package domain
 type BenchmarkName string
 
 const (
+	// BenchmarkLCA identifies the JetBrains LCA bug-localization benchmark.
 	BenchmarkLCA BenchmarkName = "jetbrains-lca"
 )
 
@@ -2097,251 +1945,6 @@ func (u UsageSummary) Empty() bool {
 }
 </file>
 
-<file path="internal/report/spec.go">
-package report
-
-import (
-	"errors"
-	"fmt"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-)
-
-// ComparisonSpec declares the systems and tasks being compared.
-//
-// This is the planned report boundary:
-//
-//	baseline system + candidate system + fixed task slice
-type ComparisonSpec struct {
-	Systems domain.Pair[domain.SystemRef]    `json:"systems"`
-	Tasks   domain.NonEmpty[domain.TaskSpec] `json:"tasks"`
-}
-
-func NewComparisonSpec(
-	systems domain.Pair[domain.SystemSpec],
-	tasks domain.NonEmpty[domain.TaskSpec],
-) ComparisonSpec {
-	return NewComparisonSpecFromRefs(domain.NewPair(systems.Baseline.Ref(), systems.Candidate.Ref()), tasks)
-}
-
-func NewComparisonSpecFromRefs(
-	systems domain.Pair[domain.SystemRef],
-	tasks domain.NonEmpty[domain.TaskSpec],
-) ComparisonSpec {
-	return ComparisonSpec{
-		Systems: systems,
-		Tasks:   tasks,
-	}
-}
-
-func (s ComparisonSpec) Validate() error {
-	if err := s.Tasks.Validate(); err != nil {
-		return err
-	}
-	if s.Systems.Baseline.ID.Empty() {
-		return errors.New("baseline system id is required")
-	}
-	if s.Systems.Candidate.ID.Empty() {
-		return errors.New("candidate system id is required")
-	}
-	if s.Systems.Baseline.Fingerprint == "" {
-		return fmt.Errorf("baseline system fingerprint is required")
-	}
-	if s.Systems.Candidate.Fingerprint == "" {
-		return fmt.Errorf("candidate system fingerprint is required")
-	}
-	return nil
-}
-</file>
-
-<file path="internal/report/task_run_set_test.go">
-package report
-
-import (
-	"testing"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-)
-
-func TestNewTaskRunSetValidation(t *testing.T) {
-	t.Parallel()
-
-	task1 := domain.TaskID("task-1")
-	task2 := domain.TaskID("task-2")
-
-	tests := []struct {
-		name    string
-		items   map[domain.TaskID]string
-		order   []domain.TaskID
-		wantErr bool
-	}{
-		{
-			name:    "empty order",
-			items:   map[domain.TaskID]string{task1: "a"},
-			wantErr: true,
-		},
-		{
-			name:    "missing task",
-			items:   map[domain.TaskID]string{task1: "a"},
-			order:   []domain.TaskID{task1, task2},
-			wantErr: true,
-		},
-		{
-			name: "duplicate task id",
-			items: map[domain.TaskID]string{
-				task1: "a",
-				task2: "b",
-			},
-			order:   []domain.TaskID{task1, task1},
-			wantErr: true,
-		},
-		{
-			name: "valid",
-			items: map[domain.TaskID]string{
-				task1: "a",
-				task2: "b",
-			},
-			order: []domain.TaskID{task2, task1},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			set, err := NewTaskRunSet(tt.items, tt.order)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got, want := set.Len(), len(tt.order); got != want {
-				t.Fatalf("Len() = %d, want %d", got, want)
-			}
-			if got := set.Values(); len(got) != len(tt.order) {
-				t.Fatalf("len(Values()) = %d, want %d", len(got), len(tt.order))
-			}
-		})
-	}
-}
-
-func TestTaskRunSetItems(t *testing.T) {
-	t.Parallel()
-
-	task1 := domain.TaskID("task-1")
-	task2 := domain.TaskID("task-2")
-	set, err := NewTaskRunSet(
-		map[domain.TaskID]string{
-			task1: "baseline",
-			task2: "candidate",
-		},
-		[]domain.TaskID{task2, task1},
-	)
-	if err != nil {
-		t.Fatalf("NewTaskRunSet() error = %v", err)
-	}
-
-	gotIDs := make([]domain.TaskID, 0)
-	gotVals := make([]string, 0)
-	for taskID, value := range set.Items() {
-		gotIDs = append(gotIDs, taskID)
-		gotVals = append(gotVals, value)
-	}
-
-	wantIDs := []domain.TaskID{task2, task1}
-	wantVals := []string{"candidate", "baseline"}
-	for i := range wantIDs {
-		if gotIDs[i] != wantIDs[i] {
-			t.Fatalf("gotIDs[%d] = %q, want %q", i, gotIDs[i], wantIDs[i])
-		}
-		if gotVals[i] != wantVals[i] {
-			t.Fatalf("gotVals[%d] = %q, want %q", i, gotVals[i], wantVals[i])
-		}
-	}
-}
-</file>
-
-<file path="internal/report/task_run_set.go">
-package report
-
-import (
-	"errors"
-	"fmt"
-	"iter"
-
-	"github.com/becker63/searchbench-go/internal/domain"
-)
-
-type TaskRunSet[T any] struct {
-	order  []domain.TaskID
-	byTask map[domain.TaskID]T
-}
-
-func NewTaskRunSet[T any](items map[domain.TaskID]T, order []domain.TaskID) (TaskRunSet[T], error) {
-	if len(order) == 0 {
-		return TaskRunSet[T]{}, errors.New("task order must be non-empty")
-	}
-
-	ordered := append([]domain.TaskID(nil), order...)
-	byTask := make(map[domain.TaskID]T, len(items))
-	for id, item := range items {
-		byTask[id] = item
-	}
-
-	seen := make(map[domain.TaskID]struct{}, len(ordered))
-	for _, id := range ordered {
-		if _, ok := seen[id]; ok {
-			return TaskRunSet[T]{}, fmt.Errorf("duplicate task id in order: %s", id)
-		}
-		seen[id] = struct{}{}
-		if _, ok := byTask[id]; !ok {
-			return TaskRunSet[T]{}, fmt.Errorf("missing item for task id: %s", id)
-		}
-	}
-
-	return TaskRunSet[T]{
-		order:  ordered,
-		byTask: byTask,
-	}, nil
-}
-
-func (s TaskRunSet[T]) Get(id domain.TaskID) (T, bool) {
-	value, ok := s.byTask[id]
-	return value, ok
-}
-
-func (s TaskRunSet[T]) Order() []domain.TaskID {
-	return append([]domain.TaskID(nil), s.order...)
-}
-
-func (s TaskRunSet[T]) Values() []T {
-	values := make([]T, 0, len(s.order))
-	for _, id := range s.order {
-		values = append(values, s.byTask[id])
-	}
-	return values
-}
-
-func (s TaskRunSet[T]) Items() iter.Seq2[domain.TaskID, T] {
-	return func(yield func(domain.TaskID, T) bool) {
-		for _, id := range s.order {
-			value := s.byTask[id]
-			if !yield(id, value) {
-				return
-			}
-		}
-	}
-}
-
-func (s TaskRunSet[T]) Len() int {
-	return len(s.order)
-}
-</file>
-
 <file path="internal/run/failure.go">
 package run
 
@@ -2350,13 +1953,21 @@ import "github.com/becker63/searchbench-go/internal/domain"
 type FailureStage string
 
 const (
+	// FailurePrepare identifies prepare/session setup failures.
 	FailurePrepare FailureStage = "prepare"
+	// FailureExecute identifies execution-time failures.
 	FailureExecute FailureStage = "execute"
-	FailureScore   FailureStage = "score"
-	FailureReport  FailureStage = "report"
+	// FailureScore identifies scoring-time failures.
+	FailureScore FailureStage = "score"
+	// FailureReport identifies report construction failures.
+	FailureReport FailureStage = "report"
 )
 
-// RunFailure records a failed path for one task/system run.
+// RunFailure records the report-facing failed path for one task/system run.
+//
+// ExecutedRun means execution succeeded. score.ScoredRun means scoring
+// succeeded. RunFailure is the separate artifact used when one of those steps
+// could not complete.
 type RunFailure struct {
 	RunID   domain.RunID    `json:"run_id"`
 	TaskID  domain.TaskID   `json:"task_id"`
@@ -2365,6 +1976,7 @@ type RunFailure struct {
 	Message string          `json:"message"`
 }
 
+// NewFailure constructs a report-facing failure record from a run spec.
 func NewFailure(spec Spec, stage FailureStage, message string) RunFailure {
 	return RunFailure{
 		RunID:   spec.ID,
@@ -2372,6 +1984,208 @@ func NewFailure(spec Spec, stage FailureStage, message string) RunFailure {
 		System:  spec.System.ID,
 		Stage:   stage,
 		Message: message,
+	}
+}
+</file>
+
+<file path="internal/score/comparison_test.go">
+package score
+
+import "testing"
+
+func TestScoreSetPoints(t *testing.T) {
+	t.Parallel()
+
+	set := ScoreSet{
+		GoldHop:         Metric[HopDistance]{Name: MetricGoldHop, Value: 1},
+		IssueHop:        Metric[HopDistance]{Name: MetricIssueHop, Value: 2},
+		TokenEfficiency: Metric[EfficiencyScore]{Name: MetricTokenEfficiency, Value: 0.7},
+		Cost:            Metric[CostScore]{Name: MetricCost, Value: 0.2},
+		Composite:       Metric[CompositeScore]{Name: MetricComposite, Value: 0.9},
+	}
+
+	got := make([]MetricPoint, 0)
+	for point := range set.Points() {
+		got = append(got, point)
+	}
+
+	wantNames := []MetricName{
+		MetricGoldHop,
+		MetricIssueHop,
+		MetricTokenEfficiency,
+		MetricCost,
+		MetricComposite,
+	}
+	wantDirections := []Direction{
+		LowerIsBetter,
+		LowerIsBetter,
+		HigherIsBetter,
+		LowerIsBetter,
+		HigherIsBetter,
+	}
+
+	if len(got) != len(wantNames) {
+		t.Fatalf("len(got) = %d, want %d", len(got), len(wantNames))
+	}
+	for i := range wantNames {
+		if got[i].Name != wantNames[i] {
+			t.Fatalf("got[%d].Name = %q, want %q", i, got[i].Name, wantNames[i])
+		}
+		if got[i].Direction != wantDirections[i] {
+			t.Fatalf("got[%d].Direction = %q, want %q", i, got[i].Direction, wantDirections[i])
+		}
+	}
+}
+</file>
+
+<file path="internal/score/comparison.go">
+package score
+
+import "iter"
+
+type MetricPoint struct {
+	Name      MetricName
+	Value     float64
+	Direction Direction
+}
+
+// MetricComparison compares one metric between baseline and candidate.
+type MetricComparison struct {
+	Metric    MetricName
+	Baseline  float64
+	Candidate float64
+	Delta     float64
+	Direction Direction
+	Improved  bool
+	Regressed bool
+}
+
+// Points returns the full required metric set in stable metric order.
+//
+// Stable ordering keeps metric iteration deterministic for comparison and
+// reporting code.
+func (s ScoreSet) Points() iter.Seq[MetricPoint] {
+	return func(yield func(MetricPoint) bool) {
+		if !yield(MetricPoint{
+			Name:      MetricGoldHop,
+			Value:     float64(s.GoldHop.Value),
+			Direction: GoldHopDefinition.Direction,
+		}) {
+			return
+		}
+		if !yield(MetricPoint{
+			Name:      MetricIssueHop,
+			Value:     float64(s.IssueHop.Value),
+			Direction: IssueHopDefinition.Direction,
+		}) {
+			return
+		}
+		if !yield(MetricPoint{
+			Name:      MetricTokenEfficiency,
+			Value:     float64(s.TokenEfficiency.Value),
+			Direction: TokenEfficiencyDefinition.Direction,
+		}) {
+			return
+		}
+		if !yield(MetricPoint{
+			Name:      MetricCost,
+			Value:     float64(s.Cost.Value),
+			Direction: CostDefinition.Direction,
+		}) {
+			return
+		}
+		yield(MetricPoint{
+			Name:      MetricComposite,
+			Value:     float64(s.Composite.Value),
+			Direction: CompositeDefinition.Direction,
+		})
+	}
+}
+
+// CompareSets compares two complete score sets metric-by-metric.
+func CompareSets(baseline ScoreSet, candidate ScoreSet) []MetricComparison {
+	candidateByName := make(map[MetricName]MetricPoint, 5)
+	for point := range candidate.Points() {
+		candidateByName[point.Name] = point
+	}
+
+	out := make([]MetricComparison, 0, 5)
+	for base := range baseline.Points() {
+		cand, ok := candidateByName[base.Name]
+		if !ok {
+			continue
+		}
+		delta := cand.Value - base.Value
+		improved := Improved(base.Direction, base.Value, cand.Value)
+		out = append(out, MetricComparison{
+			Metric:    base.Name,
+			Baseline:  base.Value,
+			Candidate: cand.Value,
+			Delta:     delta,
+			Direction: base.Direction,
+			Improved:  improved,
+			Regressed: base.Value != cand.Value && !improved,
+		})
+	}
+	return out
+}
+
+// AverageByMetric returns averages for every required metric name.
+//
+// Empty slices produce all required metrics with zero values so callers can
+// still build a complete comparison shape. This is a comparison convenience,
+// not a promotion policy; future release rules should treat missing run sets
+// explicitly.
+func AverageByMetric(runs []ScoredRun) map[MetricName]float64 {
+	totals := map[MetricName]float64{
+		MetricGoldHop:         0,
+		MetricIssueHop:        0,
+		MetricTokenEfficiency: 0,
+		MetricCost:            0,
+		MetricComposite:       0,
+	}
+	if len(runs) == 0 {
+		return totals
+	}
+
+	for _, run := range runs {
+		for point := range run.Scores.Points() {
+			totals[point.Name] += point.Value
+		}
+	}
+	for name, total := range totals {
+		totals[name] = total / float64(len(runs))
+	}
+	return totals
+}
+
+// CompareAverages compares baseline and candidate run sets using per-metric
+// averages.
+func CompareAverages(baseline []ScoredRun, candidate []ScoredRun) []MetricComparison {
+	baselineAverages := AverageByMetric(baseline)
+	candidateAverages := AverageByMetric(candidate)
+
+	return []MetricComparison{
+		newMetricComparison(MetricGoldHop, baselineAverages[MetricGoldHop], candidateAverages[MetricGoldHop]),
+		newMetricComparison(MetricIssueHop, baselineAverages[MetricIssueHop], candidateAverages[MetricIssueHop]),
+		newMetricComparison(MetricTokenEfficiency, baselineAverages[MetricTokenEfficiency], candidateAverages[MetricTokenEfficiency]),
+		newMetricComparison(MetricCost, baselineAverages[MetricCost], candidateAverages[MetricCost]),
+		newMetricComparison(MetricComposite, baselineAverages[MetricComposite], candidateAverages[MetricComposite]),
+	}
+}
+
+func newMetricComparison(name MetricName, baseline float64, candidate float64) MetricComparison {
+	direction, _ := DirectionForMetric(name)
+	delta := candidate - baseline
+	improved := Improved(direction, baseline, candidate)
+	return MetricComparison{
+		Metric:    name,
+		Baseline:  baseline,
+		Candidate: candidate,
+		Delta:     delta,
+		Direction: direction,
+		Improved:  improved,
+		Regressed: baseline != candidate && !improved,
 	}
 }
 </file>
@@ -2438,40 +2252,52 @@ package score
 type Direction string
 
 const (
-	LowerIsBetter  Direction = "lower_is_better"
+	// LowerIsBetter means smaller metric values are improvements.
+	LowerIsBetter Direction = "lower_is_better"
+	// HigherIsBetter means larger metric values are improvements.
 	HigherIsBetter Direction = "higher_is_better"
 )
 
+// MetricDefinition binds one metric name to its improvement direction.
 type MetricDefinition[T any] struct {
 	Name      MetricName
 	Direction Direction
 }
 
+// GoldHopDefinition is the canonical definition for gold_hop.
 var GoldHopDefinition = MetricDefinition[HopDistance]{
 	Name:      MetricGoldHop,
 	Direction: LowerIsBetter,
 }
 
+// IssueHopDefinition is the canonical definition for issue_hop.
 var IssueHopDefinition = MetricDefinition[HopDistance]{
 	Name:      MetricIssueHop,
 	Direction: LowerIsBetter,
 }
 
+// TokenEfficiencyDefinition is the canonical definition for token_efficiency.
 var TokenEfficiencyDefinition = MetricDefinition[EfficiencyScore]{
 	Name:      MetricTokenEfficiency,
 	Direction: HigherIsBetter,
 }
 
+// CostDefinition is the canonical definition for cost.
 var CostDefinition = MetricDefinition[CostScore]{
 	Name:      MetricCost,
 	Direction: LowerIsBetter,
 }
 
+// CompositeDefinition is the canonical definition for composite.
 var CompositeDefinition = MetricDefinition[CompositeScore]{
 	Name:      MetricComposite,
 	Direction: HigherIsBetter,
 }
 
+// Improved reports whether the candidate value is better than the baseline
+// under the given metric direction.
+//
+// Positive delta is not universally good; direction determines the meaning.
 func Improved(def Direction, baseline, candidate float64) bool {
 	switch def {
 	case HigherIsBetter:
@@ -2483,6 +2309,7 @@ func Improved(def Direction, baseline, candidate float64) bool {
 	}
 }
 
+// DirectionForMetric looks up the canonical improvement direction for a metric.
 func DirectionForMetric(name MetricName) (Direction, bool) {
 	switch name {
 	case MetricGoldHop:
@@ -2785,6 +2612,65 @@ echo "  go test ./..."
 echo "  go run ./cmd/searchbench"
 </file>
 
+<file path="internal/backend/backend.go">
+package backend
+
+import "context"
+
+// Backend starts isolated execution sessions for one task/system pair.
+//
+// Backend may be shared by a runner. Implementations that support parallel
+// execution must make StartSession safe for concurrent calls or must be wrapped
+// by a sequential runner configuration.
+type Backend interface {
+	StartSession(ctx context.Context, spec SessionSpec) (Session, error)
+}
+</file>
+
+<file path="internal/backend/session.go">
+package backend
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+// ToolSpec describes one backend-exposed tool using a small protocol shape.
+//
+// It is intentionally minimal so future iterative-context, jCodeMunch, or
+// other adapters can map their native tool representations into a stable
+// Searchbench boundary.
+type ToolSpec struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Schema      json.RawMessage `json:"schema,omitempty"`
+}
+
+// ToolResult is the normalized response returned by a backend tool call.
+type ToolResult struct {
+	Name   string          `json:"name"`
+	Output json.RawMessage `json:"output"`
+}
+
+// SessionSpec identifies the isolated runtime session to start for one run.
+type SessionSpec struct {
+	ID     domain.SessionID  `json:"id"`
+	Task   domain.TaskSpec   `json:"task"`
+	System domain.SystemSpec `json:"system"`
+}
+
+// Session represents one isolated run/session. Session implementations are not
+// required to be safe for concurrent tool calls unless explicitly documented.
+type Session interface {
+	ID() domain.SessionID
+	Tools(ctx context.Context) ([]ToolSpec, error)
+	CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)
+	Close(ctx context.Context) error
+}
+</file>
+
 <file path="internal/codegraph/edge.go">
 package codegraph
 
@@ -2807,6 +2693,7 @@ type Edge struct {
 	Weight float64  `json:"weight,omitempty"`
 }
 
+// NewEdge constructs an edge with the default weight.
 func NewEdge(from, to NodeID, kind EdgeKind) Edge {
 	return Edge{
 		From:   from,
@@ -2816,6 +2703,7 @@ func NewEdge(from, to NodeID, kind EdgeKind) Edge {
 	}
 }
 
+// NewWeightedEdge constructs an edge with an explicit weight.
 func NewWeightedEdge(from, to NodeID, kind EdgeKind, weight float64) Edge {
 	if weight == 0 {
 		weight = 1
@@ -2841,6 +2729,7 @@ type EdgeFilter struct {
 	Kinds []EdgeKind `json:"kinds,omitempty"`
 }
 
+// Allows reports whether the given edge kind passes the filter.
 func (f EdgeFilter) Allows(kind EdgeKind) bool {
 	if len(f.Kinds) == 0 {
 		return true
@@ -2853,9 +2742,10 @@ func (f EdgeFilter) Allows(kind EdgeKind) bool {
 	return false
 }
 
-// Graph is the read-only Searchbench code graph interface.
+// Graph is the read/query-time Searchbench code graph interface.
 //
-// Scoring depends on this interface, not on gograph directly.
+// Scoring depends on this interface, not on Store or gograph directly. Graph
+// values should be treated as read-only after Build.
 type Graph interface {
 	Node(id NodeID) (Node, bool)
 	Nodes() []Node
@@ -2932,6 +2822,7 @@ type Node struct {
 	Import   *ImportNode   `json:"import,omitempty"`
 }
 
+// NewFileNode constructs a file node.
 func NewFileNode(id NodeID, path domain.RepoRelPath) Node {
 	return Node{
 		ID:   id,
@@ -2940,6 +2831,7 @@ func NewFileNode(id NodeID, path domain.RepoRelPath) Node {
 	}
 }
 
+// NewFunctionNode constructs a function node.
 func NewFunctionNode(id NodeID, file domain.RepoRelPath, name string, startLine, endLine int) Node {
 	return Node{
 		ID:   id,
@@ -2953,6 +2845,7 @@ func NewFunctionNode(id NodeID, file domain.RepoRelPath, name string, startLine,
 	}
 }
 
+// NewSymbolNode constructs a symbol node.
 func NewSymbolNode(id NodeID, file domain.RepoRelPath, name string) Node {
 	return Node{
 		ID:   id,
@@ -2964,6 +2857,7 @@ func NewSymbolNode(id NodeID, file domain.RepoRelPath, name string) Node {
 	}
 }
 
+// NewImportNode constructs an import node.
 func NewImportNode(id NodeID, file domain.RepoRelPath, module string) Node {
 	return Node{
 		ID:   id,
@@ -3014,15 +2908,574 @@ type Path struct {
 	Cost  float64  `json:"cost"`
 }
 
+// Found reports whether the path contains any nodes.
 func (p Path) Found() bool {
 	return len(p.Nodes) > 0
 }
 
+// Hops reports the number of graph hops along the path.
 func (p Path) Hops() int {
 	if len(p.Nodes) == 0 {
 		return 0
 	}
 	return len(p.Nodes) - 1
+}
+</file>
+
+<file path="internal/codegraph/store.go">
+package codegraph
+
+import (
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/hmdsefi/gograph"
+)
+
+var _ Builder = (*Store)(nil)
+var _ Graph = (*Store)(nil)
+
+// Store is the current in-memory graph implementation.
+//
+// Store currently implements both Builder and Graph so callers can construct a
+// graph and then query it through one type. Its gograph dependency is an
+// internal detail hidden behind this package.
+type Store struct {
+	graph gograph.Graph[NodeID]
+
+	nodes map[NodeID]Node
+	edges []Edge
+
+	nodesByFile     map[domain.RepoRelPath][]NodeID
+	functionsByName map[string][]NodeID
+}
+
+// NewStore constructs an empty graph store.
+func NewStore() *Store {
+	return &Store{
+		graph:           gograph.New[NodeID](gograph.Directed()),
+		nodes:           make(map[NodeID]Node),
+		edges:           make([]Edge, 0),
+		nodesByFile:     make(map[domain.RepoRelPath][]NodeID),
+		functionsByName: make(map[string][]NodeID),
+	}
+}
+
+// AddNode inserts one node into the mutable store.
+func (s *Store) AddNode(node Node) error {
+	if node.ID == "" {
+		return fmt.Errorf("codegraph: node id is required")
+	}
+
+	if _, exists := s.nodes[node.ID]; exists {
+		return fmt.Errorf("codegraph: duplicate node id %q", node.ID)
+	}
+
+	s.nodes[node.ID] = node
+	s.graph.AddVertexByLabel(node.ID)
+
+	if file, ok := node.RepoFile(); ok {
+		s.nodesByFile[file] = append(s.nodesByFile[file], node.ID)
+	}
+
+	if node.Kind == NodeFunction && node.Function != nil {
+		s.functionsByName[node.Function.Name] = append(s.functionsByName[node.Function.Name], node.ID)
+	}
+
+	return nil
+}
+
+// AddEdge inserts one edge into the mutable store.
+func (s *Store) AddEdge(edge Edge) error {
+	if edge.From == "" || edge.To == "" {
+		return fmt.Errorf("codegraph: edge endpoints are required")
+	}
+	if _, ok := s.nodes[edge.From]; !ok {
+		return fmt.Errorf("codegraph: missing from node %q", edge.From)
+	}
+	if _, ok := s.nodes[edge.To]; !ok {
+		return fmt.Errorf("codegraph: missing to node %q", edge.To)
+	}
+	if edge.Weight == 0 {
+		edge.Weight = 1
+	}
+
+	from := s.graph.GetVertexByID(edge.From)
+	to := s.graph.GetVertexByID(edge.To)
+	if from == nil || to == nil {
+		return fmt.Errorf("codegraph: missing graph vertex for edge %q -> %q", edge.From, edge.To)
+	}
+
+	_, err := s.graph.AddEdge(from, to, gograph.WithEdgeWeight(edge.Weight))
+	if err != nil {
+		return err
+	}
+
+	s.edges = append(s.edges, edge)
+	return nil
+}
+
+// Build returns the store as a read/query-time Graph.
+func (s *Store) Build() (Graph, error) {
+	return s, nil
+}
+
+// Node looks up one node by ID.
+func (s *Store) Node(id NodeID) (Node, bool) {
+	node, ok := s.nodes[id]
+	return node, ok
+}
+
+// Nodes returns all nodes currently stored.
+func (s *Store) Nodes() []Node {
+	out := make([]Node, 0, len(s.nodes))
+	for _, node := range s.nodes {
+		out = append(out, node)
+	}
+	return out
+}
+
+// Edges returns all edges currently stored.
+func (s *Store) Edges() []Edge {
+	out := make([]Edge, len(s.edges))
+	copy(out, s.edges)
+	return out
+}
+
+// Neighbors returns outgoing neighbors that pass the filter.
+func (s *Store) Neighbors(id NodeID, filter EdgeFilter) []NodeID {
+	out := make([]NodeID, 0)
+	for _, edge := range s.edges {
+		if edge.From == id && filter.Allows(edge.Kind) {
+			out = append(out, edge.To)
+		}
+	}
+	return out
+}
+
+// ShortestPath computes a filtered shortest path between two nodes.
+func (s *Store) ShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool) {
+	if _, ok := s.nodes[from]; !ok {
+		return Path{}, false
+	}
+	if _, ok := s.nodes[to]; !ok {
+		return Path{}, false
+	}
+
+	return s.filteredShortestPath(from, to, filter)
+}
+
+// NodesByFile returns all node IDs associated with a repo-relative file.
+func (s *Store) NodesByFile(file domain.RepoRelPath) []NodeID {
+	ids := s.nodesByFile[file]
+	out := make([]NodeID, len(ids))
+	copy(out, ids)
+	return out
+}
+
+// FunctionsByName returns all function node IDs with the given name.
+func (s *Store) FunctionsByName(name string) []NodeID {
+	ids := s.functionsByName[name]
+	out := make([]NodeID, len(ids))
+	copy(out, ids)
+	return out
+}
+
+func (s *Store) filteredShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool) {
+	type item struct {
+		ID   NodeID
+		Path []NodeID
+	}
+
+	seen := map[NodeID]bool{from: true}
+	queue := []item{{ID: from, Path: []NodeID{from}}}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		if cur.ID == to {
+			return Path{
+				Nodes: cur.Path,
+				Edges: s.pathEdges(cur.Path),
+				Cost:  float64(max(0, len(cur.Path)-1)),
+			}, true
+		}
+
+		for _, next := range s.Neighbors(cur.ID, filter) {
+			if seen[next] {
+				continue
+			}
+
+			seen[next] = true
+
+			nextPath := make([]NodeID, 0, len(cur.Path)+1)
+			nextPath = append(nextPath, cur.Path...)
+			nextPath = append(nextPath, next)
+
+			queue = append(queue, item{
+				ID:   next,
+				Path: nextPath,
+			})
+		}
+	}
+
+	return Path{}, false
+}
+
+func (s *Store) pathEdges(nodes []NodeID) []Edge {
+	if len(nodes) < 2 {
+		return nil
+	}
+
+	out := make([]Edge, 0, len(nodes)-1)
+	for i := 0; i < len(nodes)-1; i++ {
+		from := nodes[i]
+		to := nodes[i+1]
+		for _, edge := range s.edges {
+			if edge.From == from && edge.To == to {
+				out = append(out, edge)
+				break
+			}
+		}
+	}
+
+	return out
+}
+</file>
+
+<file path="internal/domain/nonempty_test.go">
+package domain
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestNonEmptyFromSlice(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		items   []int
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			items:   nil,
+			wantErr: true,
+		},
+		{
+			name:  "single item",
+			items: []int{7},
+		},
+		{
+			name:  "multiple items",
+			items: []int{1, 2, 3},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := NonEmptyFromSlice(tt.items)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			all := got.All()
+			if len(all) != len(tt.items) {
+				t.Fatalf("len(all) = %d, want %d", len(all), len(tt.items))
+			}
+			for i := range all {
+				if all[i] != tt.items[i] {
+					t.Fatalf("all[%d] = %d, want %d", i, all[i], tt.items[i])
+				}
+			}
+
+			if len(tt.items) > 1 {
+				tail := got.Tail()
+				tail[0] = 999
+				if got.Tail()[0] == 999 {
+					t.Fatal("Tail exposed internal slice")
+				}
+			}
+		})
+	}
+}
+
+func TestNonEmptyZeroValue(t *testing.T) {
+	t.Parallel()
+
+	var n NonEmpty[int]
+
+	if n.Valid() {
+		t.Fatal("zero-value NonEmpty should be invalid")
+	}
+	if got := n.Len(); got != 0 {
+		t.Fatalf("Len() = %d, want 0", got)
+	}
+	if got := n.All(); got != nil {
+		t.Fatalf("All() = %#v, want nil", got)
+	}
+	if got := n.Tail(); got != nil {
+		t.Fatalf("Tail() = %#v, want nil", got)
+	}
+	if err := n.Validate(); err == nil {
+		t.Fatal("expected validation error")
+	}
+	if _, err := json.Marshal(n); err == nil {
+		t.Fatal("expected marshal error")
+	}
+
+	var values []int
+	for value := range n.Values() {
+		values = append(values, value)
+	}
+	if len(values) != 0 {
+		t.Fatalf("len(Values()) = %d, want 0", len(values))
+	}
+}
+
+func TestNonEmptyValues(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input NonEmpty[int]
+		want  []int
+		stop  int
+	}{
+		{
+			name:  "all values",
+			input: NewNonEmpty(1, 2, 3),
+			want:  []int{1, 2, 3},
+			stop:  3,
+		},
+		{
+			name:  "early stop",
+			input: NewNonEmpty(4, 5, 6),
+			want:  []int{4, 5},
+			stop:  2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := make([]int, 0)
+			for value := range tt.input.Values() {
+				got = append(got, value)
+				if len(got) >= tt.stop {
+					break
+				}
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("len(got) = %d, want %d", len(got), len(tt.want))
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("got[%d] = %d, want %d", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+</file>
+
+<file path="internal/domain/nonempty.go">
+package domain
+
+import (
+	"encoding/json"
+	"errors"
+	"iter"
+)
+
+var errEmptyNonEmpty = errors.New("non-empty slice is required")
+
+// NonEmpty represents a slice with at least one element.
+//
+// The zero value can still exist because of Go, so callers should prefer the
+// constructors for meaningful values.
+type NonEmpty[T any] struct {
+	head  T
+	tail  []T
+	valid bool
+}
+
+// NewNonEmpty constructs a non-empty collection from a required head element.
+func NewNonEmpty[T any](head T, tail ...T) NonEmpty[T] {
+	return NonEmpty[T]{
+		head:  head,
+		tail:  append([]T(nil), tail...),
+		valid: true,
+	}
+}
+
+// NonEmptyFromSlice constructs a NonEmpty value from a slice, rejecting empty
+// input.
+func NonEmptyFromSlice[T any](items []T) (NonEmpty[T], error) {
+	if len(items) == 0 {
+		return NonEmpty[T]{}, errEmptyNonEmpty
+	}
+	return NewNonEmpty(items[0], items[1:]...), nil
+}
+
+// Head returns the first element.
+func (n NonEmpty[T]) Head() T {
+	return n.head
+}
+
+// Tail returns the elements after Head.
+func (n NonEmpty[T]) Tail() []T {
+	if !n.valid {
+		return nil
+	}
+	return append([]T(nil), n.tail...)
+}
+
+// All returns the full collection as a slice copy.
+func (n NonEmpty[T]) All() []T {
+	if !n.valid {
+		return nil
+	}
+	items := make([]T, 1+len(n.tail))
+	items[0] = n.head
+	copy(items[1:], n.tail)
+	return items
+}
+
+// Values iterates the collection in stable order.
+func (n NonEmpty[T]) Values() iter.Seq[T] {
+	return func(yield func(T) bool) {
+		if !n.valid {
+			return
+		}
+		if !yield(n.head) {
+			return
+		}
+		for _, item := range n.tail {
+			if !yield(item) {
+				return
+			}
+		}
+	}
+}
+
+// Len reports the number of elements, or zero for an invalid zero value.
+func (n NonEmpty[T]) Len() int {
+	if !n.valid {
+		return 0
+	}
+	return 1 + len(n.tail)
+}
+
+// Valid reports whether the value was constructed as a meaningful non-empty
+// collection.
+func (n NonEmpty[T]) Valid() bool {
+	return n.valid
+}
+
+// Validate rejects the invalid zero value.
+func (n NonEmpty[T]) Validate() error {
+	if !n.valid {
+		return errEmptyNonEmpty
+	}
+	return nil
+}
+
+// MarshalJSON encodes the collection as a JSON array.
+func (n NonEmpty[T]) MarshalJSON() ([]byte, error) {
+	if err := n.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(n.All())
+}
+
+// UnmarshalJSON decodes a JSON array into a validated non-empty collection.
+func (n *NonEmpty[T]) UnmarshalJSON(data []byte) error {
+	var items []T
+	if err := json.Unmarshal(data, &items); err != nil {
+		return err
+	}
+	value, err := NonEmptyFromSlice(items)
+	if err != nil {
+		return err
+	}
+	*n = value
+	return nil
+}
+</file>
+
+<file path="internal/domain/pair.go">
+package domain
+
+import "iter"
+
+// Role names the two sides of a Searchbench comparison.
+type Role string
+
+const (
+	RoleBaseline  Role = "baseline"
+	RoleCandidate Role = "candidate"
+)
+
+// Pair stores the baseline and candidate versions of the same kind of value.
+//
+// Searchbench is fundamentally comparative, so this type should appear often:
+// Pair[SystemSpec], Pair[[]ScoredRun], Pair[ScoreSummary], etc.
+type Pair[T any] struct {
+	Baseline  T `json:"baseline"`
+	Candidate T `json:"candidate"`
+}
+
+// NewPair constructs the baseline/candidate pair for a value type.
+func NewPair[T any](baseline T, candidate T) Pair[T] {
+	return Pair[T]{
+		Baseline:  baseline,
+		Candidate: candidate,
+	}
+}
+
+// MapPair maps both sides of the pair while preserving baseline/candidate
+// roles.
+func MapPair[A, B any](p Pair[A], f func(Role, A) B) Pair[B] {
+	return Pair[B]{
+		Baseline:  f(RoleBaseline, p.Baseline),
+		Candidate: f(RoleCandidate, p.Candidate),
+	}
+}
+
+// All iterates baseline first and then candidate together with their roles.
+func (p Pair[T]) All() iter.Seq2[Role, T] {
+	return func(yield func(Role, T) bool) {
+		if !yield(RoleBaseline, p.Baseline) {
+			return
+		}
+		yield(RoleCandidate, p.Candidate)
+	}
+}
+
+// ByRole returns the value for the requested comparison role.
+func (p Pair[T]) ByRole(role Role) T {
+	switch role {
+	case RoleBaseline:
+		return p.Baseline
+	case RoleCandidate:
+		return p.Candidate
+	default:
+		var zero T
+		return zero
+	}
 }
 </file>
 
@@ -3074,6 +3527,10 @@ const (
 // PolicyHash is the stable content hash for a policy source.
 type PolicyHash string
 
+// PolicyRef is the report-safe identity for a policy artifact.
+//
+// It intentionally omits policy source so reports and comparisons can refer to
+// the policy without embedding executable code.
 type PolicyRef struct {
 	ID         PolicyID       `json:"id"`
 	Language   PolicyLanguage `json:"language"`
@@ -3104,6 +3561,10 @@ func NewPythonPolicy(id PolicyID, source string, entrypoint string) PolicyArtifa
 	}
 }
 
+// Validate checks that the policy is executable and self-consistent.
+//
+// In particular, Validate ensures the stored content hash matches Source so the
+// policy cannot silently drift away from its identity.
 func (p PolicyArtifact) Validate() error {
 	if p.ID.Empty() {
 		return errors.New("policy id is required")
@@ -3129,6 +3590,7 @@ func (p PolicyArtifact) Validate() error {
 	return nil
 }
 
+// Ref returns the report-safe identity for the policy without source text.
 func (p PolicyArtifact) Ref() PolicyRef {
 	return PolicyRef{
 		ID:         p.ID,
@@ -3165,8 +3627,14 @@ type SystemSpec struct {
 	Runtime      RuntimeConfig   `json:"runtime,omitempty"`
 }
 
+// SystemFingerprint is the stable hash of a system's behavior-affecting
+// configuration.
 type SystemFingerprint string
 
+// SystemRef is the report-safe identity for an executable system.
+//
+// It contains all fields needed to explain what was compared, but it omits
+// executable-only data such as policy source.
 type SystemRef struct {
 	ID           SystemID          `json:"id"`
 	Name         string            `json:"name"`
@@ -3178,6 +3646,7 @@ type SystemRef struct {
 	Fingerprint  SystemFingerprint `json:"fingerprint"`
 }
 
+// Validate checks that the executable system recipe is usable.
 func (s SystemSpec) Validate() error {
 	if s.ID.Empty() {
 		return errors.New("system id is required")
@@ -3204,6 +3673,11 @@ func (s SystemSpec) Validate() error {
 	return nil
 }
 
+// Fingerprint returns a deterministic hash over the system's
+// behavior-affecting configuration.
+//
+// Cosmetic display fields such as Name are intentionally excluded, while
+// PolicyRef is included so language, entrypoint, and hash all affect identity.
 func (s SystemSpec) Fingerprint() SystemFingerprint {
 	var policy *PolicyRef
 	if s.Policy != nil {
@@ -3211,6 +3685,8 @@ func (s SystemSpec) Fingerprint() SystemFingerprint {
 		policy = &ref
 	}
 
+	// Name is intentionally excluded because it is cosmetic; prompt/model/policy
+	// selection and runtime limits are the fields that affect behavior.
 	canonical := struct {
 		Backend      BackendKind     `json:"backend"`
 		Model        ModelSpec       `json:"model"`
@@ -3233,6 +3709,9 @@ func (s SystemSpec) Fingerprint() SystemFingerprint {
 	return SystemFingerprint(hex.EncodeToString(sum[:]))
 }
 
+// Ref converts the executable system recipe into its report-safe identity.
+//
+// Reports should prefer SystemRef so policy source does not leak by default.
 func (s SystemSpec) Ref() SystemRef {
 	var policy *PolicyRef
 	if s.Policy != nil {
@@ -3258,43 +3737,6 @@ func hashPolicySource(source string) PolicyHash {
 }
 </file>
 
-<file path="internal/report/comparison.go">
-package report
-
-import "github.com/becker63/searchbench-go/internal/score"
-
-// ScoreComparison compares one metric across baseline and candidate.
-//
-// Positive/negative meaning depends on the metric. Higher-is-better or
-// lower-is-better policy should live in promotion/regression logic, not here.
-type ScoreComparison struct {
-	Metric score.MetricName `json:"metric"`
-
-	Baseline  float64 `json:"baseline"`
-	Candidate float64 `json:"candidate"`
-	Delta     float64 `json:"delta"`
-}
-
-// NewScoreComparison constructs a comparison using candidate - baseline.
-func NewScoreComparison(metric score.MetricName, baseline, candidate float64) ScoreComparison {
-	return ScoreComparison{
-		Metric:    metric,
-		Baseline:  baseline,
-		Candidate: candidate,
-		Delta:     candidate - baseline,
-	}
-}
-
-func NewScoreComparisonFromMetric(c score.MetricComparison) ScoreComparison {
-	return ScoreComparison{
-		Metric:    c.Metric,
-		Baseline:  c.Baseline,
-		Candidate: c.Candidate,
-		Delta:     c.Delta,
-	}
-}
-</file>
-
 <file path="internal/report/promotion.go">
 package report
 
@@ -3302,9 +3744,12 @@ package report
 type Decision string
 
 const (
+	// DecisionPromote recommends replacing the baseline with the candidate.
 	DecisionPromote Decision = "PROMOTE"
-	DecisionReview  Decision = "REVIEW"
-	DecisionReject  Decision = "REJECT"
+	// DecisionReview recommends human review before promotion.
+	DecisionReview Decision = "REVIEW"
+	// DecisionReject recommends not promoting the candidate.
+	DecisionReject Decision = "REJECT"
 )
 
 // PromotionDecision explains whether a candidate should replace the baseline.
@@ -3314,66 +3759,265 @@ type PromotionDecision struct {
 }
 </file>
 
-<file path="internal/report/regression.go">
+<file path="internal/report/spec.go">
 package report
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/score"
 )
 
-// RegressionSeverity describes how serious a candidate regression is.
-type RegressionSeverity string
-
-const (
-	RegressionMinor    RegressionSeverity = "minor"
-	RegressionBlocking RegressionSeverity = "blocking"
-)
-
-// Regression records a metric/task-level reason the candidate got worse.
-type Regression struct {
-	TaskID domain.TaskID    `json:"task_id"`
-	Metric score.MetricName `json:"metric"`
-
-	Baseline  float64 `json:"baseline"`
-	Candidate float64 `json:"candidate"`
-	Delta     float64 `json:"delta"`
-
-	Severity RegressionSeverity `json:"severity"`
-	Reason   string             `json:"reason"`
+// ComparisonSpec declares the systems and tasks being compared.
+//
+// This is the planned report boundary:
+//
+//	baseline system + candidate system + fixed task slice
+type ComparisonSpec struct {
+	Systems domain.Pair[domain.SystemRef]    `json:"systems"`
+	Tasks   domain.NonEmpty[domain.TaskSpec] `json:"tasks"`
 }
 
-func NewRegressionFromMetricComparison(
-	taskID domain.TaskID,
-	comparison score.MetricComparison,
-	severity RegressionSeverity,
-	reason string,
-) Regression {
-	return Regression{
-		TaskID:    taskID,
-		Metric:    comparison.Metric,
-		Baseline:  comparison.Baseline,
-		Candidate: comparison.Candidate,
-		Delta:     comparison.Delta,
-		Severity:  severity,
-		Reason:    reason,
+// NewComparisonSpec constructs a report-safe comparison boundary from full
+// executable systems.
+//
+// The returned spec stores SystemRef values rather than SystemSpec values so
+// reports do not carry policy source.
+func NewComparisonSpec(
+	systems domain.Pair[domain.SystemSpec],
+	tasks domain.NonEmpty[domain.TaskSpec],
+) ComparisonSpec {
+	return NewComparisonSpecFromRefs(domain.NewPair(systems.Baseline.Ref(), systems.Candidate.Ref()), tasks)
+}
+
+// NewComparisonSpecFromRefs constructs a report-safe comparison boundary from
+// report-safe system identities.
+func NewComparisonSpecFromRefs(
+	systems domain.Pair[domain.SystemRef],
+	tasks domain.NonEmpty[domain.TaskSpec],
+) ComparisonSpec {
+	return ComparisonSpec{
+		Systems: systems,
+		Tasks:   tasks,
 	}
 }
 
-func RegressionsForTask(taskID domain.TaskID, comparisons []score.MetricComparison) []Regression {
-	out := make([]Regression, 0)
-	for _, comparison := range comparisons {
-		if !comparison.Regressed {
-			continue
+// Validate checks that the report boundary is structurally meaningful.
+func (s ComparisonSpec) Validate() error {
+	if err := s.Tasks.Validate(); err != nil {
+		return err
+	}
+	if s.Systems.Baseline.ID.Empty() {
+		return errors.New("baseline system id is required")
+	}
+	if s.Systems.Candidate.ID.Empty() {
+		return errors.New("candidate system id is required")
+	}
+	if s.Systems.Baseline.Fingerprint == "" {
+		return fmt.Errorf("baseline system fingerprint is required")
+	}
+	if s.Systems.Candidate.Fingerprint == "" {
+		return fmt.Errorf("candidate system fingerprint is required")
+	}
+	return nil
+}
+</file>
+
+<file path="internal/report/task_run_set_test.go">
+package report
+
+import (
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+func TestNewTaskRunSetValidation(t *testing.T) {
+	t.Parallel()
+
+	task1 := domain.TaskID("task-1")
+	task2 := domain.TaskID("task-2")
+
+	tests := []struct {
+		name    string
+		items   map[domain.TaskID]string
+		order   []domain.TaskID
+		wantErr bool
+	}{
+		{
+			name:    "empty order",
+			items:   map[domain.TaskID]string{task1: "a"},
+			wantErr: true,
+		},
+		{
+			name:    "missing task",
+			items:   map[domain.TaskID]string{task1: "a"},
+			order:   []domain.TaskID{task1, task2},
+			wantErr: true,
+		},
+		{
+			name: "duplicate task id",
+			items: map[domain.TaskID]string{
+				task1: "a",
+				task2: "b",
+			},
+			order:   []domain.TaskID{task1, task1},
+			wantErr: true,
+		},
+		{
+			name: "valid",
+			items: map[domain.TaskID]string{
+				task1: "a",
+				task2: "b",
+			},
+			order: []domain.TaskID{task2, task1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			set, err := NewTaskRunSet(tt.items, tt.order)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got, want := set.Len(), len(tt.order); got != want {
+				t.Fatalf("Len() = %d, want %d", got, want)
+			}
+			if got := set.Values(); len(got) != len(tt.order) {
+				t.Fatalf("len(Values()) = %d, want %d", len(got), len(tt.order))
+			}
+		})
+	}
+}
+
+func TestTaskRunSetItems(t *testing.T) {
+	t.Parallel()
+
+	task1 := domain.TaskID("task-1")
+	task2 := domain.TaskID("task-2")
+	set, err := NewTaskRunSet(
+		map[domain.TaskID]string{
+			task1: "baseline",
+			task2: "candidate",
+		},
+		[]domain.TaskID{task2, task1},
+	)
+	if err != nil {
+		t.Fatalf("NewTaskRunSet() error = %v", err)
+	}
+
+	gotIDs := make([]domain.TaskID, 0)
+	gotVals := make([]string, 0)
+	for taskID, value := range set.Items() {
+		gotIDs = append(gotIDs, taskID)
+		gotVals = append(gotVals, value)
+	}
+
+	wantIDs := []domain.TaskID{task2, task1}
+	wantVals := []string{"candidate", "baseline"}
+	for i := range wantIDs {
+		if gotIDs[i] != wantIDs[i] {
+			t.Fatalf("gotIDs[%d] = %q, want %q", i, gotIDs[i], wantIDs[i])
 		}
-		out = append(out, NewRegressionFromMetricComparison(
-			taskID,
-			comparison,
-			RegressionMinor,
-			"candidate score is worse than baseline",
-		))
+		if gotVals[i] != wantVals[i] {
+			t.Fatalf("gotVals[%d] = %q, want %q", i, gotVals[i], wantVals[i])
+		}
 	}
-	return out
+}
+</file>
+
+<file path="internal/report/task_run_set.go">
+package report
+
+import (
+	"errors"
+	"fmt"
+	"iter"
+
+	"github.com/becker63/searchbench-go/internal/domain"
+)
+
+type TaskRunSet[T any] struct {
+	order  []domain.TaskID
+	byTask map[domain.TaskID]T
+}
+
+// NewTaskRunSet constructs an ordered, task-aligned run set.
+//
+// It preserves the caller's task order while also enabling lookup by TaskID so
+// future report logic can compare baseline and candidate runs deterministically.
+func NewTaskRunSet[T any](items map[domain.TaskID]T, order []domain.TaskID) (TaskRunSet[T], error) {
+	if len(order) == 0 {
+		return TaskRunSet[T]{}, errors.New("task order must be non-empty")
+	}
+
+	ordered := append([]domain.TaskID(nil), order...)
+	byTask := make(map[domain.TaskID]T, len(items))
+	for id, item := range items {
+		byTask[id] = item
+	}
+
+	seen := make(map[domain.TaskID]struct{}, len(ordered))
+	for _, id := range ordered {
+		if _, ok := seen[id]; ok {
+			return TaskRunSet[T]{}, fmt.Errorf("duplicate task id in order: %s", id)
+		}
+		seen[id] = struct{}{}
+		if _, ok := byTask[id]; !ok {
+			return TaskRunSet[T]{}, fmt.Errorf("missing item for task id: %s", id)
+		}
+	}
+
+	return TaskRunSet[T]{
+		order:  ordered,
+		byTask: byTask,
+	}, nil
+}
+
+// Get returns the item for one task ID.
+func (s TaskRunSet[T]) Get(id domain.TaskID) (T, bool) {
+	value, ok := s.byTask[id]
+	return value, ok
+}
+
+// Order returns the preserved task ordering.
+func (s TaskRunSet[T]) Order() []domain.TaskID {
+	return append([]domain.TaskID(nil), s.order...)
+}
+
+// Values returns the ordered values without their task IDs.
+func (s TaskRunSet[T]) Values() []T {
+	values := make([]T, 0, len(s.order))
+	for _, id := range s.order {
+		values = append(values, s.byTask[id])
+	}
+	return values
+}
+
+// Items iterates task/value pairs in preserved task order.
+func (s TaskRunSet[T]) Items() iter.Seq2[domain.TaskID, T] {
+	return func(yield func(domain.TaskID, T) bool) {
+		for _, id := range s.order {
+			value := s.byTask[id]
+			if !yield(id, value) {
+				return
+			}
+		}
+	}
+}
+
+// Len reports the number of ordered task entries.
+func (s TaskRunSet[T]) Len() int {
+	return len(s.order)
 }
 </file>
 
@@ -3388,8 +4032,13 @@ type Phase interface {
 	phase()
 }
 
+// Planned marks a run that has been requested but not prepared.
 type Planned struct{}
+
+// Prepared marks a run whose backend/session state has been initialized.
 type Prepared struct{}
+
+// Executed marks a run whose execution succeeded and produced a prediction.
 type Executed struct{}
 
 func (Planned) phase()  {}
@@ -3399,19 +4048,25 @@ func (Executed) phase() {}
 type PhaseName string
 
 const (
-	PhasePlanned  PhaseName = "planned"
+	// PhasePlanned names the planned lifecycle state.
+	PhasePlanned PhaseName = "planned"
+	// PhasePrepared names the prepared lifecycle state.
 	PhasePrepared PhaseName = "prepared"
+	// PhaseExecuted names the executed lifecycle state.
 	PhaseExecuted PhaseName = "executed"
 )
 
+// Name returns the stable phase name.
 func (Planned) Name() PhaseName {
 	return PhasePlanned
 }
 
+// Name returns the stable phase name.
 func (Prepared) Name() PhaseName {
 	return PhasePrepared
 }
 
+// Name returns the stable phase name.
 func (Executed) Name() PhaseName {
 	return PhaseExecuted
 }
@@ -3451,19 +4106,22 @@ func (r Run[P]) ID() domain.RunID {
 	return r.id
 }
 
+// Spec returns the immutable planned request that this run is executing.
 func (r Run[P]) Spec() Spec {
 	return r.spec
 }
 
+// CreatedAt returns when the run record was first created.
 func (r Run[P]) CreatedAt() time.Time {
 	return r.createdAt
 }
 
+// Phase returns the current type-level phase marker.
 func (r Run[P]) Phase() P {
 	return r.phase
 }
 
-// PreparedRun means the backend session has been initialized.
+// PreparedRun means the backend session has been initialized successfully.
 //
 // For iterative-context, this means repo/session/policy setup has happened and
 // tools are ready to call.
@@ -3503,7 +4161,7 @@ type ExecutedRun struct {
 	FinishedAt time.Time           `json:"finished_at"`
 }
 
-// NewExecuted advances a prepared run into executed state.
+// NewExecuted advances a prepared run into the successful executed state.
 func NewExecuted(
 	prepared PreparedRun,
 	prediction domain.Prediction,
@@ -3548,6 +4206,8 @@ type Spec struct {
 	System domain.SystemSpec `json:"system"`
 }
 
+// NewSpec constructs a planned run request from one task and one executable
+// system.
 func NewSpec(id domain.RunID, task domain.TaskSpec, system domain.SystemSpec) Spec {
 	return Spec{
 		ID:     id,
@@ -3578,15 +4238,20 @@ type Input struct {
 <file path="internal/score/metric.go">
 package score
 
-// MetricName identifies a required Searchbench metric.
+// MetricName identifies one required Searchbench metric.
 type MetricName string
 
 const (
-	MetricGoldHop         MetricName = "gold_hop"
-	MetricIssueHop        MetricName = "issue_hop"
+	// MetricGoldHop is lower-is-better distance to the gold target.
+	MetricGoldHop MetricName = "gold_hop"
+	// MetricIssueHop is lower-is-better distance to the issue anchor.
+	MetricIssueHop MetricName = "issue_hop"
+	// MetricTokenEfficiency is higher-is-better token efficiency.
 	MetricTokenEfficiency MetricName = "token_efficiency"
-	MetricCost            MetricName = "cost"
-	MetricComposite       MetricName = "composite"
+	// MetricCost is lower-is-better cost performance.
+	MetricCost MetricName = "cost"
+	// MetricComposite is the higher-is-better reduced comparison score.
+	MetricComposite MetricName = "composite"
 )
 
 // HopDistance is a graph distance measured in hops.
@@ -3629,6 +4294,9 @@ package score
 import "context"
 
 // Engine computes the complete required ScoreSet for one executed run.
+//
+// If a required metric cannot be computed, Score should return an error rather
+// than a partial score set.
 type Engine interface {
 	Score(ctx context.Context, input Input) (ScoreSet, error)
 }
@@ -3640,6 +4308,112 @@ module github.com/becker63/searchbench-go
 go 1.26.2
 
 require github.com/hmdsefi/gograph v0.7.0 // indirect
+</file>
+
+<file path="internal/report/comparison.go">
+package report
+
+import "github.com/becker63/searchbench-go/internal/score"
+
+// ScoreComparison compares one metric across baseline and candidate.
+//
+// Positive/negative meaning depends on the metric. Higher-is-better or
+// lower-is-better policy should live in promotion/regression logic, not here.
+type ScoreComparison struct {
+	Metric score.MetricName `json:"metric"`
+
+	Baseline  float64 `json:"baseline"`
+	Candidate float64 `json:"candidate"`
+	Delta     float64 `json:"delta"`
+}
+
+// NewScoreComparison constructs a comparison using candidate - baseline.
+func NewScoreComparison(metric score.MetricName, baseline, candidate float64) ScoreComparison {
+	return ScoreComparison{
+		Metric:    metric,
+		Baseline:  baseline,
+		Candidate: candidate,
+		Delta:     candidate - baseline,
+	}
+}
+
+// NewScoreComparisonFromMetric converts a score-level metric comparison into
+// its report-facing shape.
+func NewScoreComparisonFromMetric(c score.MetricComparison) ScoreComparison {
+	return ScoreComparison{
+		Metric:    c.Metric,
+		Baseline:  c.Baseline,
+		Candidate: c.Candidate,
+		Delta:     c.Delta,
+	}
+}
+</file>
+
+<file path="internal/report/regression.go">
+package report
+
+import (
+	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/score"
+)
+
+// RegressionSeverity describes how serious a candidate regression is.
+type RegressionSeverity string
+
+const (
+	RegressionMinor    RegressionSeverity = "minor"
+	RegressionBlocking RegressionSeverity = "blocking"
+)
+
+// Regression records a metric/task-level reason the candidate got worse.
+type Regression struct {
+	TaskID domain.TaskID    `json:"task_id"`
+	Metric score.MetricName `json:"metric"`
+
+	Baseline  float64 `json:"baseline"`
+	Candidate float64 `json:"candidate"`
+	Delta     float64 `json:"delta"`
+
+	Severity RegressionSeverity `json:"severity"`
+	Reason   string             `json:"reason"`
+}
+
+// NewRegressionFromMetricComparison converts a score-level regression into a
+// report-facing regression record.
+func NewRegressionFromMetricComparison(
+	taskID domain.TaskID,
+	comparison score.MetricComparison,
+	severity RegressionSeverity,
+	reason string,
+) Regression {
+	return Regression{
+		TaskID:    taskID,
+		Metric:    comparison.Metric,
+		Baseline:  comparison.Baseline,
+		Candidate: comparison.Candidate,
+		Delta:     comparison.Delta,
+		Severity:  severity,
+		Reason:    reason,
+	}
+}
+
+// RegressionsForTask converts metric comparisons into report-level regressions
+// for one task.
+func RegressionsForTask(taskID domain.TaskID, comparisons []score.MetricComparison) []Regression {
+	out := make([]Regression, 0)
+	for _, comparison := range comparisons {
+		if !comparison.Regressed {
+			continue
+		}
+		out = append(out, NewRegressionFromMetricComparison(
+			taskID,
+			comparison,
+			RegressionMinor,
+			"candidate score is worse than baseline",
+		))
+	}
+	return out
+}
 </file>
 
 <file path="internal/report/report.go">
@@ -3673,7 +4447,8 @@ type CandidateReport struct {
 	Artifacts []domain.ReportArtifactRef `json:"artifacts,omitempty"`
 }
 
-// NewCandidateReport constructs a report from already-scored run sets.
+// NewCandidateReport constructs the central Searchbench release artifact from
+// already-compared runs and failures.
 func NewCandidateReport(
 	id domain.ReportID,
 	spec ComparisonSpec,
@@ -3703,13 +4478,16 @@ import "github.com/becker63/searchbench-go/internal/run"
 
 // ScoredRun is the minimum unit that can participate in a candidate report.
 //
-// It wraps a successful ExecutedRun with a complete ScoreSet.
+// It wraps a successful ExecutedRun with a complete validated ScoreSet. If a
+// required metric cannot be computed, scoring should fail instead of
+// constructing ScoredRun.
 type ScoredRun struct {
 	Execution run.ExecutedRun `json:"execution"`
 	Scores    ScoreSet        `json:"scores"`
 }
 
-// NewScoredRun constructs a scored run from an executed run and complete scores.
+// NewScoredRun constructs a scored run from an executed run and a complete
+// required score set.
 func NewScoredRun(execution run.ExecutedRun, scores ScoreSet) (ScoredRun, error) {
 	if err := scores.Validate(); err != nil {
 		return ScoredRun{}, err
@@ -3738,6 +4516,8 @@ type ScoreSet struct {
 	Composite       Metric[CompositeScore]  `json:"composite"`
 }
 
+// NewScoreSet constructs a complete required score set and validates metric
+// names.
 func NewScoreSet(
 	goldHop Metric[HopDistance],
 	issueHop Metric[HopDistance],
@@ -3758,6 +4538,12 @@ func NewScoreSet(
 	return s, nil
 }
 
+// Validate checks that the score set contains the required metrics in their
+// canonical slots.
+//
+// ScoreSet intentionally does not use per-metric Available flags. Missing
+// required metrics should be represented as scoring failure, not as a partial
+// score set.
 func (s ScoreSet) Validate() error {
 	if s.GoldHop.Name != MetricGoldHop {
 		return fmt.Errorf("gold hop metric must be named %q", MetricGoldHop)
@@ -3777,7 +4563,7 @@ func (s ScoreSet) Validate() error {
 	return nil
 }
 
-// Metrics returns the score set as a flat list for reporting/iteration.
+// Metrics returns the score set as a flat list for report-facing inspection.
 //
 // This is intentionally read-only-ish: callers can inspect metrics uniformly,
 // but the canonical complete representation is still the struct above.

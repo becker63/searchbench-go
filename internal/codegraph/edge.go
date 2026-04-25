@@ -19,6 +19,7 @@ type Edge struct {
 	Weight float64  `json:"weight,omitempty"`
 }
 
+// NewEdge constructs an edge with the default weight.
 func NewEdge(from, to NodeID, kind EdgeKind) Edge {
 	return Edge{
 		From:   from,
@@ -28,6 +29,7 @@ func NewEdge(from, to NodeID, kind EdgeKind) Edge {
 	}
 }
 
+// NewWeightedEdge constructs an edge with an explicit weight.
 func NewWeightedEdge(from, to NodeID, kind EdgeKind, weight float64) Edge {
 	if weight == 0 {
 		weight = 1

@@ -10,6 +10,11 @@ import (
 var _ Builder = (*Store)(nil)
 var _ Graph = (*Store)(nil)
 
+// Store is the current in-memory graph implementation.
+//
+// Store currently implements both Builder and Graph so callers can construct a
+// graph and then query it through one type. Its gograph dependency is an
+// internal detail hidden behind this package.
 type Store struct {
 	graph gograph.Graph[NodeID]
 
@@ -20,6 +25,7 @@ type Store struct {
 	functionsByName map[string][]NodeID
 }
 
+// NewStore constructs an empty graph store.
 func NewStore() *Store {
 	return &Store{
 		graph:           gograph.New[NodeID](gograph.Directed()),
@@ -30,6 +36,7 @@ func NewStore() *Store {
 	}
 }
 
+// AddNode inserts one node into the mutable store.
 func (s *Store) AddNode(node Node) error {
 	if node.ID == "" {
 		return fmt.Errorf("codegraph: node id is required")
@@ -53,6 +60,7 @@ func (s *Store) AddNode(node Node) error {
 	return nil
 }
 
+// AddEdge inserts one edge into the mutable store.
 func (s *Store) AddEdge(edge Edge) error {
 	if edge.From == "" || edge.To == "" {
 		return fmt.Errorf("codegraph: edge endpoints are required")
@@ -82,15 +90,18 @@ func (s *Store) AddEdge(edge Edge) error {
 	return nil
 }
 
+// Build returns the store as a read/query-time Graph.
 func (s *Store) Build() (Graph, error) {
 	return s, nil
 }
 
+// Node looks up one node by ID.
 func (s *Store) Node(id NodeID) (Node, bool) {
 	node, ok := s.nodes[id]
 	return node, ok
 }
 
+// Nodes returns all nodes currently stored.
 func (s *Store) Nodes() []Node {
 	out := make([]Node, 0, len(s.nodes))
 	for _, node := range s.nodes {
@@ -99,12 +110,14 @@ func (s *Store) Nodes() []Node {
 	return out
 }
 
+// Edges returns all edges currently stored.
 func (s *Store) Edges() []Edge {
 	out := make([]Edge, len(s.edges))
 	copy(out, s.edges)
 	return out
 }
 
+// Neighbors returns outgoing neighbors that pass the filter.
 func (s *Store) Neighbors(id NodeID, filter EdgeFilter) []NodeID {
 	out := make([]NodeID, 0)
 	for _, edge := range s.edges {
@@ -115,6 +128,7 @@ func (s *Store) Neighbors(id NodeID, filter EdgeFilter) []NodeID {
 	return out
 }
 
+// ShortestPath computes a filtered shortest path between two nodes.
 func (s *Store) ShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, bool) {
 	if _, ok := s.nodes[from]; !ok {
 		return Path{}, false
@@ -126,6 +140,7 @@ func (s *Store) ShortestPath(from NodeID, to NodeID, filter EdgeFilter) (Path, b
 	return s.filteredShortestPath(from, to, filter)
 }
 
+// NodesByFile returns all node IDs associated with a repo-relative file.
 func (s *Store) NodesByFile(file domain.RepoRelPath) []NodeID {
 	ids := s.nodesByFile[file]
 	out := make([]NodeID, len(ids))
@@ -133,6 +148,7 @@ func (s *Store) NodesByFile(file domain.RepoRelPath) []NodeID {
 	return out
 }
 
+// FunctionsByName returns all function node IDs with the given name.
 func (s *Store) FunctionsByName(name string) []NodeID {
 	ids := s.functionsByName[name]
 	out := make([]NodeID, len(ids))

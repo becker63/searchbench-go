@@ -16,6 +16,11 @@ type StageError struct {
 	Err      error
 }
 
+// NewStageError constructs a typed orchestration error for one run stage.
+//
+// StageError is an internal classification helper. Runner eventually converts
+// it into the report-facing run.RunFailure artifact once comparison work is
+// summarized.
 func NewStageError(spec run.Spec, stage run.FailureStage, err error) StageError {
 	if err == nil {
 		err = errors.New("unknown error")
@@ -29,6 +34,7 @@ func NewStageError(spec run.Spec, stage run.FailureStage, err error) StageError 
 	}
 }
 
+// Error formats the stage classification together with the wrapped cause.
 func (e StageError) Error() string {
 	return fmt.Sprintf(
 		"stage=%s run_id=%s task_id=%s system_id=%s: %v",
@@ -40,11 +46,14 @@ func (e StageError) Error() string {
 	)
 }
 
+// Unwrap returns the underlying stage cause for errors.Is/errors.As.
 func (e StageError) Unwrap() error {
 	return e.Err
 }
 
 func failureFromError(spec run.Spec, stage run.FailureStage, err error) run.RunFailure {
+	// StageError is the internal classification shape; RunFailure is the
+	// report-facing artifact stored in CandidateReport.
 	var stageErr StageError
 	if errors.As(err, &stageErr) {
 		return run.RunFailure{

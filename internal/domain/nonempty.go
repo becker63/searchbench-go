@@ -18,6 +18,7 @@ type NonEmpty[T any] struct {
 	valid bool
 }
 
+// NewNonEmpty constructs a non-empty collection from a required head element.
 func NewNonEmpty[T any](head T, tail ...T) NonEmpty[T] {
 	return NonEmpty[T]{
 		head:  head,
@@ -26,6 +27,8 @@ func NewNonEmpty[T any](head T, tail ...T) NonEmpty[T] {
 	}
 }
 
+// NonEmptyFromSlice constructs a NonEmpty value from a slice, rejecting empty
+// input.
 func NonEmptyFromSlice[T any](items []T) (NonEmpty[T], error) {
 	if len(items) == 0 {
 		return NonEmpty[T]{}, errEmptyNonEmpty
@@ -33,10 +36,12 @@ func NonEmptyFromSlice[T any](items []T) (NonEmpty[T], error) {
 	return NewNonEmpty(items[0], items[1:]...), nil
 }
 
+// Head returns the first element.
 func (n NonEmpty[T]) Head() T {
 	return n.head
 }
 
+// Tail returns the elements after Head.
 func (n NonEmpty[T]) Tail() []T {
 	if !n.valid {
 		return nil
@@ -44,6 +49,7 @@ func (n NonEmpty[T]) Tail() []T {
 	return append([]T(nil), n.tail...)
 }
 
+// All returns the full collection as a slice copy.
 func (n NonEmpty[T]) All() []T {
 	if !n.valid {
 		return nil
@@ -54,6 +60,7 @@ func (n NonEmpty[T]) All() []T {
 	return items
 }
 
+// Values iterates the collection in stable order.
 func (n NonEmpty[T]) Values() iter.Seq[T] {
 	return func(yield func(T) bool) {
 		if !n.valid {
@@ -70,6 +77,7 @@ func (n NonEmpty[T]) Values() iter.Seq[T] {
 	}
 }
 
+// Len reports the number of elements, or zero for an invalid zero value.
 func (n NonEmpty[T]) Len() int {
 	if !n.valid {
 		return 0
@@ -77,10 +85,13 @@ func (n NonEmpty[T]) Len() int {
 	return 1 + len(n.tail)
 }
 
+// Valid reports whether the value was constructed as a meaningful non-empty
+// collection.
 func (n NonEmpty[T]) Valid() bool {
 	return n.valid
 }
 
+// Validate rejects the invalid zero value.
 func (n NonEmpty[T]) Validate() error {
 	if !n.valid {
 		return errEmptyNonEmpty
@@ -88,6 +99,7 @@ func (n NonEmpty[T]) Validate() error {
 	return nil
 }
 
+// MarshalJSON encodes the collection as a JSON array.
 func (n NonEmpty[T]) MarshalJSON() ([]byte, error) {
 	if err := n.Validate(); err != nil {
 		return nil, err
@@ -95,6 +107,7 @@ func (n NonEmpty[T]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.All())
 }
 
+// UnmarshalJSON decodes a JSON array into a validated non-empty collection.
 func (n *NonEmpty[T]) UnmarshalJSON(data []byte) error {
 	var items []T
 	if err := json.Unmarshal(data, &items); err != nil {

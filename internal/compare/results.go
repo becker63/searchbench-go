@@ -13,6 +13,8 @@ type Results struct {
 	regressions []report.Regression
 }
 
+// Summary is the aggregated comparison view produced after all task work has
+// finished.
 type Summary struct {
 	Runs        domain.Pair[[]score.ScoredRun]
 	Failures    domain.Pair[[]run.RunFailure]
@@ -20,6 +22,8 @@ type Summary struct {
 	Regressions []report.Regression
 }
 
+// NewResults constructs the single-threaded comparison accumulator used by
+// Runner after task work has been collected in deterministic order.
 func NewResults(capacity int) Results {
 	return Results{
 		runs: domain.NewPair(
@@ -34,6 +38,11 @@ func NewResults(capacity int) Results {
 	}
 }
 
+// AddTaskResult appends one task comparison outcome into the aggregate result.
+//
+// Results is intentionally single-threaded. Runner collects task work first and
+// then feeds the accumulator on the main goroutine to preserve deterministic
+// ordering without locks.
 func (r *Results) AddTaskResult(result TaskComparisonResult) {
 	if result.Runs.Baseline != nil {
 		r.runs.Baseline = append(r.runs.Baseline, *result.Runs.Baseline)
@@ -50,6 +59,8 @@ func (r *Results) AddTaskResult(result TaskComparisonResult) {
 	r.regressions = append(r.regressions, result.Regressions...)
 }
 
+// Summary reduces the accumulated runs and failures into report-facing
+// comparisons plus the collected regressions.
 func (r Results) Summary() Summary {
 	metricComparisons := score.CompareAverages(r.runs.Baseline, r.runs.Candidate)
 	comparisons := make([]report.ScoreComparison, 0, len(metricComparisons))

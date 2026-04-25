@@ -28,7 +28,8 @@ type CandidateReport struct {
 	Artifacts []domain.ReportArtifactRef `json:"artifacts,omitempty"`
 }
 
-// NewCandidateReport constructs a report from already-scored run sets.
+// NewCandidateReport constructs the central Searchbench release artifact from
+// already-compared runs and failures.
 func NewCandidateReport(
 	id domain.ReportID,
 	spec ComparisonSpec,

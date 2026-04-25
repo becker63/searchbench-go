@@ -12,6 +12,7 @@ type Plan struct {
 	Tasks   domain.NonEmpty[domain.TaskSpec]
 }
 
+// NewPlan constructs an executable baseline/candidate comparison request.
 func NewPlan(
 	systems domain.Pair[domain.SystemSpec],
 	tasks domain.NonEmpty[domain.TaskSpec],
@@ -22,6 +23,10 @@ func NewPlan(
 	}
 }
 
+// Validate checks the executable comparison inputs before orchestration starts.
+//
+// It requires a non-empty task slice plus individually valid baseline and
+// candidate systems, wrapping system errors with their comparison role.
 func (p Plan) Validate() error {
 	if err := p.Tasks.Validate(); err != nil {
 		return err
@@ -35,6 +40,11 @@ func (p Plan) Validate() error {
 	return nil
 }
 
+// ReportSpec converts the executable plan into its report-safe identity.
+//
+// The resulting ComparisonSpec contains SystemRef values rather than full
+// executable SystemSpec values so reports do not carry policy source by
+// default.
 func (p Plan) ReportSpec() report.ComparisonSpec {
 	return report.NewComparisonSpec(p.Systems, p.Tasks)
 }

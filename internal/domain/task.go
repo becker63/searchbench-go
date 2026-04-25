@@ -4,6 +4,7 @@ package domain
 type BenchmarkName string
 
 const (
+	// BenchmarkLCA identifies the JetBrains LCA bug-localization benchmark.
 	BenchmarkLCA BenchmarkName = "jetbrains-lca"
 )
 

@@ -1,14 +1,19 @@
 package score
 
-// MetricName identifies a required Searchbench metric.
+// MetricName identifies one required Searchbench metric.
 type MetricName string
 
 const (
-	MetricGoldHop         MetricName = "gold_hop"
-	MetricIssueHop        MetricName = "issue_hop"
+	// MetricGoldHop is lower-is-better distance to the gold target.
+	MetricGoldHop MetricName = "gold_hop"
+	// MetricIssueHop is lower-is-better distance to the issue anchor.
+	MetricIssueHop MetricName = "issue_hop"
+	// MetricTokenEfficiency is higher-is-better token efficiency.
 	MetricTokenEfficiency MetricName = "token_efficiency"
-	MetricCost            MetricName = "cost"
-	MetricComposite       MetricName = "composite"
+	// MetricCost is lower-is-better cost performance.
+	MetricCost MetricName = "cost"
+	// MetricComposite is the higher-is-better reduced comparison score.
+	MetricComposite MetricName = "composite"
 )
 
 // HopDistance is a graph distance measured in hops.

@@ -24,6 +24,8 @@ func NewScoreComparison(metric score.MetricName, baseline, candidate float64) Sc
 	}
 }
 
+// NewScoreComparisonFromMetric converts a score-level metric comparison into
+// its report-facing shape.
 func NewScoreComparisonFromMetric(c score.MetricComparison) ScoreComparison {
 	return ScoreComparison{
 		Metric:    c.Metric,

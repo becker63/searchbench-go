@@ -8,6 +8,7 @@ type MetricPoint struct {
 	Direction Direction
 }
 
+// MetricComparison compares one metric between baseline and candidate.
 type MetricComparison struct {
 	Metric    MetricName
 	Baseline  float64
@@ -19,6 +20,9 @@ type MetricComparison struct {
 }
 
 // Points returns the full required metric set in stable metric order.
+//
+// Stable ordering keeps metric iteration deterministic for comparison and
+// reporting code.
 func (s ScoreSet) Points() iter.Seq[MetricPoint] {
 	return func(yield func(MetricPoint) bool) {
 		if !yield(MetricPoint{
@@ -57,6 +61,7 @@ func (s ScoreSet) Points() iter.Seq[MetricPoint] {
 	}
 }
 
+// CompareSets compares two complete score sets metric-by-metric.
 func CompareSets(baseline ScoreSet, candidate ScoreSet) []MetricComparison {
 	candidateByName := make(map[MetricName]MetricPoint, 5)
 	for point := range candidate.Points() {
@@ -87,7 +92,9 @@ func CompareSets(baseline ScoreSet, candidate ScoreSet) []MetricComparison {
 // AverageByMetric returns averages for every required metric name.
 //
 // Empty slices produce all required metrics with zero values so callers can
-// still build a complete comparison shape.
+// still build a complete comparison shape. This is a comparison convenience,
+// not a promotion policy; future release rules should treat missing run sets
+// explicitly.
 func AverageByMetric(runs []ScoredRun) map[MetricName]float64 {
 	totals := map[MetricName]float64{
 		MetricGoldHop:         0,
@@ -111,6 +118,8 @@ func AverageByMetric(runs []ScoredRun) map[MetricName]float64 {
 	return totals
 }
 
+// CompareAverages compares baseline and candidate run sets using per-metric
+// averages.
 func CompareAverages(baseline []ScoredRun, candidate []ScoredRun) []MetricComparison {
 	baselineAverages := AverageByMetric(baseline)
 	candidateAverages := AverageByMetric(candidate)

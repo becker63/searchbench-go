@@ -31,19 +31,22 @@ func (r Run[P]) ID() domain.RunID {
 	return r.id
 }
 
+// Spec returns the immutable planned request that this run is executing.
 func (r Run[P]) Spec() Spec {
 	return r.spec
 }
 
+// CreatedAt returns when the run record was first created.
 func (r Run[P]) CreatedAt() time.Time {
 	return r.createdAt
 }
 
+// Phase returns the current type-level phase marker.
 func (r Run[P]) Phase() P {
 	return r.phase
 }
 
-// PreparedRun means the backend session has been initialized.
+// PreparedRun means the backend session has been initialized successfully.
 //
 // For iterative-context, this means repo/session/policy setup has happened and
 // tools are ready to call.
@@ -83,7 +86,7 @@ type ExecutedRun struct {
 	FinishedAt time.Time           `json:"finished_at"`
 }
 
-// NewExecuted advances a prepared run into executed state.
+// NewExecuted advances a prepared run into the successful executed state.
 func NewExecuted(
 	prepared PreparedRun,
 	prediction domain.Prediction,

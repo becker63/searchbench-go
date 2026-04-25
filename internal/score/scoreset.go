@@ -14,6 +14,8 @@ type ScoreSet struct {
 	Composite       Metric[CompositeScore]  `json:"composite"`
 }
 
+// NewScoreSet constructs a complete required score set and validates metric
+// names.
 func NewScoreSet(
 	goldHop Metric[HopDistance],
 	issueHop Metric[HopDistance],
@@ -34,6 +36,12 @@ func NewScoreSet(
 	return s, nil
 }
 
+// Validate checks that the score set contains the required metrics in their
+// canonical slots.
+//
+// ScoreSet intentionally does not use per-metric Available flags. Missing
+// required metrics should be represented as scoring failure, not as a partial
+// score set.
 func (s ScoreSet) Validate() error {
 	if s.GoldHop.Name != MetricGoldHop {
 		return fmt.Errorf("gold hop metric must be named %q", MetricGoldHop)
@@ -53,7 +61,7 @@ func (s ScoreSet) Validate() error {
 	return nil
 }
 
-// Metrics returns the score set as a flat list for reporting/iteration.
+// Metrics returns the score set as a flat list for report-facing inspection.
 //
 // This is intentionally read-only-ish: callers can inspect metrics uniformly,
 // but the canonical complete representation is still the struct above.

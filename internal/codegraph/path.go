@@ -7,10 +7,12 @@ type Path struct {
 	Cost  float64  `json:"cost"`
 }
 
+// Found reports whether the path contains any nodes.
 func (p Path) Found() bool {
 	return len(p.Nodes) > 0
 }
 
+// Hops reports the number of graph hops along the path.
 func (p Path) Hops() int {
 	if len(p.Nodes) == 0 {
 		return 0
