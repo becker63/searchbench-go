@@ -8,6 +8,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/codegraph"
 	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/logging"
 	"github.com/becker63/searchbench-go/internal/report"
 	"github.com/becker63/searchbench-go/internal/run"
 	"github.com/becker63/searchbench-go/internal/score"
@@ -75,6 +76,7 @@ type Runner struct {
 	NewReportID   ReportIDFunc
 	Now           ClockFunc
 	Parallelism   Parallelism
+	Logger        logging.Logger
 }
 
 // TaskComparisonResult is the per-task outcome produced by CompareTask.
@@ -102,6 +104,17 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 		return report.CandidateReport{}, err
 	}
 
+	parallelism := r.normalizedParallelism()
+	logger := r.logger()
+	logger.ComparisonStarted(
+		"",
+		plan.Systems.Baseline.Ref(),
+		plan.Systems.Candidate.Ref(),
+		plan.Tasks.Len(),
+		string(parallelism.Mode),
+		parallelism.MaxWorkers,
+	)
+
 	taskResults, err := r.RunTasks(ctx, plan)
 	if err != nil {
 		return report.CandidateReport{}, err
@@ -126,6 +139,8 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 	if r.Now != nil {
 		out.CreatedAt = r.Now().UTC()
 	}
+	logger.ReportCreated(out)
+	logger.ComparisonCompleted(out)
 	return out, nil
 }
 
@@ -158,6 +173,10 @@ func (r Runner) Validate() error {
 
 func (r Runner) normalizedParallelism() Parallelism {
 	return r.Parallelism.Normalize()
+}
+
+func (r Runner) logger() logging.Logger {
+	return r.Logger
 }
 
 // RunTasks executes task comparisons according to the configured task-level
@@ -290,15 +309,20 @@ func (r Runner) CompareTask(
 	}
 
 	graph, err := r.GraphProvider.GraphForTask(ctx, task)
+	logger := r.logger()
+	logger.TaskStarted(task)
 	if err != nil {
-		return TaskComparisonResult{
+		result := TaskComparisonResult{
 			Failures: domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) *run.RunFailure {
 				spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
 				stageErr := NewStageError(spec, run.FailureScore, fmt.Errorf("graph: %w", err))
 				failure := failureFromError(spec, run.FailureScore, stageErr)
+				logger.RunFailed(role, failure)
 				return &failure
 			}),
 		}
+		logger.TaskCompleted(task, false, false, 0)
+		return result
 	}
 
 	outcomes := domain.MapPair(systems, func(role domain.Role, system domain.SystemSpec) outcome {
@@ -322,6 +346,7 @@ func (r Runner) CompareTask(
 	if out.Runs.Baseline != nil && out.Runs.Candidate != nil {
 		out.Regressions = report.RegressionsForTask(task.ID, score.CompareSets(out.Runs.Baseline.Scores, out.Runs.Candidate.Scores))
 	}
+	logger.TaskCompleted(task, out.Runs.Baseline != nil, out.Runs.Candidate != nil, len(out.Regressions))
 	return out
 }
 
@@ -338,13 +363,17 @@ func (r Runner) ExecuteAndScore(
 	graph codegraph.Graph,
 ) (*score.ScoredRun, *run.RunFailure) {
 	spec := run.NewSpec(r.NewRunID(role, task, system.Ref()), task, system)
+	logger := r.logger()
+	logger.RunStarted(role, spec)
 
 	executed, err := r.Executor.Execute(ctx, spec)
 	if err != nil {
 		stageErr := NewStageError(spec, run.FailureExecute, err)
 		failure := failureFromError(spec, run.FailureExecute, stageErr)
+		logger.RunFailed(role, failure)
 		return nil, &failure
 	}
+	logger.RunExecuted(role, executed)
 
 	scoreSet, err := r.Scorer.Score(ctx, score.Input{
 		Run:   executed,
@@ -353,6 +382,7 @@ func (r Runner) ExecuteAndScore(
 	if err != nil {
 		stageErr := NewStageError(spec, run.FailureScore, err)
 		failure := failureFromError(spec, run.FailureScore, stageErr)
+		logger.RunFailed(role, failure)
 		return nil, &failure
 	}
 
@@ -360,8 +390,10 @@ func (r Runner) ExecuteAndScore(
 	if err != nil {
 		stageErr := NewStageError(spec, run.FailureScore, err)
 		failure := failureFromError(spec, run.FailureScore, stageErr)
+		logger.RunFailed(role, failure)
 		return nil, &failure
 	}
+	logger.RunScored(role, executed, scoreSet)
 
 	return &scoredRun, nil
 }

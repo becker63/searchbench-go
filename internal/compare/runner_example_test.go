@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/logging"
 	"github.com/becker63/searchbench-go/internal/report"
 )
 
@@ -129,6 +130,7 @@ func exampleRunner(now time.Time) Runner {
 		Now: func() time.Time {
 			return now
 		},
+		Logger: logging.NewNop(),
 	}
 }
 
