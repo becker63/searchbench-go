@@ -18,7 +18,7 @@ type TaskInput struct {
 
 // TaskOracle is the scoring-only portion of a task.
 //
-// This must never be included in prompts.
+// This must never be included in prompts for a evaluator agent in order to not skew judgement.
 type TaskOracle struct {
 	GoldFiles []RepoRelPath `json:"gold_files"`
 }
