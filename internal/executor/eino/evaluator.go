@@ -13,7 +13,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/pipeline"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
 )
@@ -23,30 +22,24 @@ type RenderPromptFunc func(ctx context.Context, input evaluatorprompt.Input) (st
 
 // Config defines the minimal evaluator runner dependencies.
 type Config struct {
-	Model                    model.ToolCallingChatModel
-	Tools                    []tool.BaseTool
-	RenderPrompt             RenderPromptFunc
-	CommandRunner            pipeline.CommandRunner
-	PipelineSteps            []pipeline.CommandSpec
-	Allowlist                pipeline.Allowlist
-	WorkDir                  string
-	RetryPolicy              *RetryPolicy
-	SessionID                domain.SessionID
-	TraceID                  domain.TraceID
-	Now                      func() time.Time
-	MaxPipelineFeedbackChars int
+	Model        model.ToolCallingChatModel
+	Tools        []tool.BaseTool
+	RenderPrompt RenderPromptFunc
+	WorkDir      string
+	RetryPolicy  *RetryPolicy
+	SessionID    domain.SessionID
+	TraceID      domain.TraceID
+	Now          func() time.Time
 }
 
 // Result is the typed outcome for one evaluator run.
 type Result struct {
-	Executed               *run.ExecutedRun
-	Failure                *Failure
-	Phases                 []Phase
-	Attempts               []Attempt
-	RenderedPrompt         string
-	RawOutput              string
-	PipelineResults        []pipeline.StepResult
-	PipelineClassification *pipeline.Classification
+	Executed       *run.ExecutedRun
+	Failure        *Failure
+	Phases         []Phase
+	Attempts       []Attempt
+	RenderedPrompt string
+	RawOutput      string
 }
 
 // Success reports whether the evaluator completed with a normalized
@@ -57,16 +50,13 @@ func (r Result) Success() bool {
 
 // Evaluator is the minimal Eino-backed evaluator executor.
 type Evaluator struct {
-	model                    model.ToolCallingChatModel
-	tools                    []tool.BaseTool
-	renderPrompt             RenderPromptFunc
-	pipeline                 pipeline.Runner
-	pipelineSteps            []pipeline.CommandSpec
-	retryPolicy              RetryPolicy
-	maxPipelineFeedbackChars int
-	sessionID                domain.SessionID
-	traceID                  domain.TraceID
-	now                      func() time.Time
+	model        model.ToolCallingChatModel
+	tools        []tool.BaseTool
+	renderPrompt RenderPromptFunc
+	retryPolicy  RetryPolicy
+	sessionID    domain.SessionID
+	traceID      domain.TraceID
+	now          func() time.Time
 }
 
 // New constructs a cold evaluator runner.
@@ -94,16 +84,6 @@ func New(config Config) (*Evaluator, error) {
 		workDir = wd
 	}
 
-	pipelineSteps := append([]pipeline.CommandSpec(nil), config.PipelineSteps...)
-	if len(pipelineSteps) == 0 {
-		pipelineSteps = pipeline.DefaultEvaluatorSteps(workDir)
-	}
-
-	maxPipelineFeedbackChars := config.MaxPipelineFeedbackChars
-	if maxPipelineFeedbackChars <= 0 {
-		maxPipelineFeedbackChars = 2000
-	}
-
 	sessionID := config.SessionID
 	if sessionID.Empty() {
 		sessionID = domain.SessionID("eino-local")
@@ -113,16 +93,10 @@ func New(config Config) (*Evaluator, error) {
 		model:        config.Model,
 		tools:        append([]tool.BaseTool(nil), config.Tools...),
 		renderPrompt: renderPrompt,
-		pipeline: pipeline.Runner{
-			CommandRunner: config.CommandRunner,
-			Allowlist:     config.Allowlist,
-		},
-		pipelineSteps:            pipelineSteps,
-		retryPolicy:              normalizeRetryPolicy(config.RetryPolicy),
-		maxPipelineFeedbackChars: maxPipelineFeedbackChars,
-		sessionID:                sessionID,
-		traceID:                  config.TraceID,
-		now:                      now,
+		retryPolicy:  normalizeRetryPolicy(config.RetryPolicy),
+		sessionID:    sessionID,
+		traceID:      config.TraceID,
+		now:          now,
 	}, nil
 }
 
@@ -142,30 +116,6 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 	result := Result{}
 	recordPhase := func(phase Phase) {
 		result.Phases = append(result.Phases, phase)
-	}
-
-	recordPhase(PhaseRunPipeline)
-	pipelineResults := e.pipeline.Run(ctx, e.pipelineSteps)
-	result.PipelineResults = append([]pipeline.StepResult(nil), pipelineResults...)
-
-	classification := pipeline.Classify(pipelineResults)
-	result.PipelineClassification = &classification
-	if classification.HasFailures() {
-		recordPhase(PhaseClassifyPipeline)
-		kind := FailureKindPipelineFailed
-		if len(classification.InfrastructureFailures) > 0 {
-			kind = FailureKindPipelineInfrastructureFailed
-		}
-		result.Failure = &Failure{
-			Phase:                  PhaseClassifyPipeline,
-			Kind:                   kind,
-			Message:                "pipeline validation failed",
-			Recoverable:            false,
-			StepResults:            append([]pipeline.StepResult(nil), pipelineResults...),
-			PipelineClassification: result.PipelineClassification,
-			PipelineFeedback:       pipeline.FormatPipelineFeedback(classification, e.maxPipelineFeedbackChars),
-		}
-		return result
 	}
 
 	allowedTools, err := e.allowedToolNames(ctx)

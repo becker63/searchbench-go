@@ -22,10 +22,9 @@ func TestMalformedFinalOutputRetriesAndSucceeds(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
-		Now:           fixedClock(),
+		Model:   model,
+		WorkDir: "/repo",
+		Now:     fixedClock(),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -65,10 +64,9 @@ func TestEmptyPredictionRetriesAccordingToPolicy(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
-		Now:           fixedClock(),
+		Model:   model,
+		WorkDir: "/repo",
+		Now:     fixedClock(),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -98,10 +96,9 @@ func TestRetriesExhaustedReturnsTypedFailure(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
-		Now:           fixedClock(),
+		Model:   model,
+		WorkDir: "/repo",
+		Now:     fixedClock(),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -130,9 +127,8 @@ func TestPromptRenderFailureIsNotRetried(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
+		Model:   model,
+		WorkDir: "/repo",
 		RenderPrompt: func(context.Context, evaluatorprompt.Input) (string, error) {
 			return "", errors.New("render prompt failed")
 		},
@@ -185,9 +181,8 @@ func TestRecoverableToolFailureCanRetryWhenEnabled(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
+		Model:   model,
+		WorkDir: "/repo",
 		Tools: []tool.BaseTool{fakeTool{
 			name: "fake_resolve",
 			err:  recoverableToolErr{message: "temporary tool outage"},
@@ -231,10 +226,9 @@ func TestNilRetryPolicyUsesDefaults(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
-		Now:           fixedClock(),
+		Model:   model,
+		WorkDir: "/repo",
+		Now:     fixedClock(),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -258,9 +252,8 @@ func TestExplicitRetryPolicyCanDisableFinalizationRetry(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
+		Model:   model,
+		WorkDir: "/repo",
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:                2,
 			RetryOnModelError:          true,
@@ -298,9 +291,8 @@ func TestExplicitRetryPolicyCanDisableInvalidPredictionRetry(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
+		Model:   model,
+		WorkDir: "/repo",
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:                2,
 			RetryOnModelError:          true,
@@ -338,9 +330,8 @@ func TestExplicitRetryPolicyNormalizesInvalidMaxAttemptsToOne(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
+		Model:   model,
+		WorkDir: "/repo",
 		RetryPolicy: &RetryPolicy{
 			MaxAttempts:                0,
 			RetryOnModelError:          true,

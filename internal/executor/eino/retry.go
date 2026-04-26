@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/becker63/searchbench-go/internal/pipeline"
 )
 
 // RetryPolicy controls bounded evaluator retries for recoverable failures.
@@ -124,12 +122,6 @@ func exhaustedFailure(last *Failure, attempts []Attempt) *Failure {
 	if last != nil {
 		failure.Attempt = last.Attempt
 		failure.Cause = last
-		failure.StepResults = append([]pipeline.StepResult(nil), last.StepResults...)
-		failure.PipelineFeedback = last.PipelineFeedback
-		if last.PipelineClassification != nil {
-			classification := *last.PipelineClassification
-			failure.PipelineClassification = &classification
-		}
 	}
 	return failure
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/pipeline"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
@@ -23,9 +22,8 @@ func TestEvaluatorConstructionIsCold(t *testing.T) {
 
 	model := modeltest.NewScriptedModel()
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
+		Model:   model,
+		WorkDir: "/repo",
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -57,9 +55,8 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
+		Model:   model,
+		WorkDir: "/repo",
 		Tools: []tool.BaseTool{fakeTool{
 			name:   "fake_resolve",
 			result: `{"resolved_path":"src/main.go"}`,
@@ -80,7 +77,6 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	}
 
 	if got, want := result.Phases, []Phase{
-		PhaseRunPipeline,
 		PhaseRenderPrompt,
 		PhaseRunEvaluator,
 		PhaseFinalizePrediction,
@@ -199,13 +195,12 @@ func TestEvaluatorRunFailures(t *testing.T) {
 			t.Parallel()
 
 			evaluator, err := New(Config{
-				Model:         tt.model,
-				CommandRunner: newPassingCommandRunner(),
-				WorkDir:       "/repo",
-				Tools:         tt.tools,
-				RenderPrompt:  tt.renderPrompt,
-				RetryPolicy:   &RetryPolicy{MaxAttempts: 1},
-				Now:           fixedClock(),
+				Model:        tt.model,
+				WorkDir:      "/repo",
+				Tools:        tt.tools,
+				RenderPrompt: tt.renderPrompt,
+				RetryPolicy:  &RetryPolicy{MaxAttempts: 1},
+				Now:          fixedClock(),
 			})
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
@@ -238,11 +233,10 @@ func TestEvaluatorExecuteReturnsFailureAsError(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
-		RetryPolicy:   &RetryPolicy{MaxAttempts: 1},
-		Now:           fixedClock(),
+		Model:       model,
+		WorkDir:     "/repo",
+		RetryPolicy: &RetryPolicy{MaxAttempts: 1},
+		Now:         fixedClock(),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -271,10 +265,9 @@ func TestEvaluatorUsesExistingRunModelOnSuccess(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model:         model,
-		CommandRunner: newPassingCommandRunner(),
-		WorkDir:       "/repo",
-		Now:           fixedClock(),
+		Model:   model,
+		WorkDir: "/repo",
+		Now:     fixedClock(),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -320,39 +313,6 @@ func (f fakeTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 }
 
 var _ tool.InvokableTool = fakeTool{}
-
-type scriptedCommandRunner struct {
-	results []pipeline.StepResult
-	calls   []pipeline.CommandSpec
-}
-
-func (r *scriptedCommandRunner) Run(_ context.Context, spec pipeline.CommandSpec) pipeline.StepResult {
-	r.calls = append(r.calls, spec)
-	if len(r.results) == 0 {
-		return pipeline.StepResult{
-			ExitCode:            -1,
-			InfrastructureError: errors.New("no scripted pipeline results remaining"),
-		}
-	}
-
-	result := r.results[0]
-	r.results = r.results[1:]
-	return result
-}
-
-func (r *scriptedCommandRunner) Calls() []pipeline.CommandSpec {
-	return append([]pipeline.CommandSpec(nil), r.calls...)
-}
-
-func newPassingCommandRunner() *scriptedCommandRunner {
-	return &scriptedCommandRunner{
-		results: []pipeline.StepResult{
-			{Name: "templ_generate", ExitCode: 0, Duration: 5 * time.Millisecond},
-			{Name: "gofmt_check", ExitCode: 0, Duration: 5 * time.Millisecond},
-			{Name: "go_test", ExitCode: 0, Duration: 5 * time.Millisecond},
-		},
-	}
-}
 
 func sampleRunSpec() run.Spec {
 	task := domain.TaskSpec{

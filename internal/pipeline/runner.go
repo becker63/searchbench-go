@@ -25,7 +25,7 @@ type Allowlist struct {
 }
 
 // DefaultAllowlist returns the narrow repository-local command allowlist used
-// by the evaluator validation pipeline.
+// by typed validation pipelines.
 func DefaultAllowlist() Allowlist {
 	return Allowlist{
 		commands: [][]string{
@@ -50,23 +50,6 @@ func (a Allowlist) Allows(command []string) bool {
 type Runner struct {
 	CommandRunner CommandRunner
 	Allowlist     Allowlist
-}
-
-// DefaultEvaluatorSteps returns the minimal local preflight used by the current
-// evaluator proof seam.
-func DefaultEvaluatorSteps(cwd string) []CommandSpec {
-	return []CommandSpec{
-		{
-			Name:    "templ_generate",
-			Command: []string{"templ", "generate"},
-			CWD:     cwd,
-		},
-		{
-			Name:    "gofmt_check",
-			Command: []string{"gofmt", "-l", "."},
-			CWD:     cwd,
-		},
-	}
 }
 
 // Run executes the supplied pipeline steps in order and stops at the first
