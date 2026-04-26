@@ -49,6 +49,7 @@ docs/
     agentic-development-flow.md
     issue-style-guide.md
     model-testing.md
+    pure-center.md
 internal/
   backend/
     backend.go
@@ -98,6 +99,16 @@ internal/
       evaluator.go
       finalizer.go
       phases.go
+      pipeline_integration_test.go
+      retry_test.go
+      retry.go
+  pipeline/
+    classify.go
+    doc.go
+    feedback.go
+    pipeline_test.go
+    runner.go
+    step.go
   prompts/
     evaluator/
       input.go
@@ -171,6 +182,7 @@ internal/
 prompts/
   issue-2.md
   issue-4.md
+  issue-5.md
 scripts/
   openai-netwatch.sh
 testdata/
@@ -196,6 +208,1806 @@ todo.md
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="docs/engineering/pure-center.md">
+# Expanding the Pure Center
+
+## Purpose
+
+This note captures an important architectural direction behind SearchBench-Go:
+
+    use exploratory systems to discover the real model,
+    then preserve that model in a pure, typed center,
+    while pushing effects to explicit adapter edges.
+
+This is not only a SearchBench-Go idea. It is a broader engineering taste that can transfer across languages, infrastructure projects, build systems, developer tools, and AI evaluation harnesses.
+
+## The core idea
+
+A lot of good engineering tooling expands the part of a system that is:
+
+- typed
+- deterministic
+- inspectable
+- reproducible
+- testable without the world
+- readable without knowing every adapter
+- portable across languages and runtimes
+
+Call that part the pure center.
+
+The pure center is where the project’s real nouns live.
+
+In SearchBench-Go, that center is things like:
+
+    domain
+    run
+    score
+    report
+    codegraph
+
+These packages describe the stable model:
+
+    What is a task?
+    What is a system?
+    What is a prediction?
+    What happened during a run?
+    How do we score it?
+    How do we report it?
+    What code universe are we reasoning over?
+
+Those concepts should be understandable without knowing Eino, MCP, OpenAI, LangSmith, repo checkout logic, subprocess details, or the old Python implementation.
+
+## The adapter edge
+
+Effects still exist.
+
+They just should not own the model.
+
+The effectful edges are things like:
+
+    Eino execution
+    MCP sessions
+    OpenAI/OpenRouter provider calls
+    LangSmith tracing
+    CLI subprocess validation
+    repo materialization
+    filesystem writes
+    network calls
+    test fixture harnesses
+
+These are adapter-shaped concerns.
+
+They are allowed to be messy, concrete, and runtime-specific, but they should depend inward on the pure center.
+
+The pure center should not depend outward on them.
+
+A useful dependency direction is:
+
+    adapters -> pure model
+
+not:
+
+    pure model -> adapters
+
+## Why Python mattered
+
+The pure center could not have been designed correctly up front.
+
+The original Python SearchBench was the discovery medium.
+
+Python made it cheap to explore, refactor, glue things together, and learn from pressure. It allowed the project to discover the real nouns through use:
+
+    task
+    prediction
+    run
+    score
+    report
+    policy
+    backend
+    pipeline step
+    failure classification
+    dataset row
+    graph distance
+    prompt input
+
+The Python version was messy in places because it had to be. It was doing semantic discovery.
+
+It answered questions like:
+
+    What keeps showing up?
+    What do tests keep needing?
+    What gets passed everywhere?
+    What becomes painful when it is a dict?
+    What failures need names?
+    What concepts survive refactors?
+    What is just adapter glue?
+    What should be scored deterministically?
+    What should never be model-visible?
+
+The Go rewrite is valuable because those answers now exist.
+
+Python found the shape.
+Go is crystallizing it.
+
+## Preserve semantics, not implementation shape
+
+The goal of the Go rewrite is not to mechanically port Python SearchBench.
+
+The goal is to preserve the hard-earned semantics while deleting accidental structure.
+
+Preserve:
+
+    typed task identity
+    file-localization predictions
+    run lifecycle
+    deterministic scoring inputs
+    pipeline step results
+    structured failure classification
+    writer/evaluator separation
+    prompt boundaries
+    policy identity
+    bounded retry behavior
+
+Do not blindly preserve:
+
+    Python-specific class structure
+    Pydantic implementation details
+    dict-shaped data passing
+    Langfuse-specific tracing shape
+    custom state machine implementation
+    worktree mutation as policy selection
+    custom backend adapter machinery when Eino/MCP can buy it
+
+A migration is successful when the stable model survives and the accidental scaffolding disappears.
+
+## Why this improves readability
+
+A pure center makes the project easier for newcomers and for future me.
+
+A newcomer can start with:
+
+    domain
+    run
+    score
+    report
+    codegraph
+
+and understand the project before learning the adapters.
+
+They can form the basic story:
+
+    A task exists.
+    A system attempts it.
+    The system produces a prediction.
+    A run records what happened.
+    A scorer evaluates the run.
+    A report explains the comparison.
+    A code graph provides deterministic localization structure.
+
+That is much easier than asking them to begin with model APIs, MCP, tracing, subprocesses, or benchmark sync.
+
+The pure center gives the system a readable spine.
+
+## Why this improves testing
+
+The larger the pure center is, the more of the system can be tested without the world.
+
+Good tests should often need no:
+
+    API keys
+    network
+    live model calls
+    repository checkout
+    tracing backend
+    subprocess
+    filesystem mutation
+    provider SDK behavior
+
+This is why SearchBench-Go uses deterministic model fixtures and fake provider boundaries.
+
+It lets execution code be tested through typed contracts instead of paid side effects.
+
+The same principle applies to CLI validation:
+
+    external command output -> StepResult
+    StepResult -> PipelineClassification
+    PipelineClassification -> bounded feedback
+    feedback -> retry context
+
+Once effects are converted into typed data, the rest of the system becomes easier to reason about.
+
+## Tooling that expands the pure center
+
+This architectural taste shows up in many tools.
+
+Nix expands the pure part of environments and builds.
+
+Buck2 expands the pure part of build graphs and dependency reasoning.
+
+Kubernetes expands the declarative model of infrastructure state.
+
+CRDs let teams define typed domain models inside a control plane.
+
+Go types expand compile-time architectural constraints.
+
+Pydantic expands runtime validation and schema clarity.
+
+templ expands typed prompt rendering.
+
+tree-sitter expands source code into structured data.
+
+CodeQL expands code search into queryable semantics.
+
+The shared pattern is:
+
+    turn messy operational reality into typed, inspectable, reproducible models
+
+That is the broader engineering direction.
+
+## SearchBench-Go as an example
+
+Agent systems are usually effect-heavy:
+
+    prompt goes in
+    model does something
+    tools may be called
+    text comes out
+    maybe tests ran
+    maybe cost exploded
+    maybe tracing captured something
+
+SearchBench-Go tries to carve out a larger pure center:
+
+    TaskSpec
+    SystemSpec
+    PolicyArtifact
+    Prediction
+    Run
+    ScoreSet
+    CandidateReport
+    StepResult
+    PipelineClassification
+    PromptInput
+    CodeGraph
+
+The model/provider/tooling world is still there, but it is pushed to the edge:
+
+    Eino executes model calls.
+    MCP exposes tools.
+    CLI runner executes commands.
+    LangSmith records traces.
+    Repo materialization checks out code.
+    Provider clients talk to remote APIs.
+
+The center remains legible.
+
+## Dangling boundary pressure
+
+As adapters grow, they exert pressure on the pure center.
+
+That pressure should be watched deliberately.
+
+Examples:
+
+    Eino types leaking into domain models
+    provider details leaking into run records
+    test fixtures shaping production abstractions
+    CLI subprocess details leaking into scoring
+    prompt inputs depending on executor packages
+    backend-specific fields appearing in predictions
+    tracing SDKs appearing in pure packages
+
+These are signs that a boundary sweep may be needed.
+
+Not every boundary issue should be fixed immediately. Some should become dangling issues: future cleanup notes that preserve architectural signal without derailing current implementation.
+
+The ability to notice dangling activity is important.
+
+It means the process is not only producing code. It is also detecting where the architecture wants to be cleaned up later.
+
+## Development process
+
+The current process supports this direction:
+
+    discuss design
+    write GitHub issue as implementation contract
+    write agent prompt as execution wrapper
+    run coding agent
+    inspect result
+    pack result
+    feed discoveries into the next issue
+    create dangling cleanup notes when needed
+
+The issue is the contract.
+
+The prompt is the execution protocol.
+
+The agent result is evidence.
+
+The next issue absorbs what was learned.
+
+This process lets the pure center grow from implementation pressure rather than from abstract speculation.
+
+## Practical rule
+
+When adding a new feature, ask:
+
+    Is this a stable concept or an effectful mechanism?
+
+If it is a stable concept, it may belong near the center.
+
+Examples:
+
+    task
+    prediction
+    run phase
+    score
+    report
+    pipeline step result
+    failure kind
+
+If it is an effectful mechanism, it probably belongs at the edge.
+
+Examples:
+
+    Eino model call
+    MCP client session
+    subprocess execution
+    repo checkout
+    LangSmith span
+    OpenAI request
+    filesystem write
+
+Then ask:
+
+    Can the effect be converted into typed data quickly?
+
+If yes, the rest of the system can remain pure.
+
+## Final principle
+
+Use exploratory tools to discover the model.
+
+Use typed systems to preserve it.
+
+Use adapters to touch the world.
+
+Keep expanding the part of the system that can be understood, tested, and changed without needing the world to be present.
+</file>
+
+<file path="internal/executor/eino/pipeline_integration_test.go">
+package eino
+
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/cloudwego/eino/schema"
+
+	"github.com/becker63/searchbench-go/internal/pipeline"
+	"github.com/becker63/searchbench-go/internal/testing/modeltest"
+)
+
+func TestPipelineFailurePreventsModelExecution(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
+		},
+	)
+	commandRunner := &scriptedCommandRunner{
+		results: []pipeline.StepResult{
+			{Name: "templ_generate", ExitCode: 0},
+			{Name: "gofmt_check", ExitCode: 0},
+			{
+				Name:     "go_test",
+				ExitCode: 1,
+				Stderr:   "FAIL ./internal/executor/eino",
+			},
+		},
+	}
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: commandRunner,
+		PipelineSteps: []pipeline.CommandSpec{
+			{Name: "templ_generate", Command: []string{"templ", "generate"}, CWD: "/repo"},
+			{Name: "gofmt_check", Command: []string{"gofmt", "-l", "."}, CWD: "/repo"},
+			{Name: "go_test", Command: []string{"go", "test", "./..."}, CWD: "/repo"},
+		},
+		WorkDir: "/repo",
+		Now:     fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected pipeline failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindPipelineFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := result.Failure.Phase, PhaseClassifyPipeline; got != want {
+		t.Fatalf("Failure.Phase = %q, want %q", got, want)
+	}
+	if result.Failure.PipelineClassification == nil {
+		t.Fatal("PipelineClassification = nil, want classification")
+	}
+	if len(result.Failure.PipelineClassification.TestFailures) != 1 {
+		t.Fatalf("len(TestFailures) = %d, want 1", len(result.Failure.PipelineClassification.TestFailures))
+	}
+	if !strings.Contains(result.Failure.PipelineFeedback, "## TEST FAILURES") {
+		t.Fatalf("PipelineFeedback missing test-failure section:\n%s", result.Failure.PipelineFeedback)
+	}
+	if calls := model.Calls(); len(calls) != 0 {
+		t.Fatalf("len(model.Calls()) = %d, want 0", len(calls))
+	}
+	if len(result.Attempts) != 0 {
+		t.Fatalf("len(Attempts) = %d, want 0", len(result.Attempts))
+	}
+	if result.Failure.Recoverable {
+		t.Fatal("Failure.Recoverable = true, want false")
+	}
+}
+
+func TestSuccessfulPipelineAllowsModelExecution(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		Now:           fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if calls := model.Calls(); len(calls) != 1 {
+		t.Fatalf("len(model.Calls()) = %d, want 1", len(calls))
+	}
+	if len(result.PipelineResults) != 2 {
+		t.Fatalf("len(PipelineResults) = %d, want 2", len(result.PipelineResults))
+	}
+}
+
+func TestPipelineFailureRemainsNonRetryableWithExplicitRetryPolicy(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
+		},
+	)
+	commandRunner := &scriptedCommandRunner{
+		results: []pipeline.StepResult{
+			{
+				Name:     "templ_generate",
+				ExitCode: 1,
+				Stderr:   "templ failed",
+			},
+		},
+	}
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: commandRunner,
+		PipelineSteps: []pipeline.CommandSpec{
+			{Name: "templ_generate", Command: []string{"templ", "generate"}, CWD: "/repo"},
+		},
+		WorkDir: "/repo",
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:                3,
+			RetryOnModelError:          true,
+			RetryOnToolFailure:         true,
+			RetryOnFinalizationFailure: true,
+			RetryOnInvalidPrediction:   true,
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected pipeline failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindPipelineFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if result.Failure.Recoverable {
+		t.Fatal("Failure.Recoverable = true, want false")
+	}
+	if got, want := len(model.Calls()), 0; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+	if got, want := len(result.Attempts), 0; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+}
+
+func TestDefaultPipelineUsesOnlyLocalPreflightSteps(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
+		},
+	)
+
+	commandRunner := newPassingCommandRunner()
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: commandRunner,
+		WorkDir:       "/repo",
+		Now:           fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if got, want := len(result.PipelineResults), 2; got != want {
+		t.Fatalf("len(PipelineResults) = %d, want %d", got, want)
+	}
+	if got, want := len(commandRunner.Calls()), 2; got != want {
+		t.Fatalf("len(commandRunner.Calls()) = %d, want %d", got, want)
+	}
+	if got, want := commandRunner.Calls()[1].Name, "gofmt_check"; got != want {
+		t.Fatalf("second step name = %q, want %q", got, want)
+	}
+}
+</file>
+
+<file path="internal/executor/eino/retry_test.go">
+package eino
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+
+	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
+	"github.com/becker63/searchbench-go/internal/testing/modeltest"
+)
+
+func TestMalformedFinalOutputRetriesAndSucceeds(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage("not json", nil)},
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":["./SRC/Main.go"],"reasoning":"retry succeeded"}`, nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		Now:           fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if result.Executed == nil {
+		t.Fatal("Executed = nil, want success")
+	}
+	if got, want := len(result.Attempts), 2; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if result.Attempts[0].Failure == nil || result.Attempts[0].Failure.Kind != FailureKindFinalizationFailed {
+		t.Fatalf("first attempt failure = %#v, want finalization_failed", result.Attempts[0].Failure)
+	}
+	if got, want := len(model.Calls()), 2; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+	secondPrompt := model.Calls()[1].Messages[0].Content
+	if !strings.Contains(secondPrompt, "Previous attempt returned malformed JSON.") {
+		t.Fatalf("second prompt missing retry feedback:\n%s", secondPrompt)
+	}
+	if strings.Contains(secondPrompt, "internal/should/not/leak.go") {
+		t.Fatalf("second prompt leaked oracle data:\n%s", secondPrompt)
+	}
+}
+
+func TestEmptyPredictionRetriesAccordingToPolicy(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":[]}`, nil)},
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		Now:           fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if result.Executed == nil {
+		t.Fatal("Executed = nil, want success")
+	}
+	if got, want := len(result.Attempts), 2; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if result.Attempts[0].Failure == nil || result.Attempts[0].Failure.Kind != FailureKindInvalidPrediction {
+		t.Fatalf("first attempt failure = %#v, want invalid_prediction", result.Attempts[0].Failure)
+	}
+}
+
+func TestRetriesExhaustedReturnsTypedFailure(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage("not json", nil)},
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage("still not json", nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		Now:           fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindRetriesExhausted; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := result.Failure.Phase, PhaseExhausted; got != want {
+		t.Fatalf("Failure.Phase = %q, want %q", got, want)
+	}
+	if got, want := len(result.Attempts), 2; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+}
+
+func TestPromptRenderFailureIsNotRetried(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		RenderPrompt: func(context.Context, evaluatorprompt.Input) (string, error) {
+			return "", errors.New("render prompt failed")
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindPromptRenderFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := len(result.Attempts), 1; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if calls := model.Calls(); len(calls) != 0 {
+		t.Fatalf("len(model.Calls()) = %d, want 0", len(calls))
+	}
+}
+
+func TestRecoverableToolFailureCanRetryWhenEnabled(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-1",
+				Function: schema.FunctionCall{
+					Name:      "fake_resolve",
+					Arguments: `{"query":"retry interceptor"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-2",
+				Function: schema.FunctionCall{
+					Name:      "fake_resolve",
+					Arguments: `{"query":"retry interceptor"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		Tools: []tool.BaseTool{fakeTool{
+			name: "fake_resolve",
+			err:  recoverableToolErr{message: "temporary tool outage"},
+		}},
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:                2,
+			RetryOnModelError:          true,
+			RetryOnToolFailure:         true,
+			RetryOnFinalizationFailure: true,
+			RetryOnInvalidPrediction:   true,
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure after repeated tool error")
+	}
+	if got, want := result.Failure.Kind, FailureKindRetriesExhausted; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+}
+
+type recoverableToolErr struct {
+	message string
+}
+
+func (e recoverableToolErr) Error() string { return e.message }
+
+func (e recoverableToolErr) Recoverable() bool { return true }
+
+func TestNilRetryPolicyUsesDefaults(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage("not json", nil)},
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		Now:           fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if got, want := len(result.Attempts), 2; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+}
+
+func TestExplicitRetryPolicyCanDisableFinalizationRetry(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage("not json", nil)},
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:                2,
+			RetryOnModelError:          true,
+			RetryOnToolFailure:         false,
+			RetryOnFinalizationFailure: false,
+			RetryOnInvalidPrediction:   true,
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindFinalizationFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := len(result.Attempts), 1; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if got, want := len(model.Calls()), 1; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+}
+
+func TestExplicitRetryPolicyCanDisableInvalidPredictionRetry(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":[]}`, nil)},
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:                2,
+			RetryOnModelError:          true,
+			RetryOnToolFailure:         false,
+			RetryOnFinalizationFailure: true,
+			RetryOnInvalidPrediction:   false,
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindInvalidPrediction; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := len(result.Attempts), 1; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if got, want := len(model.Calls()), 1; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+}
+
+func TestExplicitRetryPolicyNormalizesInvalidMaxAttemptsToOne(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage("not json", nil)},
+		modeltest.ScriptedResponse{Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil)},
+	)
+
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		RetryPolicy: &RetryPolicy{
+			MaxAttempts:                0,
+			RetryOnModelError:          true,
+			RetryOnToolFailure:         false,
+			RetryOnFinalizationFailure: true,
+			RetryOnInvalidPrediction:   true,
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindFinalizationFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := len(result.Attempts), 1; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if got, want := len(model.Calls()), 1; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+}
+</file>
+
+<file path="internal/executor/eino/retry.go">
+package eino
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/pipeline"
+)
+
+// RetryPolicy controls bounded evaluator retries for recoverable failures.
+type RetryPolicy struct {
+	MaxAttempts                int
+	RetryOnModelError          bool
+	RetryOnToolFailure         bool
+	RetryOnFinalizationFailure bool
+	RetryOnInvalidPrediction   bool
+}
+
+// Attempt records one evaluator-local attempt outcome.
+type Attempt struct {
+	Number         int
+	RenderedPrompt string
+	RawOutput      string
+	Failure        *Failure
+}
+
+// DefaultRetryPolicy returns the minimal retry policy for the evaluator loop.
+func DefaultRetryPolicy() RetryPolicy {
+	return RetryPolicy{
+		MaxAttempts:                2,
+		RetryOnModelError:          true,
+		RetryOnToolFailure:         false,
+		RetryOnFinalizationFailure: true,
+		RetryOnInvalidPrediction:   true,
+	}
+}
+
+func normalizeRetryPolicy(policy *RetryPolicy) RetryPolicy {
+	if policy == nil {
+		return DefaultRetryPolicy()
+	}
+
+	normalized := *policy
+	if normalized.MaxAttempts <= 0 {
+		normalized.MaxAttempts = 1
+	}
+	return normalized
+}
+
+func (p RetryPolicy) allows(kind FailureKind) bool {
+	switch kind {
+	case FailureKindEvaluatorFailed:
+		return p.RetryOnModelError
+	case FailureKindToolCallFailed:
+		return p.RetryOnToolFailure
+	case FailureKindFinalizationFailed:
+		return p.RetryOnFinalizationFailure
+	case FailureKindInvalidPrediction:
+		return p.RetryOnInvalidPrediction
+	default:
+		return false
+	}
+}
+
+func isRecoverableModelError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+}
+
+type recoverableError interface {
+	Recoverable() bool
+}
+
+func isRecoverableToolError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var recoverable recoverableError
+	return errors.As(err, &recoverable) && recoverable.Recoverable()
+}
+
+func retryFeedbackForFailure(failure *Failure) string {
+	if failure == nil {
+		return ""
+	}
+
+	switch failure.Kind {
+	case FailureKindEvaluatorFailed:
+		return fmt.Sprintf("Previous attempt failed during evaluator execution: %s.", safeFailureDetail(failure))
+	case FailureKindToolCallFailed:
+		return fmt.Sprintf("Previous attempt failed during a tool call: %s.", safeFailureDetail(failure))
+	case FailureKindFinalizationFailed:
+		return "Previous attempt returned malformed JSON."
+	case FailureKindInvalidPrediction:
+		return "Previous attempt returned empty predicted files."
+	default:
+		return ""
+	}
+}
+
+func safeFailureDetail(failure *Failure) string {
+	if failure == nil {
+		return "unknown failure"
+	}
+	if failure.Cause != nil {
+		return failure.Cause.Error()
+	}
+	if failure.Message != "" {
+		return failure.Message
+	}
+	return string(failure.Kind)
+}
+
+func exhaustedFailure(last *Failure, attempts []Attempt) *Failure {
+	failure := &Failure{
+		Phase:       PhaseExhausted,
+		Kind:        FailureKindRetriesExhausted,
+		Message:     fmt.Sprintf("evaluator retries exhausted after %d attempt(s)", len(attempts)),
+		Recoverable: false,
+	}
+	if last != nil {
+		failure.Attempt = last.Attempt
+		failure.Cause = last
+		failure.StepResults = append([]pipeline.StepResult(nil), last.StepResults...)
+		failure.PipelineFeedback = last.PipelineFeedback
+		if last.PipelineClassification != nil {
+			classification := *last.PipelineClassification
+			failure.PipelineClassification = &classification
+		}
+	}
+	return failure
+}
+</file>
+
+<file path="internal/pipeline/classify.go">
+package pipeline
+
+import "strings"
+
+// Classification groups pipeline results into stable failure categories.
+type Classification struct {
+	GenerationFailures     []StepResult
+	FormatErrors           []StepResult
+	TypeErrors             []StepResult
+	LintErrors             []StepResult
+	TestFailures           []StepResult
+	InfrastructureFailures []StepResult
+	PassedSteps            []StepResult
+}
+
+// HasFailures reports whether the classification contains any failed steps.
+func (c Classification) HasFailures() bool {
+	return len(c.GenerationFailures) > 0 ||
+		len(c.FormatErrors) > 0 ||
+		len(c.TypeErrors) > 0 ||
+		len(c.LintErrors) > 0 ||
+		len(c.TestFailures) > 0 ||
+		len(c.InfrastructureFailures) > 0
+}
+
+// Classify groups step results into stable pipeline categories.
+func Classify(results []StepResult) Classification {
+	classification := Classification{}
+	for _, result := range results {
+		if result.Passed {
+			classification.PassedSteps = append(classification.PassedSteps, result)
+			continue
+		}
+		if result.Skipped {
+			continue
+		}
+		if result.InfrastructureError != nil {
+			classification.InfrastructureFailures = append(classification.InfrastructureFailures, result)
+			continue
+		}
+
+		switch result.Name {
+		case "templ_generate":
+			classification.GenerationFailures = append(classification.GenerationFailures, result)
+		case "gofmt_check":
+			classification.FormatErrors = append(classification.FormatErrors, result)
+		case "go_vet":
+			if looksLikeTypeError(result) {
+				classification.TypeErrors = append(classification.TypeErrors, result)
+			} else {
+				classification.LintErrors = append(classification.LintErrors, result)
+			}
+		case "go_test":
+			if looksLikeTypeError(result) {
+				classification.TypeErrors = append(classification.TypeErrors, result)
+			} else {
+				classification.TestFailures = append(classification.TestFailures, result)
+			}
+		default:
+			classification.InfrastructureFailures = append(classification.InfrastructureFailures, result)
+		}
+	}
+	return classification
+}
+
+func looksLikeTypeError(result StepResult) bool {
+	combined := strings.ToLower(result.Stdout + "\n" + result.Stderr)
+	patterns := []string{
+		"[build failed]",
+		"undefined:",
+		"cannot use ",
+		"no required module provides package",
+		"syntax error:",
+		"too many arguments in call",
+		"not enough arguments in call",
+		"missing return",
+		"invalid operation:",
+		"build constraints exclude all go files",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(combined, pattern) {
+			return true
+		}
+	}
+	return false
+}
+</file>
+
+<file path="internal/pipeline/doc.go">
+// Package pipeline owns small typed local validation pipelines.
+//
+// It provides allowlisted CLI step execution, step result capture, failure
+// classification, and bounded feedback formatting for evaluator-side retry and
+// repair flows.
+//
+// The default evaluator step list in this package is the current local
+// evaluator preflight seam used to prove typed CLI validation before model
+// execution. It is not yet the final dataset-scale lifecycle for SearchBench
+// runs; later work may choose different scheduling such as once-per-process
+// preflight or post-write candidate validation.
+//
+// It does not own model execution, prompt rendering, backend runtimes, or the
+// public SearchBench CLI surface.
+package pipeline
+</file>
+
+<file path="internal/pipeline/feedback.go">
+package pipeline
+
+import (
+	"fmt"
+	"strings"
+)
+
+const defaultStepTailChars = 400
+
+// FormatPipelineFeedback converts a classification into deterministic, bounded
+// retry-safe text.
+func FormatPipelineFeedback(classification Classification, maxChars int) string {
+	if maxChars <= 0 {
+		maxChars = 2000
+	}
+
+	sections := []struct {
+		heading string
+		steps   []StepResult
+	}{
+		{heading: "## INFRASTRUCTURE FAILURES", steps: classification.InfrastructureFailures},
+		{heading: "## GENERATION FAILURES", steps: classification.GenerationFailures},
+		{heading: "## FORMAT ERRORS", steps: classification.FormatErrors},
+		{heading: "## TYPE ERRORS", steps: classification.TypeErrors},
+		{heading: "## LINT ERRORS", steps: classification.LintErrors},
+		{heading: "## TEST FAILURES", steps: classification.TestFailures},
+		{heading: "## PASSED STEPS", steps: classification.PassedSteps},
+	}
+
+	var builder strings.Builder
+	for _, section := range sections {
+		if len(section.steps) == 0 {
+			continue
+		}
+		if builder.Len() > 0 {
+			builder.WriteString("\n\n")
+		}
+		builder.WriteString(section.heading)
+		for _, step := range section.steps {
+			builder.WriteString("\n")
+			builder.WriteString(formatStep(step))
+			if builder.Len() >= maxChars {
+				return truncateString(builder.String(), maxChars)
+			}
+		}
+	}
+
+	return truncateString(builder.String(), maxChars)
+}
+
+func formatStep(step StepResult) string {
+	var builder strings.Builder
+	status := fmt.Sprintf("- %s: %s", step.Name, step.CommandString())
+	if step.ExitCode >= 0 {
+		status += fmt.Sprintf(" (exit %d)", step.ExitCode)
+	}
+	if step.InfrastructureError != nil {
+		status += fmt.Sprintf(" infrastructure=%q", step.InfrastructureError.Error())
+	}
+	builder.WriteString(status)
+
+	if stdout := step.StdoutTail(defaultStepTailChars); stdout != "" {
+		builder.WriteString("\n  stdout: ")
+		builder.WriteString(stdout)
+	}
+	if stderr := step.StderrTail(defaultStepTailChars); stderr != "" {
+		builder.WriteString("\n  stderr: ")
+		builder.WriteString(stderr)
+	}
+
+	return builder.String()
+}
+
+func truncateString(value string, maxChars int) string {
+	if maxChars <= 0 {
+		return ""
+	}
+
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= maxChars {
+		return string(runes)
+	}
+	if maxChars <= 3 {
+		return string(runes[:maxChars])
+	}
+	return string(runes[:maxChars-3]) + "..."
+}
+</file>
+
+<file path="internal/pipeline/pipeline_test.go">
+package pipeline
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestRunnerRecordsTypedStepResult(t *testing.T) {
+	t.Parallel()
+
+	runner := &scriptedRunner{
+		results: []StepResult{{
+			ExitCode: 1,
+			Stdout:   "out",
+			Stderr:   "err",
+			Duration: 25 * time.Millisecond,
+		}},
+	}
+
+	results := Runner{
+		CommandRunner: runner,
+		Allowlist:     DefaultAllowlist(),
+	}.Run(context.Background(), []CommandSpec{{
+		Name:    "go_test",
+		Command: []string{"go", "test", "./..."},
+		CWD:     "/repo",
+	}})
+
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+
+	got := results[0]
+	if got.Name != "go_test" {
+		t.Fatalf("Name = %q, want go_test", got.Name)
+	}
+	if got.CommandString() != "go test ./..." {
+		t.Fatalf("CommandString() = %q, want %q", got.CommandString(), "go test ./...")
+	}
+	if got.CWD != "/repo" {
+		t.Fatalf("CWD = %q, want /repo", got.CWD)
+	}
+	if got.Passed {
+		t.Fatal("Passed = true, want false")
+	}
+	if got.ExitCode != 1 {
+		t.Fatalf("ExitCode = %d, want 1", got.ExitCode)
+	}
+	if got.Stdout != "out" {
+		t.Fatalf("Stdout = %q, want out", got.Stdout)
+	}
+	if got.Stderr != "err" {
+		t.Fatalf("Stderr = %q, want err", got.Stderr)
+	}
+	if got.Duration != 25*time.Millisecond {
+		t.Fatalf("Duration = %v, want 25ms", got.Duration)
+	}
+}
+
+func TestClassifySuccessfulPipelineRecordsPassedSteps(t *testing.T) {
+	t.Parallel()
+
+	classification := Classify([]StepResult{
+		{Name: "templ_generate", Command: []string{"templ", "generate"}, Passed: true},
+		{Name: "gofmt_check", Command: []string{"gofmt", "-l", "."}, Passed: true},
+	})
+
+	if classification.HasFailures() {
+		t.Fatal("HasFailures() = true, want false")
+	}
+	if len(classification.PassedSteps) != 2 {
+		t.Fatalf("len(PassedSteps) = %d, want 2", len(classification.PassedSteps))
+	}
+}
+
+func TestClassifyTemplFailureAsGenerationFailure(t *testing.T) {
+	t.Parallel()
+
+	classification := Classify([]StepResult{{
+		Name:     "templ_generate",
+		Command:  []string{"templ", "generate"},
+		ExitCode: 1,
+	}})
+
+	if len(classification.GenerationFailures) != 1 {
+		t.Fatalf("len(GenerationFailures) = %d, want 1", len(classification.GenerationFailures))
+	}
+}
+
+func TestClassifyGofmtFailureAsFormatError(t *testing.T) {
+	t.Parallel()
+
+	classification := Classify([]StepResult{{
+		Name:     "gofmt_check",
+		Command:  []string{"gofmt", "-l", "."},
+		ExitCode: 1,
+	}})
+
+	if len(classification.FormatErrors) != 1 {
+		t.Fatalf("len(FormatErrors) = %d, want 1", len(classification.FormatErrors))
+	}
+}
+
+func TestClassifyGoTestFailures(t *testing.T) {
+	t.Parallel()
+
+	typeErr := Classify([]StepResult{{
+		Name:     "go_test",
+		Command:  []string{"go", "test", "./..."},
+		ExitCode: 1,
+		Stderr:   "undefined: missingSymbol",
+	}})
+	if len(typeErr.TypeErrors) != 1 {
+		t.Fatalf("len(TypeErrors) = %d, want 1", len(typeErr.TypeErrors))
+	}
+
+	testErr := Classify([]StepResult{{
+		Name:     "go_test",
+		Command:  []string{"go", "test", "./..."},
+		ExitCode: 1,
+		Stderr:   "--- FAIL: TestEvaluator (0.00s)",
+	}})
+	if len(testErr.TestFailures) != 1 {
+		t.Fatalf("len(TestFailures) = %d, want 1", len(testErr.TestFailures))
+	}
+}
+
+func TestClassifyInfrastructureFailures(t *testing.T) {
+	t.Parallel()
+
+	classification := Classify([]StepResult{{
+		Name:                "go_test",
+		Command:             []string{"go", "test", "./..."},
+		InfrastructureError: errors.New("exec: \"go\": executable file not found"),
+	}})
+
+	if len(classification.InfrastructureFailures) != 1 {
+		t.Fatalf("len(InfrastructureFailures) = %d, want 1", len(classification.InfrastructureFailures))
+	}
+}
+
+func TestRunnerRejectsDisallowedCommandWithoutExecuting(t *testing.T) {
+	t.Parallel()
+
+	runner := &scriptedRunner{
+		results: []StepResult{{ExitCode: 0}},
+	}
+
+	results := Runner{
+		CommandRunner: runner,
+		Allowlist:     DefaultAllowlist(),
+	}.Run(context.Background(), []CommandSpec{{
+		Name:    "rm_repo",
+		Command: []string{"rm", "-rf", "."},
+		CWD:     "/repo",
+	}})
+
+	if len(runner.calls) != 0 {
+		t.Fatalf("len(runner.calls) = %d, want 0", len(runner.calls))
+	}
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if results[0].InfrastructureError == nil {
+		t.Fatal("InfrastructureError = nil, want disallowed-command failure")
+	}
+}
+
+func TestFormatPipelineFeedbackIsDeterministicAndBounded(t *testing.T) {
+	t.Parallel()
+
+	classification := Classification{
+		GenerationFailures: []StepResult{{
+			Name:     "templ_generate",
+			Command:  []string{"templ", "generate"},
+			ExitCode: 1,
+			Stderr:   strings.Repeat("x", 60),
+		}},
+		PassedSteps: []StepResult{{
+			Name:    "gofmt_check",
+			Command: []string{"gofmt", "-l", "."},
+			Passed:  true,
+		}},
+	}
+
+	feedback := FormatPipelineFeedback(classification, 220)
+	if !strings.Contains(feedback, "## GENERATION FAILURES") {
+		t.Fatalf("feedback missing generation section:\n%s", feedback)
+	}
+	if !strings.Contains(feedback, "## PASSED STEPS") {
+		t.Fatalf("feedback missing passed section:\n%s", feedback)
+	}
+	if len([]rune(feedback)) > 220 {
+		t.Fatalf("feedback length = %d, want <= 220", len([]rune(feedback)))
+	}
+}
+
+func TestExecCommandRunnerSetsDurationOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	result := ExecCommandRunner{}.Run(context.Background(), CommandSpec{
+		Name:    "go_version",
+		Command: []string{"go", "version"},
+	})
+
+	if result.Duration <= 0 {
+		t.Fatalf("Duration = %v, want > 0", result.Duration)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("ExitCode = %d, want 0", result.ExitCode)
+	}
+	if result.InfrastructureError != nil {
+		t.Fatalf("InfrastructureError = %v, want nil", result.InfrastructureError)
+	}
+}
+
+func TestExecCommandRunnerSetsDurationOnInfrastructureFailure(t *testing.T) {
+	t.Parallel()
+
+	result := ExecCommandRunner{}.Run(context.Background(), CommandSpec{
+		Name:    "missing_command",
+		Command: []string{"searchbench-definitely-missing-command"},
+	})
+
+	if result.Duration <= 0 {
+		t.Fatalf("Duration = %v, want > 0", result.Duration)
+	}
+	if result.InfrastructureError == nil {
+		t.Fatal("InfrastructureError = nil, want non-nil")
+	}
+	if result.Passed {
+		t.Fatal("Passed = true, want false")
+	}
+}
+
+type scriptedRunner struct {
+	results []StepResult
+	calls   []CommandSpec
+}
+
+func (r *scriptedRunner) Run(_ context.Context, spec CommandSpec) StepResult {
+	r.calls = append(r.calls, spec)
+	if len(r.results) == 0 {
+		return StepResult{
+			ExitCode:            -1,
+			InfrastructureError: errors.New("no scripted results remaining"),
+		}
+	}
+
+	result := r.results[0]
+	r.results = r.results[1:]
+	return result
+}
+</file>
+
+<file path="internal/pipeline/runner.go">
+package pipeline
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os/exec"
+	"slices"
+	"strings"
+	"time"
+)
+
+// CommandRunner executes one local validation command.
+type CommandRunner interface {
+	Run(ctx context.Context, spec CommandSpec) StepResult
+}
+
+// ExecCommandRunner runs local commands through os/exec.
+type ExecCommandRunner struct{}
+
+// Allowlist is the exact argv allowlist for local validation steps.
+type Allowlist struct {
+	commands [][]string
+}
+
+// DefaultAllowlist returns the narrow repository-local command allowlist used
+// by the evaluator validation pipeline.
+func DefaultAllowlist() Allowlist {
+	return Allowlist{
+		commands: [][]string{
+			{"templ", "generate"},
+			{"gofmt", "-l", "."},
+			{"go", "test", "./..."},
+		},
+	}
+}
+
+// Allows reports whether the exact command argv is allowed.
+func (a Allowlist) Allows(command []string) bool {
+	for _, allowed := range a.commands {
+		if slices.Equal(allowed, command) {
+			return true
+		}
+	}
+	return false
+}
+
+// Runner executes a small allowlisted validation pipeline.
+type Runner struct {
+	CommandRunner CommandRunner
+	Allowlist     Allowlist
+}
+
+// DefaultEvaluatorSteps returns the minimal local preflight used by the current
+// evaluator proof seam.
+func DefaultEvaluatorSteps(cwd string) []CommandSpec {
+	return []CommandSpec{
+		{
+			Name:    "templ_generate",
+			Command: []string{"templ", "generate"},
+			CWD:     cwd,
+		},
+		{
+			Name:    "gofmt_check",
+			Command: []string{"gofmt", "-l", "."},
+			CWD:     cwd,
+		},
+	}
+}
+
+// Run executes the supplied pipeline steps in order and stops at the first
+// failed step.
+func (r Runner) Run(ctx context.Context, steps []CommandSpec) []StepResult {
+	commandRunner := r.CommandRunner
+	if commandRunner == nil {
+		commandRunner = ExecCommandRunner{}
+	}
+	allowlist := r.Allowlist
+	if len(allowlist.commands) == 0 {
+		allowlist = DefaultAllowlist()
+	}
+
+	results := make([]StepResult, 0, len(steps))
+	for _, spec := range steps {
+		result := StepResult{
+			Name:     spec.Name,
+			Command:  append([]string(nil), spec.Command...),
+			CWD:      spec.CWD,
+			ExitCode: -1,
+		}
+
+		if err := ctx.Err(); err != nil {
+			result.InfrastructureError = err
+		} else if !allowlist.Allows(spec.Command) {
+			result.InfrastructureError = fmt.Errorf("command is not allowlisted: %s", strings.Join(spec.Command, " "))
+		} else {
+			runCtx := ctx
+			cancel := func() {}
+			if spec.Timeout > 0 {
+				runCtx, cancel = context.WithTimeout(ctx, spec.Timeout)
+			}
+			result = commandRunner.Run(runCtx, spec)
+			cancel()
+			result.Name = spec.Name
+			result.Command = append([]string(nil), spec.Command...)
+			result.CWD = spec.CWD
+			if result.ExitCode == 0 && result.InfrastructureError == nil {
+				result.Passed = true
+			}
+			if err := runCtx.Err(); err != nil && result.InfrastructureError == nil {
+				result.InfrastructureError = err
+				result.TimedOut = errors.Is(err, context.DeadlineExceeded)
+				result.Passed = false
+			}
+		}
+
+		result = normalizeResult(spec, result)
+		results = append(results, result)
+		if result.Failed() {
+			break
+		}
+	}
+
+	return results
+}
+
+func (ExecCommandRunner) Run(ctx context.Context, spec CommandSpec) (result StepResult) {
+	startedAt := time.Now()
+	result = StepResult{
+		Name:     spec.Name,
+		Command:  append([]string(nil), spec.Command...),
+		CWD:      spec.CWD,
+		ExitCode: -1,
+	}
+	defer func() {
+		result.Duration = time.Since(startedAt)
+	}()
+
+	if len(spec.Command) == 0 {
+		result.InfrastructureError = errors.New("command is required")
+		return result
+	}
+
+	cmd := exec.CommandContext(ctx, spec.Command[0], spec.Command[1:]...)
+	if spec.CWD != "" {
+		cmd.Dir = spec.CWD
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	result.Stdout = stdout.String()
+	result.Stderr = stderr.String()
+
+	if err == nil {
+		result.ExitCode = 0
+		return result
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		result.ExitCode = exitErr.ExitCode()
+		if ctx.Err() != nil {
+			result.InfrastructureError = ctx.Err()
+			result.TimedOut = errors.Is(ctx.Err(), context.DeadlineExceeded)
+		}
+		return result
+	}
+
+	result.InfrastructureError = err
+	if ctx.Err() != nil {
+		result.InfrastructureError = ctx.Err()
+		result.TimedOut = errors.Is(ctx.Err(), context.DeadlineExceeded)
+	}
+	return result
+}
+
+func normalizeResult(spec CommandSpec, result StepResult) StepResult {
+	if result.InfrastructureError != nil {
+		result.Passed = false
+		return result
+	}
+
+	switch spec.Name {
+	case "gofmt_check":
+		result.Passed = result.ExitCode == 0 && strings.TrimSpace(result.Stdout) == ""
+	default:
+		result.Passed = result.ExitCode == 0
+	}
+
+	return result
+}
+</file>
+
+<file path="internal/pipeline/step.go">
+package pipeline
+
+import (
+	"strings"
+	"time"
+)
+
+// CommandSpec defines one allowlisted local validation step.
+type CommandSpec struct {
+	Name    string
+	Command []string
+	CWD     string
+	Timeout time.Duration
+}
+
+// StepResult records the typed result of one local validation step.
+type StepResult struct {
+	Name                string
+	Command             []string
+	CWD                 string
+	Passed              bool
+	ExitCode            int
+	Stdout              string
+	Stderr              string
+	Duration            time.Duration
+	Skipped             bool
+	InfrastructureError error
+	TimedOut            bool
+}
+
+// Failed reports whether the step ended in a classified failure.
+func (r StepResult) Failed() bool {
+	return !r.Passed && !r.Skipped
+}
+
+// CommandString joins the recorded argv for deterministic rendering.
+func (r StepResult) CommandString() string {
+	return strings.Join(r.Command, " ")
+}
+
+// StdoutTail returns a bounded tail of stdout for feedback formatting.
+func (r StepResult) StdoutTail(maxChars int) string {
+	return tailString(r.Stdout, maxChars)
+}
+
+// StderrTail returns a bounded tail of stderr for feedback formatting.
+func (r StepResult) StderrTail(maxChars int) string {
+	return tailString(r.Stderr, maxChars)
+}
+
+func tailString(value string, maxChars int) string {
+	value = strings.TrimSpace(value)
+	if maxChars <= 0 || value == "" {
+		return ""
+	}
+
+	runes := []rune(value)
+	if len(runes) <= maxChars {
+		return value
+	}
+	return "..." + string(runes[len(runes)-maxChars:])
+}
+</file>
 
 <file path="docs/engineering/agentic-development-flow.md">
 # Agentic Development Flow
@@ -2827,15 +4639,27 @@ package eino
 <file path="internal/executor/eino/errors.go">
 package eino
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/pipeline"
+)
 
 // Failure is the typed failed outcome for one evaluator run.
+//
+// This remains evaluator-local because it carries retry and pipeline details
+// that are not yet shared across executors.
 type Failure struct {
 	Phase       Phase
 	Kind        FailureKind
 	Message     string
 	Cause       error
 	Recoverable bool
+	Attempt     int
+
+	StepResults            []pipeline.StepResult
+	PipelineClassification *pipeline.Classification
+	PipelineFeedback       string
 }
 
 func (f *Failure) Error() string {
@@ -2872,6 +4696,8 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/pipeline"
+	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
 )
@@ -2880,7 +4706,11 @@ func TestEvaluatorConstructionIsCold(t *testing.T) {
 	t.Parallel()
 
 	model := modeltest.NewScriptedModel()
-	evaluator, err := New(Config{Model: model})
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -2911,7 +4741,9 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	)
 
 	evaluator, err := New(Config{
-		Model: model,
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
 		Tools: []tool.BaseTool{fakeTool{
 			name:   "fake_resolve",
 			result: `{"resolved_path":"src/main.go"}`,
@@ -2932,6 +4764,7 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	}
 
 	if got, want := result.Phases, []Phase{
+		PhaseRunPipeline,
 		PhaseRenderPrompt,
 		PhaseRunEvaluator,
 		PhaseFinalizePrediction,
@@ -2984,7 +4817,7 @@ func TestEvaluatorRunFailures(t *testing.T) {
 					Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
 				},
 			),
-			renderPrompt: func(context.Context, domain.TaskSpec, []string) (string, error) {
+			renderPrompt: func(context.Context, evaluatorprompt.Input) (string, error) {
 				return "", errors.New("render blew up")
 			},
 			wantKind:      FailureKindPromptRenderFailed,
@@ -3050,10 +4883,13 @@ func TestEvaluatorRunFailures(t *testing.T) {
 			t.Parallel()
 
 			evaluator, err := New(Config{
-				Model:        tt.model,
-				Tools:        tt.tools,
-				RenderPrompt: tt.renderPrompt,
-				Now:          fixedClock(),
+				Model:         tt.model,
+				CommandRunner: newPassingCommandRunner(),
+				WorkDir:       "/repo",
+				Tools:         tt.tools,
+				RenderPrompt:  tt.renderPrompt,
+				RetryPolicy:   &RetryPolicy{MaxAttempts: 1},
+				Now:           fixedClock(),
 			})
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
@@ -3085,7 +4921,13 @@ func TestEvaluatorExecuteReturnsFailureAsError(t *testing.T) {
 		},
 	)
 
-	evaluator, err := New(Config{Model: model, Now: fixedClock()})
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		RetryPolicy:   &RetryPolicy{MaxAttempts: 1},
+		Now:           fixedClock(),
+	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -3112,7 +4954,12 @@ func TestEvaluatorUsesExistingRunModelOnSuccess(t *testing.T) {
 		},
 	)
 
-	evaluator, err := New(Config{Model: model, Now: fixedClock()})
+	evaluator, err := New(Config{
+		Model:         model,
+		CommandRunner: newPassingCommandRunner(),
+		WorkDir:       "/repo",
+		Now:           fixedClock(),
+	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -3157,6 +5004,39 @@ func (f fakeTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 }
 
 var _ tool.InvokableTool = fakeTool{}
+
+type scriptedCommandRunner struct {
+	results []pipeline.StepResult
+	calls   []pipeline.CommandSpec
+}
+
+func (r *scriptedCommandRunner) Run(_ context.Context, spec pipeline.CommandSpec) pipeline.StepResult {
+	r.calls = append(r.calls, spec)
+	if len(r.results) == 0 {
+		return pipeline.StepResult{
+			ExitCode:            -1,
+			InfrastructureError: errors.New("no scripted pipeline results remaining"),
+		}
+	}
+
+	result := r.results[0]
+	r.results = r.results[1:]
+	return result
+}
+
+func (r *scriptedCommandRunner) Calls() []pipeline.CommandSpec {
+	return append([]pipeline.CommandSpec(nil), r.calls...)
+}
+
+func newPassingCommandRunner() *scriptedCommandRunner {
+	return &scriptedCommandRunner{
+		results: []pipeline.StepResult{
+			{Name: "templ_generate", ExitCode: 0, Duration: 5 * time.Millisecond},
+			{Name: "gofmt_check", ExitCode: 0, Duration: 5 * time.Millisecond},
+			{Name: "go_test", ExitCode: 0, Duration: 5 * time.Millisecond},
+		},
+	}
+}
 
 func sampleRunSpec() run.Spec {
 	task := domain.TaskSpec{
@@ -3219,6 +5099,7 @@ package eino
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
@@ -3228,30 +5109,40 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	"github.com/becker63/searchbench-go/internal/pipeline"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
 )
 
-// RenderPromptFunc renders the evaluator prompt from a prompt-safe task view.
-type RenderPromptFunc func(ctx context.Context, task domain.TaskSpec, allowedTools []string) (string, error)
+// RenderPromptFunc renders the evaluator prompt from its typed prompt contract.
+type RenderPromptFunc func(ctx context.Context, input evaluatorprompt.Input) (string, error)
 
 // Config defines the minimal evaluator runner dependencies.
 type Config struct {
-	Model        model.ToolCallingChatModel
-	Tools        []tool.BaseTool
-	RenderPrompt RenderPromptFunc
-	SessionID    domain.SessionID
-	TraceID      domain.TraceID
-	Now          func() time.Time
+	Model                    model.ToolCallingChatModel
+	Tools                    []tool.BaseTool
+	RenderPrompt             RenderPromptFunc
+	CommandRunner            pipeline.CommandRunner
+	PipelineSteps            []pipeline.CommandSpec
+	Allowlist                pipeline.Allowlist
+	WorkDir                  string
+	RetryPolicy              *RetryPolicy
+	SessionID                domain.SessionID
+	TraceID                  domain.TraceID
+	Now                      func() time.Time
+	MaxPipelineFeedbackChars int
 }
 
 // Result is the typed outcome for one evaluator run.
 type Result struct {
-	Executed       *run.ExecutedRun
-	Failure        *Failure
-	Phases         []Phase
-	RenderedPrompt string
-	RawOutput      string
+	Executed               *run.ExecutedRun
+	Failure                *Failure
+	Phases                 []Phase
+	Attempts               []Attempt
+	RenderedPrompt         string
+	RawOutput              string
+	PipelineResults        []pipeline.StepResult
+	PipelineClassification *pipeline.Classification
 }
 
 // Success reports whether the evaluator completed with a normalized
@@ -3262,12 +5153,16 @@ func (r Result) Success() bool {
 
 // Evaluator is the minimal Eino-backed evaluator executor.
 type Evaluator struct {
-	model        model.ToolCallingChatModel
-	tools        []tool.BaseTool
-	renderPrompt RenderPromptFunc
-	sessionID    domain.SessionID
-	traceID      domain.TraceID
-	now          func() time.Time
+	model                    model.ToolCallingChatModel
+	tools                    []tool.BaseTool
+	renderPrompt             RenderPromptFunc
+	pipeline                 pipeline.Runner
+	pipelineSteps            []pipeline.CommandSpec
+	retryPolicy              RetryPolicy
+	maxPipelineFeedbackChars int
+	sessionID                domain.SessionID
+	traceID                  domain.TraceID
+	now                      func() time.Time
 }
 
 // New constructs a cold evaluator runner.
@@ -3286,6 +5181,25 @@ func New(config Config) (*Evaluator, error) {
 		now = func() time.Time { return time.Now().UTC() }
 	}
 
+	workDir := config.WorkDir
+	if workDir == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("eino evaluator: determine working directory: %w", err)
+		}
+		workDir = wd
+	}
+
+	pipelineSteps := append([]pipeline.CommandSpec(nil), config.PipelineSteps...)
+	if len(pipelineSteps) == 0 {
+		pipelineSteps = pipeline.DefaultEvaluatorSteps(workDir)
+	}
+
+	maxPipelineFeedbackChars := config.MaxPipelineFeedbackChars
+	if maxPipelineFeedbackChars <= 0 {
+		maxPipelineFeedbackChars = 2000
+	}
+
 	sessionID := config.SessionID
 	if sessionID.Empty() {
 		sessionID = domain.SessionID("eino-local")
@@ -3295,9 +5209,16 @@ func New(config Config) (*Evaluator, error) {
 		model:        config.Model,
 		tools:        append([]tool.BaseTool(nil), config.Tools...),
 		renderPrompt: renderPrompt,
-		sessionID:    sessionID,
-		traceID:      config.TraceID,
-		now:          now,
+		pipeline: pipeline.Runner{
+			CommandRunner: config.CommandRunner,
+			Allowlist:     config.Allowlist,
+		},
+		pipelineSteps:            pipelineSteps,
+		retryPolicy:              normalizeRetryPolicy(config.RetryPolicy),
+		maxPipelineFeedbackChars: maxPipelineFeedbackChars,
+		sessionID:                sessionID,
+		traceID:                  config.TraceID,
+		now:                      now,
 	}, nil
 }
 
@@ -3319,76 +5240,138 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 		result.Phases = append(result.Phases, phase)
 	}
 
-	recordPhase(PhaseRenderPrompt)
+	recordPhase(PhaseRunPipeline)
+	pipelineResults := e.pipeline.Run(ctx, e.pipelineSteps)
+	result.PipelineResults = append([]pipeline.StepResult(nil), pipelineResults...)
+
+	classification := pipeline.Classify(pipelineResults)
+	result.PipelineClassification = &classification
+	if classification.HasFailures() {
+		recordPhase(PhaseClassifyPipeline)
+		kind := FailureKindPipelineFailed
+		if len(classification.InfrastructureFailures) > 0 {
+			kind = FailureKindPipelineInfrastructureFailed
+		}
+		result.Failure = &Failure{
+			Phase:                  PhaseClassifyPipeline,
+			Kind:                   kind,
+			Message:                "pipeline validation failed",
+			Recoverable:            false,
+			StepResults:            append([]pipeline.StepResult(nil), pipelineResults...),
+			PipelineClassification: result.PipelineClassification,
+			PipelineFeedback:       pipeline.FormatPipelineFeedback(classification, e.maxPipelineFeedbackChars),
+		}
+		return result
+	}
+
 	allowedTools, err := e.allowedToolNames(ctx)
 	if err != nil {
-		result.Failure = &Failure{
+		failure := &Failure{
 			Phase:   PhaseRenderPrompt,
 			Kind:    FailureKindPromptRenderFailed,
 			Message: "collect tool names",
 			Cause:   err,
+			Attempt: 1,
 		}
+		result.Attempts = append(result.Attempts, Attempt{Number: 1, Failure: failure})
+		result.Failure = failure
 		return result
 	}
 
-	renderedPrompt, err := e.renderPrompt(ctx, spec.Task, allowedTools)
-	if err != nil {
-		result.Failure = &Failure{
-			Phase:   PhaseRenderPrompt,
-			Kind:    FailureKindPromptRenderFailed,
-			Message: "render evaluator prompt",
-			Cause:   err,
+	for attemptNumber := 1; attemptNumber <= e.retryPolicy.MaxAttempts; attemptNumber++ {
+		attempt := Attempt{Number: attemptNumber}
+
+		recordPhase(PhaseRenderPrompt)
+		input := evaluatorprompt.InputFromTask(spec.Task, allowedTools)
+		for _, previous := range result.Attempts {
+			if feedback := retryFeedbackForFailure(previous.Failure); feedback != "" {
+				input.RetryFeedback = append(input.RetryFeedback, feedback)
+			}
 		}
+
+		renderedPrompt, err := e.renderPrompt(ctx, input)
+		attempt.RenderedPrompt = renderedPrompt
+		result.RenderedPrompt = renderedPrompt
+		if err != nil {
+			failure := &Failure{
+				Phase:   PhaseRenderPrompt,
+				Kind:    FailureKindPromptRenderFailed,
+				Message: "render evaluator prompt",
+				Cause:   err,
+				Attempt: attemptNumber,
+			}
+			attempt.Failure = failure
+			result.Attempts = append(result.Attempts, attempt)
+			result.Failure = failure
+			return result
+		}
+
+		recordPhase(PhaseRunEvaluator)
+		startedAt := e.now().UTC()
+		rawOutput, toolErr, err := e.runEvaluator(ctx, renderedPrompt)
+		attempt.RawOutput = rawOutput
+		result.RawOutput = rawOutput
+		if err != nil {
+			failure := e.evaluatorFailure(attemptNumber, toolErr, err)
+			attempt.Failure = failure
+			result.Attempts = append(result.Attempts, attempt)
+			if e.shouldRetry(failure, attemptNumber) {
+				recordPhase(PhasePrepareRetry)
+				continue
+			}
+			if failure.Recoverable && e.retryPolicy.MaxAttempts > 1 {
+				recordPhase(PhaseExhausted)
+				result.Failure = exhaustedFailure(failure, result.Attempts)
+				return result
+			}
+			result.Failure = failure
+			return result
+		}
+
+		recordPhase(PhaseFinalizePrediction)
+		prediction, kind, err := FinalizePrediction(rawOutput)
+		if err != nil {
+			failure := &Failure{
+				Phase:       PhaseFinalizePrediction,
+				Kind:        kind,
+				Message:     "finalize evaluator prediction",
+				Cause:       err,
+				Recoverable: e.retryPolicy.allows(kind),
+				Attempt:     attemptNumber,
+			}
+			attempt.Failure = failure
+			result.Attempts = append(result.Attempts, attempt)
+			if e.shouldRetry(failure, attemptNumber) {
+				recordPhase(PhasePrepareRetry)
+				continue
+			}
+			if failure.Recoverable && e.retryPolicy.MaxAttempts > 1 {
+				recordPhase(PhaseExhausted)
+				result.Failure = exhaustedFailure(failure, result.Attempts)
+				return result
+			}
+			result.Failure = failure
+			return result
+		}
+
+		recordPhase(PhaseComplete)
+		result.Attempts = append(result.Attempts, attempt)
+		planned := run.NewPlanned(spec)
+		prepared := run.NewPrepared(planned, e.sessionID)
+		executed := run.NewExecuted(
+			prepared,
+			prediction,
+			domain.UsageSummary{},
+			e.traceID,
+			startedAt,
+			e.now().UTC(),
+		)
+		result.Executed = &executed
 		return result
 	}
-	result.RenderedPrompt = renderedPrompt
 
-	recordPhase(PhaseRunEvaluator)
-	startedAt := e.now().UTC()
-	rawOutput, toolErr, err := e.runEvaluator(ctx, renderedPrompt)
-	if err != nil {
-		kind := FailureKindEvaluatorFailed
-		message := "run evaluator agent"
-		cause := err
-		if toolErr != nil {
-			kind = FailureKindToolCallFailed
-			message = "run evaluator tool call"
-			cause = toolErr
-		}
-		result.Failure = &Failure{
-			Phase:   PhaseRunEvaluator,
-			Kind:    kind,
-			Message: message,
-			Cause:   cause,
-		}
-		return result
-	}
-	result.RawOutput = rawOutput
-
-	recordPhase(PhaseFinalizePrediction)
-	prediction, kind, err := FinalizePrediction(rawOutput)
-	if err != nil {
-		result.Failure = &Failure{
-			Phase:   PhaseFinalizePrediction,
-			Kind:    kind,
-			Message: "finalize evaluator prediction",
-			Cause:   err,
-		}
-		return result
-	}
-
-	recordPhase(PhaseComplete)
-	planned := run.NewPlanned(spec)
-	prepared := run.NewPrepared(planned, e.sessionID)
-	executed := run.NewExecuted(
-		prepared,
-		prediction,
-		domain.UsageSummary{},
-		e.traceID,
-		startedAt,
-		e.now().UTC(),
-	)
-	result.Executed = &executed
+	recordPhase(PhaseExhausted)
+	result.Failure = exhaustedFailure(nil, result.Attempts)
 	return result
 }
 
@@ -3459,8 +5442,34 @@ func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string) (st
 	return finalOutput, nil, nil
 }
 
-func defaultRenderPrompt(ctx context.Context, task domain.TaskSpec, allowedTools []string) (string, error) {
-	return evaluatorprompt.Render(ctx, evaluatorprompt.InputFromTask(task, allowedTools))
+func defaultRenderPrompt(ctx context.Context, input evaluatorprompt.Input) (string, error) {
+	return evaluatorprompt.Render(ctx, input)
+}
+
+func (e *Evaluator) shouldRetry(failure *Failure, attemptNumber int) bool {
+	return failure != nil && failure.Recoverable && attemptNumber < e.retryPolicy.MaxAttempts
+}
+
+func (e *Evaluator) evaluatorFailure(attemptNumber int, toolErr error, err error) *Failure {
+	kind := FailureKindEvaluatorFailed
+	message := "run evaluator agent"
+	cause := err
+	recoverable := isRecoverableModelError(err) && e.retryPolicy.allows(FailureKindEvaluatorFailed)
+	if toolErr != nil {
+		kind = FailureKindToolCallFailed
+		message = "run evaluator tool call"
+		cause = toolErr
+		recoverable = isRecoverableToolError(toolErr) && e.retryPolicy.allows(FailureKindToolCallFailed)
+	}
+
+	return &Failure{
+		Phase:       PhaseRunEvaluator,
+		Kind:        kind,
+		Message:     message,
+		Cause:       cause,
+		Recoverable: recoverable,
+		Attempt:     attemptNumber,
+	}
 }
 
 type toolErrorRecorder struct {
@@ -3524,12 +5533,19 @@ func FinalizePrediction(raw string) (domain.Prediction, FailureKind, error) {
 package eino
 
 // Phase is the evaluator-local lifecycle phase name.
+//
+// These names stay local to the Eino evaluator until more than one executor
+// needs the same retry/pipeline vocabulary.
 type Phase string
 
 const (
+	PhaseRunPipeline        Phase = "run_pipeline"
+	PhaseClassifyPipeline   Phase = "classify_pipeline"
 	PhaseRenderPrompt       Phase = "render_prompt"
 	PhaseRunEvaluator       Phase = "run_evaluator"
 	PhaseFinalizePrediction Phase = "finalize_prediction"
+	PhasePrepareRetry       Phase = "prepare_retry"
+	PhaseExhausted          Phase = "exhausted"
 	PhaseComplete           Phase = "complete"
 )
 
@@ -3537,11 +5553,14 @@ const (
 type FailureKind string
 
 const (
-	FailureKindPromptRenderFailed FailureKind = "prompt_render_failed"
-	FailureKindEvaluatorFailed    FailureKind = "evaluator_failed"
-	FailureKindToolCallFailed     FailureKind = "tool_call_failed"
-	FailureKindFinalizationFailed FailureKind = "finalization_failed"
-	FailureKindInvalidPrediction  FailureKind = "invalid_prediction"
+	FailureKindPipelineFailed               FailureKind = "pipeline_failed"
+	FailureKindPipelineInfrastructureFailed FailureKind = "pipeline_infrastructure_failed"
+	FailureKindPromptRenderFailed           FailureKind = "prompt_render_failed"
+	FailureKindEvaluatorFailed              FailureKind = "evaluator_failed"
+	FailureKindToolCallFailed               FailureKind = "tool_call_failed"
+	FailureKindFinalizationFailed           FailureKind = "finalization_failed"
+	FailureKindInvalidPrediction            FailureKind = "invalid_prediction"
+	FailureKindRetriesExhausted             FailureKind = "retries_exhausted"
 )
 </file>
 
@@ -3573,6 +5592,7 @@ type Input struct {
 	IssueBody        string
 	AllowedTools     []string
 	Constraints      []string
+	RetryFeedback    []string
 	OutputSchemaJSON string
 }
 
@@ -3740,20 +5760,53 @@ func Prompt(in Input) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</constraints> <output-contract>Return strict JSON matching this schema: <json-schema>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</constraints> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var9 string
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(in.OutputSchemaJSON)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/prompts/evaluator/prompt.templ`, Line: 28, Col: 37}
+		if len(in.RetryFeedback) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<retry-feedback>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, feedback := range in.RetryFeedback {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<attempt-feedback>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var9 string
+				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(feedback)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/prompts/evaluator/prompt.templ`, Line: 29, Col: 33}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</attempt-feedback>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</retry-feedback> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<output-contract>Return strict JSON matching this schema: <json-schema>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</json-schema></output-contract></searchbench-prompt>")
+		var templ_7745c5c3_Var10 string
+		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(in.OutputSchemaJSON)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/prompts/evaluator/prompt.templ`, Line: 35, Col: 37}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</json-schema></output-contract></searchbench-prompt>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -3829,6 +5882,50 @@ func TestRenderPromptFromTypedInput(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderPromptIncludesRetryFeedbackWithoutOracleLeak(t *testing.T) {
+	t.Parallel()
+
+	task := domain.TaskSpec{
+		ID:        domain.TaskID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1"),
+		Benchmark: domain.BenchmarkLCA,
+		Repo: domain.RepoSnapshot{
+			Name: domain.RepoName("square/okhttp"),
+			SHA:  domain.RepoSHA("abc123"),
+		},
+		Input: domain.TaskInput{
+			Title: "Crash when retrying HTTP request",
+			Body:  "The client crashes when the retry interceptor replays a request.",
+		},
+		Oracle: domain.TaskOracle{
+			GoldFiles: []domain.RepoRelPath{"internal/should/not/leak.go"},
+		},
+	}
+
+	input := InputFromTask(task, []string{"fake_resolve"})
+	input.RetryFeedback = []string{
+		"Previous attempt returned malformed JSON.",
+		"Previous attempt returned empty predicted files.",
+	}
+
+	prompt, err := Render(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	for _, want := range []string{
+		"<retry-feedback>",
+		"<attempt-feedback>Previous attempt returned malformed JSON.</attempt-feedback>",
+		"<attempt-feedback>Previous attempt returned empty predicted files.</attempt-feedback>",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "internal/should/not/leak.go") {
+		t.Fatalf("prompt unexpectedly leaked oracle data:\n%s", prompt)
+	}
+}
 </file>
 
 <file path="internal/prompts/evaluator/prompt.templ">
@@ -3857,6 +5954,13 @@ templ Prompt(in Input) {
 				<constraint>{ constraint }</constraint>
 			}
 		</constraints>
+		if len(in.RetryFeedback) > 0 {
+			<retry-feedback>
+				for _, feedback := range in.RetryFeedback {
+					<attempt-feedback>{ feedback }</attempt-feedback>
+				}
+			</retry-feedback>
+		}
 		<output-contract>
 			Return strict JSON matching this schema:
 			<json-schema>{ in.OutputSchemaJSON }</json-schema>
@@ -7563,6 +9667,741 @@ Then summarize:
 - confirmation that no duplicate LCA schema was introduced
 </file>
 
+<file path="prompts/issue-5.md">
+You are working in the searchbench-go repository.
+
+The target GitHub issue is:
+
+    Add retry-aware Eino evaluator execution and CLI pipeline validation
+
+Before making any changes, use the GitHub CLI to find and read the full target issue.
+
+Run:
+
+    gh issue list --state open --search "Add retry-aware Eino evaluator execution and CLI pipeline validation"
+    gh issue view <ISSUE_NUMBER> --comments --json title,body,comments,labels,state,url
+
+If multiple issues match, choose the open issue whose title exactly matches:
+
+    Add retry-aware Eino evaluator execution and CLI pipeline validation
+
+If no issue matches, stop and report that the target issue could not be found. Do not implement from memory.
+
+Treat the GitHub issue body as the source of truth for the implementation contract.
+
+If this prompt conflicts with the GitHub issue, prefer the GitHub issue unless it clearly violates AGENTS.md/agents.md or the repository architecture docs. In that case, stop and explain the conflict before editing.
+
+Before editing, read the project guidance and architecture docs:
+
+1. AGENTS.md or agents.md, whichever exists
+2. docs/engineering/issue-style-guide.md
+3. docs/engineering/agentic-development-flow.md
+4. docs/engineering/model-testing.md
+5. integration-shape.md
+6. todo.md
+7. Existing package docs, especially:
+   - internal/domain/doc.go
+   - internal/run/doc.go
+   - internal/compare/doc.go
+   - internal/backend/doc.go
+   - internal/score/doc.go
+   - internal/executor/eino/doc.go
+   - internal/prompts/evaluator/
+   - internal/testing/doc.go
+   - internal/testing/modeltest/doc.go
+   - internal/surface/cli/doc.go
+   - internal/surface/logging/doc.go
+
+Also inspect the existing implementation from prior issues:
+
+- internal/testing/modeltest/
+- internal/domain/localization.go
+- internal/domain/prediction.go
+- internal/domain/task.go
+- internal/domain/repo.go
+- internal/run/phases.go
+- internal/run/failure.go
+- internal/run/record.go
+- internal/executor/eino/evaluator.go
+- internal/executor/eino/evaluator_test.go
+- internal/executor/eino/finalizer.go
+- internal/executor/eino/phases.go
+- internal/executor/eino/errors.go
+- internal/prompts/evaluator/
+
+Do not start editing until you understand the existing package boundaries.
+
+Task:
+Implement the issue “Add retry-aware Eino evaluator execution and CLI pipeline validation”.
+
+Goal:
+Extend the existing minimal Eino evaluator loop with bounded retry machinery and a typed CLI validation pipeline.
+
+This issue proves that SearchBench-Go can:
+
+- retry evaluator execution on recoverable model/finalization/tool failures
+- run local CLI validation steps before evaluator execution
+- represent external command results as typed step results
+- classify CLI failures into structured categories
+- surface pipeline failures as typed evaluator failures
+- test CLI failure behavior without real model calls
+- preserve old Python SearchBench pipeline/repair semantics without porting the old Python state machine
+
+Important: this is not the full writer/optimization loop.
+
+This issue creates the reusable evaluator-side retry and CLI pipeline substrate that later writer/repair issues will consume.
+
+Dependency context:
+The deterministic model fixture testing issue is already done.
+
+Use:
+
+    internal/testing/modeltest.ScriptedModel
+
+for evaluator retry tests.
+
+Do not create a second model fixture system.
+
+The LCA/domain schema issue is already done.
+
+Use existing domain/run types where appropriate.
+
+Do not reimplement:
+
+- domain.LCATask
+- domain.LCATaskIdentity
+- domain.LCAContext
+- domain.LCAGold
+- domain.LCAHFRow
+- domain.Prediction
+- domain.CanonicalizePath
+- domain.CanonicalizePaths
+
+The minimal Eino evaluator loop is already done.
+
+Build on the existing package:
+
+    internal/executor/eino
+
+Do not rewrite the minimal evaluator.
+
+Do not replace Eino.
+
+Do not introduce a custom agent framework.
+
+Architecture rule:
+SearchBench-Go owns:
+
+- phase/result typing
+- retry policy
+- pipeline step definitions
+- subprocess execution boundaries
+- pipeline classification
+- failure feedback construction
+- evaluator result/failure envelopes
+
+Eino owns:
+
+- model/tool execution
+- tool-call loop behavior
+- model response handling
+
+The new pipeline package should own:
+
+- local CLI command execution
+- command allowlisting
+- step results
+- classification of external command failures
+- bounded feedback formatting
+
+The modeltest package owns:
+
+- scripted model responses
+- deterministic model test behavior
+
+Do not introduce:
+
+- custom state machine library
+- custom ReAct loop
+- MCP-specific code
+- repo materialization
+- policy artifacts
+- policy injection
+- writer agent
+- optimization loop
+- graph-distance scoring
+- LangSmith tracing
+- live model calls in default tests
+- broad public CLI product surface
+
+Preserve from Python SearchBench:
+
+- external validation steps return typed step results
+- step results include name, command, exit status, stdout, stderr, duration, and pass/fail status
+- command execution is scoped and allowlisted
+- pipeline classification distinguishes type errors, lint/format errors, test failures, generation failures, and infrastructure failures
+- warnings on successful commands are not failures
+- feedback is structured and truncated to a safe size
+- retry attempts receive classified failure context
+- exhausted retries return a typed failure with the last useful classification
+
+Do not preserve:
+
+- Python-specific commands as production defaults
+- Pydantic model implementation details
+- Python state machine framework
+- Langfuse-specific tracing shape
+- worktree mutation as policy selection
+- Python dict-shaped data passing
+- ad-hoc subprocess calls spread across the codebase
+
+Package placement:
+Prefer existing project structure.
+
+If no better location exists, create:
+
+    internal/pipeline/
+      doc.go
+      step.go
+      runner.go
+      classify.go
+      feedback.go
+      pipeline_test.go
+
+Modify or add under:
+
+    internal/executor/eino/
+      retry.go
+      retry_test.go
+      pipeline_integration_test.go
+
+Use existing files where better.
+
+If internal/run already owns a concept cleanly, reuse it rather than duplicating it.
+
+Do not place subprocess execution in internal/domain.
+
+Do not place Eino-specific retry logic in internal/pipeline.
+
+Do not place testing-only fake commands in production packages.
+
+Do not place pipeline code under internal/surface/cli. This is a CLI/subprocess validation pipeline, not the public SearchBench command-line surface.
+
+Pipeline step model:
+Define or reuse a typed step result for CLI checks.
+
+A useful shape is:
+
+    StepResult
+      name
+      command
+      cwd
+      passed
+      exit_code
+      stdout
+      stderr
+      stdout_tail
+      stderr_tail
+      duration
+      skipped
+
+Use exact field names that fit Go conventions and the existing repo.
+
+Rules:
+
+- command should be recorded for review/debugging
+- cwd should be recorded if useful
+- stdout/stderr may be stored fully if small
+- include tail/truncation helpers where useful
+- failed commands should not panic
+- subprocess launch failures should become infrastructure failures
+- context cancellation should be respected
+
+Command execution boundary:
+Implement a small command runner abstraction so tests do not need real subprocesses.
+
+Suggested shape:
+
+    CommandRunner
+      Run(ctx, CommandSpec) StepResult
+
+    CommandSpec
+      name
+      command
+      cwd
+      timeout
+
+Production runner:
+
+- uses os/exec
+- captures stdout/stderr
+- respects context cancellation
+- returns typed StepResult
+
+Test runner:
+
+- returns scripted StepResult values
+- records commands
+- can simulate command failure
+- can simulate subprocess launch/infrastructure failure
+
+Do not use shell strings by default.
+
+Prefer:
+
+    []string{"go", "test", "./..."}
+
+over:
+
+    "go test ./..."
+
+Command allowlist:
+The pipeline runner should only execute known commands.
+
+Initial allowed commands should be narrow and repository-local.
+
+Reasonable candidates:
+
+    templ generate
+    gofmt check
+    go test ./...
+    go vet ./... if already standard
+
+Use the repo’s actual conventions.
+
+If templ generation is required because prompt.templ exists, include a templ_generate step only if it is available and consistent with the project.
+
+If templ is not available in the default test environment, tests should use scripted command runners and should not require global templ execution.
+
+Do not add arbitrary command execution.
+
+Unknown/disallowed commands should fail closed as infrastructure failures.
+
+Initial evaluator validation pipeline:
+Create a minimal evaluator validation pipeline.
+
+Suggested steps:
+
+    templ_generate
+    gofmt_check
+    go_test
+
+Optional only if already standard:
+
+    go_vet
+
+Do not add slow, flaky, networked, or paid checks.
+
+Do not add staticcheck unless the repo already uses it and it is available in the dev environment.
+
+Pipeline classification:
+Classify failed step results into structured categories.
+
+Suggested shape:
+
+    PipelineClassification
+      generation_failures
+      format_errors
+      type_errors
+      lint_errors
+      test_failures
+      infrastructure_failures
+      passed_steps
+
+Suggested mapping:
+
+    templ_generate failure:
+      generation_failures
+
+    gofmt_check failure:
+      format_errors
+
+    go_test failure caused by compile/type errors:
+      type_errors if detectable, otherwise test_failures
+
+    go_test ordinary test failure:
+      test_failures
+
+    go_vet failure:
+      lint_errors or type_errors depending on message
+
+    command launch failure / timeout / disallowed command:
+      infrastructure_failures
+
+Do not overfit classification to brittle exact stderr text.
+
+Use simple, stable heuristics.
+
+Warnings with exit code 0 should be recorded but not classified as failures.
+
+Structured feedback:
+Add a helper that converts PipelineClassification into bounded, readable feedback.
+
+Suggested helper:
+
+    FormatPipelineFeedback(classification, maxChars int) string
+
+Feedback should include deterministic sections like:
+
+    ## GENERATION FAILURES
+    ## FORMAT ERRORS
+    ## TYPE ERRORS
+    ## LINT ERRORS
+    ## TEST FAILURES
+    ## INFRASTRUCTURE FAILURES
+    ## PASSED STEPS
+
+Add an action-hint helper if useful:
+
+    InferPipelineActionHint(classification) string
+
+Suggested priority:
+
+    infrastructure failures first
+    generation failures
+    format errors
+    type errors
+    lint errors
+    test failures
+    all passed
+
+Keep this small. It is future-facing for writer/repair loops, but must be testable now.
+
+Retry policy:
+Add bounded retry support to the Eino evaluator runner.
+
+A useful shape:
+
+    RetryPolicy
+      max_attempts
+      retry_on_model_error
+      retry_on_tool_failure
+      retry_on_finalization_failure
+      retry_on_invalid_prediction
+      retry_on_pipeline_failure
+
+Default behavior for this issue:
+
+- retry finalization failure
+- retry invalid/empty predictions
+- retry recoverable model errors
+- retry recoverable tool failures only if explicitly marked recoverable
+- do not retry pipeline failure by default
+- do not retry prompt render failure
+- do not retry infrastructure failure by default
+
+Default max attempts should be small:
+
+    2 or 3
+
+Use existing project conventions if already defined.
+
+Retry feedback:
+When retrying evaluator execution, the next model attempt should receive concise structured feedback about why the previous attempt failed.
+
+Examples:
+
+    previous attempt returned malformed JSON
+    previous attempt returned empty predicted files
+    previous tool call failed: fake_resolve
+    previous model call failed: context length exceeded
+
+For this issue, retry feedback may be appended to evaluator prompt input or passed through a typed retry context.
+
+Do not mutate global prompt state.
+
+Do not expose gold/oracle data in retry feedback.
+
+Do not include full unbounded stderr/tool output.
+
+Pipeline integration:
+Run the evaluator validation pipeline as part of evaluator execution lifecycle, but keep it separate from model execution.
+
+For this issue, run the validation pipeline before the model call.
+
+Reason:
+
+- if local evaluator code cannot compile or prompt generation is broken, do not spend model calls
+- tests can prove pipeline failure prevents model execution
+- later writer issues can reuse the same pipeline after candidate generation
+
+This issue may expose a lower-level function so future writer/repair loops can run the pipeline after candidate artifacts are written.
+
+Phase flow:
+Use ordinary Go control flow, not a state machine library.
+
+Expected flow:
+
+    Run(ctx, task)
+      create execution result accumulator
+
+      phase: run_pipeline
+          run evaluator validation pipeline
+          collect StepResult[]
+          if command launch failed:
+              classify as infrastructure failure
+          if any step failed:
+              phase: classify_pipeline
+                  classify step results
+                  format pipeline feedback
+              return pipeline_failed without calling model
+
+      for attempt := 0; attempt < maxAttempts; attempt++ {
+          phase: render_prompt
+              build typed evaluator prompt input
+              include retry feedback if attempt > 0
+              render .templ XML-style prompt
+              if render failed:
+                  return prompt_render_failed
+
+          phase: run_evaluator
+              run Eino evaluator agent
+              expose allowed fake/local tools
+              if evaluator/model failed:
+                  if recoverable and attempts remain:
+                      phase: prepare_retry
+                          record evaluator_failed feedback
+                          continue
+                  return evaluator_failed
+
+              if tool failed:
+                  if recoverable and attempts remain:
+                      phase: prepare_retry
+                          record tool_call_failed feedback
+                          continue
+                  return tool_call_failed
+
+          phase: finalize_prediction
+              parse final structured JSON response
+              normalize predicted files
+              if malformed:
+                  if attempts remain:
+                      phase: prepare_retry
+                          record finalization_failed feedback
+                          continue
+                  return finalization_failed
+
+              if predicted files empty:
+                  if attempts remain:
+                      phase: prepare_retry
+                          record invalid_prediction feedback
+                          continue
+                  return invalid_prediction
+
+          phase: complete
+              return successful evaluator result
+      }
+
+      phase: exhausted
+          return failed result with last failure and attempt history
+
+Additional phase names introduced by this issue:
+
+    run_pipeline
+    classify_pipeline
+    prepare_retry
+    exhausted
+
+Add or reuse typed failure kinds for:
+
+    pipeline_failed
+    pipeline_infrastructure_failed
+    prompt_render_failed
+    evaluator_failed
+    tool_call_failed
+    finalization_failed
+    invalid_prediction
+    retries_exhausted
+
+If existing eino/run failure types already express these, reuse them.
+
+Evaluator result behavior:
+Extend the existing evaluator result type as needed.
+
+It should include enough information for review and later tracing:
+
+    success
+    prediction/executed run
+    failure
+    phases
+    attempts
+    pipeline_results
+    pipeline_classification
+    metadata
+
+Use existing result/run models if they fit.
+
+Do not move this into pure domain unless the existing architecture clearly requires it.
+
+Testing policy:
+Default tests must be offline, deterministic, and safe.
+
+They must not require:
+
+- API keys
+- network access
+- real OpenAI/OpenRouter/Anthropic calls
+- paid model usage
+- real external command execution unless covered by a tiny optional hermetic local command test
+
+Use scripted command runners for most pipeline tests.
+
+Use Tier 1 scripted model fixtures for evaluator retry tests.
+
+Do not use real model APIs.
+
+Required tests:
+Add tests proving:
+
+1. pipeline step result records command, exit code, stdout/stderr, duration, and pass/fail
+2. successful pipeline classification records passed steps
+3. templ_generate failure becomes generation_failures
+4. gofmt_check failure becomes format_errors
+5. go_test failure becomes test_failures or type_errors according to the implemented heuristic
+6. command launch failure becomes infrastructure_failures
+7. disallowed command does not execute and becomes infrastructure failure
+8. formatted pipeline feedback is deterministic and bounded
+9. pipeline failure prevents evaluator model execution
+10. successful pipeline allows evaluator model execution
+11. malformed final output retries once and then succeeds when the second scripted response is valid
+12. empty predicted files retries according to policy
+13. retries exhausted returns retries_exhausted or the final typed failure with attempt history
+14. prompt render failure is not retried
+15. pipeline failure is not retried by default
+16. retry feedback does not include gold/oracle data
+17. default tests do not require API keys or real network access
+
+Required CLI failure test:
+Add at least one test specifically proving CLI failure behavior.
+
+Example:
+
+    scripted command runner returns:
+      StepResult{
+        Name: "go_test",
+        Command: []string{"go", "test", "./..."},
+        Passed: false,
+        ExitCode: 1,
+        Stderr: "FAIL ./internal/executor/eino",
+      }
+
+Assert:
+
+- evaluator returns a typed failure
+- phase is run_pipeline or classify_pipeline
+- kind is pipeline_failed
+- classification includes test_failures
+- feedback includes TEST FAILURES
+- model call count is zero
+
+This test is important. It preserves old SearchBench behavior where external checks were first-class loop information.
+
+Optional tiny real command test:
+A tiny real subprocess test is optional.
+
+If added, it must be hermetic and cheap.
+
+Example:
+
+    command runner can execute go version
+
+or a tiny temp package test.
+
+But this is not required. Prefer scripted command runners.
+
+Do not depend on global tools unless the repo already requires them for normal go test ./....
+
+Important non-goals:
+Do not implement:
+
+- writer agent
+- policy generation
+- policy artifact installation
+- optimization loop
+- MCP
+- Iterative Context
+- jCodeMunch
+- repo materialization
+- graph-distance scoring
+- LangSmith tracing
+- GitHub issue automation
+- broad public CLI product surface
+- live model calls
+- broad arbitrary command execution
+- retrying forever
+- automatic code modification by evaluator
+- candidate policy repair
+- post-candidate writer feedback loop
+
+Acceptance criteria:
+
+- A typed CLI pipeline step result exists or an existing equivalent is reused.
+- Step results record command, exit code, stdout, stderr, duration, and pass/fail.
+- CLI command execution is behind a small runner abstraction.
+- Tests can script command success/failure without spawning real commands.
+- Command execution is allowlisted.
+- Disallowed commands fail closed.
+- A minimal evaluator validation pipeline exists.
+- Pipeline failures are classified into structured categories.
+- Pipeline feedback is deterministic and bounded.
+- Pipeline failure prevents model execution by default.
+- The evaluator runner supports bounded retry attempts.
+- Retry attempts record attempt number and failure reason.
+- Recoverable finalization failure can retry and succeed.
+- Empty predicted files can retry according to policy.
+- Prompt render failures are not retried.
+- Pipeline failures are not retried by default.
+- Retries exhausted returns a typed failure.
+- Tests cover a failing CLI command.
+- Tests cover retry success after an initial bad model response.
+- Tests cover retry exhaustion.
+- Default tests do not require API keys.
+- Default tests do not call real model APIs.
+- Default tests do not require external network access.
+- The implementation uses ordinary Go control flow, not a state machine library.
+- The implementation does not introduce writer/optimization/MCP/policy machinery.
+
+Implementation guidance:
+Keep this boring and small.
+
+Do not overbuild.
+
+Do not create a general pipeline framework.
+
+Do not create a public CLI command unless the GitHub issue explicitly asks for it.
+
+Do not create a generic provider abstraction.
+
+Do not attempt MCP/tool runtime integration.
+
+The goal is to make evaluator retry and CLI validation failures typed, testable, and reusable.
+
+Before handing off, run:
+
+    gofmt -w .
+    templ generate
+    go test ./...
+    go mod tidy
+    go test ./...
+
+If templ is not available or not required by the current change, explain that in the final summary and run the applicable commands.
+
+Then summarize:
+
+- issue number and title implemented
+- files changed
+- new pipeline package or files added
+- retry changes made to internal/executor/eino
+- tests added
+- how scripted command runners were used
+- how Tier 1 modeltest helpers were used
+- whether any real subprocess test was added
+- any deliberate deviations from the issue
+- confirmation that no real model/provider/network calls were added
+- confirmation that pipeline failures prevent model execution
+- confirmation that no MCP/backend/policy/scoring/writer work was added
+</file>
+
 <file path="scripts/openai-netwatch.sh">
 #!/usr/bin/env nix-shell
 #! nix-shell -i bash -p bash coreutils gnugrep gnused gawk iproute2 lsof dnsutils procps strace tcpdump
@@ -7787,6 +10626,7 @@ esac
 <file path=".gitignore">
 .codex
 .tmp/
+repomix-output.xml
 </file>
 
 <file path=".gitmodules">
@@ -9307,51 +12147,6 @@ func TestNonEmptyValues(t *testing.T) {
 			}
 		})
 	}
-}
-</file>
-
-<file path="internal/domain/task.go">
-package domain
-
-// BenchmarkName identifies the source benchmark/task family.
-type BenchmarkName string
-
-const (
-	// BenchmarkLCA identifies the JetBrains LCA bug-localization benchmark.
-	BenchmarkLCA BenchmarkName = "jetbrains-lca"
-)
-
-// TaskInput is the portion of a task that may be shown to the agent.
-//
-// Gold labels and scoring-only fields must not live here.
-type TaskInput struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-}
-
-// TaskOracle is the scoring-only portion of a task.
-//
-// This must never be included in prompts.
-type TaskOracle struct {
-	GoldFiles []RepoRelPath `json:"gold_files"`
-}
-
-// TaskSpec is a single benchmark task over a specific repo snapshot.
-//
-// Conceptually:
-//
-//	TaskSpec = RepoSnapshot + agent-visible input + scorer-visible oracle.
-type TaskSpec struct {
-	ID        TaskID        `json:"id"`
-	Benchmark BenchmarkName `json:"benchmark"`
-	Repo      RepoSnapshot  `json:"repo"`
-	Input     TaskInput     `json:"input"`
-	Oracle    TaskOracle    `json:"oracle"`
-}
-
-// AgentInput returns the prompt-safe portion of the task.
-func (t TaskSpec) AgentInput() TaskInput {
-	return t.Input
 }
 </file>
 
@@ -12518,6 +15313,51 @@ func hashPolicySource(source string) PolicyHash {
 }
 </file>
 
+<file path="internal/domain/task.go">
+package domain
+
+// BenchmarkName identifies the source benchmark/task family.
+type BenchmarkName string
+
+const (
+	// BenchmarkLCA identifies the JetBrains LCA bug-localization benchmark.
+	BenchmarkLCA BenchmarkName = "jetbrains-lca"
+)
+
+// TaskInput is the portion of a task that may be shown to the agent.
+//
+// Gold labels and scoring-only fields must not live here.
+type TaskInput struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
+// TaskOracle is the scoring-only portion of a task.
+//
+// This must never be included in prompts for a evaluator agent in order to not skew judgement.
+type TaskOracle struct {
+	GoldFiles []RepoRelPath `json:"gold_files"`
+}
+
+// TaskSpec is a single benchmark task over a specific repo snapshot.
+//
+// Conceptually:
+//
+//	TaskSpec = RepoSnapshot + agent-visible input + scorer-visible oracle.
+type TaskSpec struct {
+	ID        TaskID        `json:"id"`
+	Benchmark BenchmarkName `json:"benchmark"`
+	Repo      RepoSnapshot  `json:"repo"`
+	Input     TaskInput     `json:"input"`
+	Oracle    TaskOracle    `json:"oracle"`
+}
+
+// AgentInput returns the prompt-safe portion of the task.
+func (t TaskSpec) AgentInput() TaskInput {
+	return t.Input
+}
+</file>
+
 <file path="internal/report/promotion.go">
 package report
 
@@ -13666,6 +16506,7 @@ module github.com/becker63/searchbench-go
 go 1.26.2
 
 require (
+	github.com/a-h/templ v0.3.1001
 	github.com/alecthomas/kong v1.15.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cloudwego/eino v0.8.11
@@ -13675,42 +16516,33 @@ require (
 )
 
 require (
-	github.com/a-h/parse v0.0.0-20250122154542-74294addb73e // indirect
-	github.com/a-h/templ v0.3.1001 // indirect
-	github.com/andybalholm/brotli v1.1.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
-	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
 	github.com/charmbracelet/x/ansi v0.8.0 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/cli/browser v1.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
-	github.com/fatih/color v1.16.0 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/meguminnnnnnnnn/go-openai v0.1.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/nikolalohinski/gonja v1.5.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -13723,12 +16555,9 @@ require (
 	github.com/yargevad/filepathx v1.0.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect
+	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
-	golang.org/x/mod v0.26.0 // indirect
-	golang.org/x/net v0.42.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/tools v0.35.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 </file>

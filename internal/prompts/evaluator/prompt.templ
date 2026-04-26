@@ -23,6 +23,13 @@ templ Prompt(in Input) {
 				<constraint>{ constraint }</constraint>
 			}
 		</constraints>
+		if len(in.RetryFeedback) > 0 {
+			<retry-feedback>
+				for _, feedback := range in.RetryFeedback {
+					<attempt-feedback>{ feedback }</attempt-feedback>
+				}
+			</retry-feedback>
+		}
 		<output-contract>
 			Return strict JSON matching this schema:
 			<json-schema>{ in.OutputSchemaJSON }</json-schema>

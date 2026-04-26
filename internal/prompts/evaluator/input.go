@@ -25,6 +25,7 @@ type Input struct {
 	IssueBody        string
 	AllowedTools     []string
 	Constraints      []string
+	RetryFeedback    []string
 	OutputSchemaJSON string
 }
 

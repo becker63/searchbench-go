@@ -1,14 +1,26 @@
 package eino
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/becker63/searchbench-go/internal/pipeline"
+)
 
 // Failure is the typed failed outcome for one evaluator run.
+//
+// This remains evaluator-local because it carries retry and pipeline details
+// that are not yet shared across executors.
 type Failure struct {
 	Phase       Phase
 	Kind        FailureKind
 	Message     string
 	Cause       error
 	Recoverable bool
+	Attempt     int
+
+	StepResults            []pipeline.StepResult
+	PipelineClassification *pipeline.Classification
+	PipelineFeedback       string
 }
 
 func (f *Failure) Error() string {
