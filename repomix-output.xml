@@ -47,6 +47,7 @@ cmd/
 docs/
   engineering/
     issue-style-guide.md
+    model-testing.md
 internal/
   backend/
     backend.go
@@ -76,6 +77,8 @@ internal/
     artifact.go
     doc.go
     ids.go
+    localization_test.go
+    localization.go
     nonempty_test.go
     nonempty.go
     pair_test.go
@@ -137,6 +140,23 @@ internal/
       logger.go
       mode.go
       styles.go
+  testing/
+    modeltest/
+      testdata/
+        chat_completion_error.json
+        chat_completion_success.json
+      doc.go
+      fixtures.go
+      openai_server_test.go
+      openai_server.go
+      scripted_model_test.go
+      scripted_model.go
+    doc.go
+prompts/
+  issue-2.md
+  issue-3.md
+scripts/
+  openai-netwatch.sh
 testdata/
   fixtures/
     reports/
@@ -734,6 +754,326 @@ Use acceptance criteria for review.
 Use non-goals to prevent architecture drift.
 </file>
 
+<file path="docs/engineering/model-testing.md">
+# SearchBench-Go Model Testing
+
+## Purpose
+
+SearchBench-Go has deterministic model-testing infrastructure under:
+
+```text
+internal/testing/
+internal/testing/modeltest/
+```
+
+This infrastructure exists so agents can build model-backed execution code without:
+
+- real provider calls
+- API-key dependencies
+- external network access in default tests
+- paid model usage
+- ad hoc mock systems in production packages
+
+These helpers are test infrastructure only. They are not production architecture.
+
+## Three tiers
+
+SearchBench-Go uses three model-testing tiers.
+
+### Tier 1: scripted Eino model
+
+Use `internal/testing/modeltest.ScriptedModel` for most evaluator tests.
+
+This helper implements Eino's `model.ToolCallingChatModel` and works directly with:
+
+- `github.com/cloudwego/eino/components/model`
+- `github.com/cloudwego/eino/schema`
+
+It provides:
+
+- deterministic `Generate` responses in order
+- deterministic `Stream` chunks in order
+- scripted model errors
+- recorded calls for assertions
+- recorded tool bindings via `WithTools`
+
+This is the default path for:
+
+- evaluator-loop tests
+- prompt-to-model integration tests
+- malformed final-output tests
+- empty-prediction tests
+- failure-classification tests
+- fake-tool orchestration tests
+
+### Tier 2: fake OpenAI-compatible server
+
+Use `internal/testing/modeltest.FakeOpenAIServer` only when the test needs to prove provider-boundary wiring.
+
+Current scope:
+
+- local-only `httptest` server
+- `POST /v1/chat/completions`
+- scripted responses by request order
+- recorded method, path, body, and headers
+- deterministic exhaustion error
+
+This is appropriate for:
+
+- Eino OpenAI adapter smoke tests
+- BaseURL override tests
+- request-shape recording tests
+
+This is not a full OpenAI mock.
+
+### Tier 3: live model tests
+
+Live model tests are allowed only as explicit opt-in tests.
+
+They must never run in the default suite.
+
+Examples:
+
+```text
+SEARCHBENCH_RUN_LIVE_MODEL_TESTS=1 go test ./...
+go test -tags=live ./...
+```
+
+If a test can spend money, it must be opt-in.
+
+## Package inventory
+
+Current package layout:
+
+```text
+internal/testing/doc.go
+internal/testing/modeltest/doc.go
+internal/testing/modeltest/fixtures.go
+internal/testing/modeltest/scripted_model.go
+internal/testing/modeltest/openai_server.go
+internal/testing/modeltest/testdata/
+```
+
+### `fixtures.go`
+
+Provides:
+
+- `Fixture(name string) ([]byte, error)`
+- `MustFixture(name string) []byte`
+
+Use this for scrubbed provider-response fixtures stored in package `testdata`.
+
+### `scripted_model.go`
+
+Provides:
+
+- `NewScriptedModel(responses ...ScriptedResponse) *ScriptedModel`
+- `ScriptedResponse`
+- `ScriptedCall`
+- `(*ScriptedModel).Calls() []ScriptedCall`
+- `ErrNoScriptedResponses`
+
+`ScriptedResponse` supports:
+
+- `Message *schema.Message`
+- `Stream []*schema.Message`
+- `Err error`
+
+Important behavior:
+
+- each `Generate` or `Stream` call consumes exactly one scripted response
+- calls are recorded before response consumption
+- `WithTools` returns a new view over the same scripted state
+- tool bindings are recorded on each call
+- exhaustion returns `ErrNoScriptedResponses`
+
+### `openai_server.go`
+
+Provides:
+
+- `NewFakeOpenAIServer(responses ...FakeResponse) *FakeOpenAIServer`
+- `(*FakeOpenAIServer).BaseURL() string`
+- `(*FakeOpenAIServer).Requests() []RecordedRequest`
+- `(*FakeOpenAIServer).Close()`
+- `DecodeRecordedRequest`
+
+`FakeResponse` supports:
+
+- `Status`
+- `Body`
+- `Header`
+
+`RecordedRequest` captures:
+
+- `Method`
+- `Path`
+- `Body`
+- `Header`
+
+Important behavior:
+
+- binds to local loopback only
+- records every request before responding
+- returns scripted responses in order
+- returns a deterministic fixture-exhaustion error when responses run out
+- does not proxy or fall through to any real provider
+
+## Default test contract
+
+Default tests for model-backed code must remain:
+
+- offline
+- deterministic
+- cheap
+- safe to run repeatedly
+
+Default tests must not require:
+
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `OPENROUTER_API_KEY`
+- external network access
+- live provider endpoints
+
+When a new agent/executor test is possible with Tier 1, use Tier 1.
+
+Do not jump to Tier 2 or Tier 3 unless the test is specifically about those boundaries.
+
+## Guidance for the next two issues
+
+### 1. `Define LCA localization domain schema from the Python SearchBench contract`
+
+This issue should stay pure domain work.
+
+It should:
+
+- define typed domain models
+- define path normalization
+- define validation and parsing behavior
+- use in-memory table tests only
+
+It should not import:
+
+- `internal/testing/modeltest`
+- Eino
+- provider adapters
+- `httptest`
+
+Reason:
+
+The domain-schema issue is a prerequisite for execution code, not execution code itself. Its tests should prove purity and deterministic normalization, not model behavior.
+
+What this issue may rely on from the testing strategy:
+
+- the repository already has a strict rule that default model tests are offline
+- future execution-layer tests already have a home and should not push model fixtures into `internal/domain`
+
+What this issue should prepare for:
+
+- a canonical prediction type that the Eino evaluator can return
+- typed execution phases and failure kinds that evaluator tests can assert against
+- stable path normalization shared by finalization tests later
+
+### 2. `Prove the minimal Eino agent loop`
+
+This issue should consume `internal/testing/modeltest` directly.
+
+Default test strategy:
+
+- use `ScriptedModel` for evaluator logic tests
+- use local fake tools for deterministic tool execution
+- use typed domain result assertions
+
+Optional provider-boundary test:
+
+- use `FakeOpenAIServer` only for one narrow Eino OpenAI adapter smoke test if needed
+
+Recommended coverage shape:
+
+- success final prediction via `ScriptedModel`
+- malformed final output via `ScriptedModel`
+- empty predicted files via `ScriptedModel`
+- evaluator/model error via `ScriptedModel`
+- tool failure with deterministic local fake tool
+- optional tool-call-shaped scripted model responses if the runner uses them cleanly
+
+The minimal Eino issue should not:
+
+- create another test fixture package
+- create a production model abstraction to hide Eino
+- move these helpers into executor packages
+- call real model APIs in default tests
+
+## Recommended usage patterns
+
+### Tier 1 evaluator test
+
+Use this shape when the test is about runner behavior:
+
+```go
+model := modeltest.NewScriptedModel(
+	modeltest.ScriptedResponse{
+		Message: &schema.Message{
+			Role:    schema.Assistant,
+			Content: `{"predicted_files":["src/main.kt"]}`,
+		},
+	},
+)
+```
+
+Then assert:
+
+- runner result
+- phase classification
+- failure kind
+- model call count
+- prompt/message content
+
+### Tier 2 adapter smoke test
+
+Use this shape only when the test is about the OpenAI-compatible adapter boundary:
+
+```go
+server := modeltest.NewFakeOpenAIServer(modeltest.FakeResponse{
+	Status: http.StatusOK,
+	Body:   string(modeltest.MustFixture("chat_completion_success.json")),
+})
+defer server.Close()
+```
+
+Then configure Eino OpenAI with:
+
+- fake API key
+- `BaseURL: server.BaseURL()`
+- fixed model name
+
+Then assert:
+
+- request path
+- request method
+- request body contains the expected high-signal fields
+
+## Anti-patterns
+
+Do not:
+
+- put model fixtures in `internal/domain`, `internal/run`, `internal/score`, or `internal/compare`
+- introduce a generic provider abstraction just for tests
+- add real provider calls to default tests
+- copy raw provider dumps with secrets or giant payloads
+- assert brittle JSON formatting details
+- make Tier 2 the main path for evaluator logic tests
+
+## Why this matters
+
+The next execution issues should be able to move quickly because:
+
+- Eino types are already present in test infrastructure
+- provider-boundary smoke testing already has a narrow local harness
+- offline deterministic defaults are already enforced by example
+- execution code can focus on prompting, tooling, finalization, and typed failures instead of rebuilding test scaffolding
+</file>
+
 <file path="internal/backend/doc.go">
 // Package backend defines the future runtime/session boundary for Searchbench.
 //
@@ -1223,6 +1563,656 @@ func assertRunOrder(t *testing.T, runs []score.ScoredRun, want []domain.TaskID) 
 // orchestration, backend sessions, or graph ingestion. Those higher-level
 // concerns build on the domain model rather than living inside it.
 package domain
+</file>
+
+<file path="internal/domain/localization_test.go">
+package domain
+
+import (
+	"encoding/json"
+	"errors"
+	"testing"
+)
+
+func TestLCATaskIdentityTaskIDDeterministic(t *testing.T) {
+	t.Parallel()
+
+	identity := LCATaskIdentity{
+		DatasetName:   "searchbench/lca",
+		DatasetConfig: "python",
+		DatasetSplit:  "dev",
+		RepoOwner:     "Square",
+		RepoName:      "OkHttp",
+		BaseSHA:       "ABC123",
+		IssueURL:      "https://example.test/issues/1",
+	}
+
+	got := identity.TaskID()
+	want := TaskID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1")
+	if got != want {
+		t.Fatalf("TaskID() = %q, want %q", got, want)
+	}
+	if identity.TaskID() != got {
+		t.Fatalf("TaskID() is not deterministic: got %q then %q", got, identity.TaskID())
+	}
+}
+
+func TestLCATaskIdentityIssueKeyFallbacks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		identity LCATaskIdentity
+		want     TaskID
+	}{
+		{
+			name: "issue url preferred",
+			identity: LCATaskIdentity{
+				DatasetName:   "d",
+				DatasetConfig: "c",
+				DatasetSplit:  "s",
+				RepoOwner:     "square",
+				RepoName:      "okhttp",
+				BaseSHA:       "abc123",
+				IssueURL:      "https://example.test/issues/1",
+				PullURL:       "https://example.test/pulls/2",
+			},
+			want: TaskID("d:c:s:square/okhttp@abc123:https://example.test/issues/1"),
+		},
+		{
+			name: "pull url fallback",
+			identity: LCATaskIdentity{
+				DatasetName:   "d",
+				DatasetConfig: "c",
+				DatasetSplit:  "s",
+				RepoOwner:     "square",
+				RepoName:      "okhttp",
+				BaseSHA:       "abc123",
+				PullURL:       "https://example.test/pulls/2",
+			},
+			want: TaskID("d:c:s:square/okhttp@abc123:https://example.test/pulls/2"),
+		},
+		{
+			name: "unknown issue fallback",
+			identity: LCATaskIdentity{
+				DatasetName:   "d",
+				DatasetConfig: "c",
+				DatasetSplit:  "s",
+				RepoOwner:     "square",
+				RepoName:      "okhttp",
+				BaseSHA:       "abc123",
+			},
+			want: TaskID("d:c:s:square/okhttp@abc123:unknown-issue"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tt.identity.TaskID(); got != tt.want {
+				t.Fatalf("TaskID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCanonicalizePaths(t *testing.T) {
+	t.Parallel()
+
+	got := CanonicalizePaths([]string{
+		"src/Main.kt",
+		"./src/Main.kt",
+		"/src/Main.kt",
+		`src\Main.kt`,
+	})
+	want := []RepoRelPath{"src/main.kt"}
+	if len(got) != len(want) {
+		t.Fatalf("len(got) = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestLCAHFRowToTask(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		payload string
+		wantErr string
+	}{
+		{
+			name: "changed files array",
+			payload: `{
+				"repo_owner":"square",
+				"repo_name":"okhttp",
+				"base_sha":"abc123",
+				"issue_title":"t",
+				"issue_body":"b",
+				"issue_url":"https://example.test/issues/1",
+				"changed_files":["./src/Main.kt","src\\Main.kt"]
+			}`,
+		},
+		{
+			name: "changed files stringified list",
+			payload: `{
+				"repo_owner":"square",
+				"repo_name":"okhttp",
+				"base_sha":"abc123",
+				"issue_title":"t",
+				"issue_body":"b",
+				"changed_files":"['src/Main.kt']"
+			}`,
+		},
+		{
+			name: "missing base sha",
+			payload: `{
+				"repo_owner":"square",
+				"repo_name":"okhttp",
+				"issue_title":"t",
+				"issue_body":"b",
+				"changed_files":["src/Main.kt"]
+			}`,
+			wantErr: "base_sha",
+		},
+		{
+			name: "missing changed files",
+			payload: `{
+				"repo_owner":"square",
+				"repo_name":"okhttp",
+				"base_sha":"abc123",
+				"issue_title":"t",
+				"issue_body":"b"
+			}`,
+			wantErr: "changed_files",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var row LCAHFRow
+			err := json.Unmarshal([]byte(tt.payload), &row)
+			if err == nil {
+				_, err = row.ToTask("searchbench/lca", "python", "dev")
+			}
+
+			if tt.wantErr != "" {
+				var schemaErr *SchemaError
+				if !errors.As(err, &schemaErr) {
+					t.Fatalf("expected SchemaError, got %v", err)
+				}
+				if schemaErr.Field != tt.wantErr {
+					t.Fatalf("SchemaError.Field = %q, want %q", schemaErr.Field, tt.wantErr)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			task, err := row.ToTask("searchbench/lca", "python", "dev")
+			if err != nil {
+				t.Fatalf("unexpected conversion error: %v", err)
+			}
+			wantID := TaskID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1")
+			if row.IssueURL == "" {
+				wantID = TaskID("searchbench/lca:python:dev:square/okhttp@abc123:unknown-issue")
+			}
+			if got := task.TaskID(); got != wantID {
+				t.Fatalf("task.TaskID() = %q, want %q", got, wantID)
+			}
+			if got := task.ChangedFiles(); len(got) != 1 || got[0] != "src/main.kt" {
+				t.Fatalf("ChangedFiles() = %#v, want [\"src/main.kt\"]", got)
+			}
+		})
+	}
+}
+</file>
+
+<file path="internal/domain/localization.go">
+package domain
+
+import (
+	"encoding/json"
+	"fmt"
+	"path"
+	"sort"
+	"strings"
+)
+
+// SchemaError is a typed validation/parsing error for dataset and localization
+// domain shapes.
+type SchemaError struct {
+	Field   string
+	Message string
+}
+
+func (e *SchemaError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Field == "" {
+		return e.Message
+	}
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
+
+// LCATaskIdentity is the deterministic identity for one LCA dataset task.
+type LCATaskIdentity struct {
+	DatasetName   string `json:"dataset_name"`
+	DatasetConfig string `json:"dataset_config"`
+	DatasetSplit  string `json:"dataset_split"`
+	RepoOwner     string `json:"repo_owner"`
+	RepoName      string `json:"repo_name"`
+	BaseSHA       string `json:"base_sha"`
+	IssueURL      string `json:"issue_url,omitempty"`
+	PullURL       string `json:"pull_url,omitempty"`
+}
+
+// Validate rejects incomplete task identities.
+func (i LCATaskIdentity) Validate() error {
+	switch {
+	case strings.TrimSpace(i.DatasetName) == "":
+		return &SchemaError{Field: "dataset_name", Message: "value is required"}
+	case strings.TrimSpace(i.DatasetConfig) == "":
+		return &SchemaError{Field: "dataset_config", Message: "value is required"}
+	case strings.TrimSpace(i.DatasetSplit) == "":
+		return &SchemaError{Field: "dataset_split", Message: "value is required"}
+	case strings.TrimSpace(i.RepoOwner) == "":
+		return &SchemaError{Field: "repo_owner", Message: "value is required"}
+	case strings.TrimSpace(i.RepoName) == "":
+		return &SchemaError{Field: "repo_name", Message: "value is required"}
+	case strings.TrimSpace(i.BaseSHA) == "":
+		return &SchemaError{Field: "base_sha", Message: "value is required"}
+	default:
+		return nil
+	}
+}
+
+// RepoFullName returns the normalized repository owner/name pair.
+func (i LCATaskIdentity) RepoFullName() string {
+	return normalizeIdentityToken(i.RepoOwner) + "/" + normalizeIdentityToken(i.RepoName)
+}
+
+// IssueOrPullKey returns the deterministic issue key used in the task ID.
+func (i LCATaskIdentity) IssueOrPullKey() string {
+	if value := strings.TrimSpace(i.IssueURL); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(i.PullURL); value != "" {
+		return value
+	}
+	return "unknown-issue"
+}
+
+// TaskID returns the stable benchmark task identifier.
+func (i LCATaskIdentity) TaskID() TaskID {
+	return TaskID(fmt.Sprintf(
+		"%s:%s:%s:%s@%s:%s",
+		strings.TrimSpace(i.DatasetName),
+		strings.TrimSpace(i.DatasetConfig),
+		strings.TrimSpace(i.DatasetSplit),
+		i.RepoFullName(),
+		normalizeIdentityToken(i.BaseSHA),
+		i.IssueOrPullKey(),
+	))
+}
+
+// LCAContext is the model-visible issue and repo metadata for one LCA task.
+type LCAContext struct {
+	IssueTitle    string   `json:"issue_title"`
+	IssueBody     string   `json:"issue_body"`
+	DiffURL       string   `json:"diff_url,omitempty"`
+	Diff          string   `json:"diff,omitempty"`
+	HeadSHA       string   `json:"head_sha,omitempty"`
+	RepoLanguage  string   `json:"repo_language,omitempty"`
+	RepoLanguages []string `json:"repo_languages,omitempty"`
+	RepoLicense   string   `json:"repo_license,omitempty"`
+	RepoStars     int      `json:"repo_stars,omitempty"`
+}
+
+// Validate rejects incomplete agent-visible context.
+func (c LCAContext) Validate() error {
+	switch {
+	case strings.TrimSpace(c.IssueTitle) == "":
+		return &SchemaError{Field: "issue_title", Message: "value is required"}
+	case strings.TrimSpace(c.IssueBody) == "":
+		return &SchemaError{Field: "issue_body", Message: "value is required"}
+	default:
+		return nil
+	}
+}
+
+// LCAGold captures the canonical changed_files gold label and small derived
+// metadata.
+type LCAGold struct {
+	ChangedFiles      NonEmpty[RepoRelPath] `json:"changed_files"`
+	ChangedFilesCount int                   `json:"changed_files_count,omitempty"`
+	ChangedFilesExts  []string              `json:"changed_files_exts,omitempty"`
+}
+
+// NewLCAGold constructs normalized LCA gold labels.
+func NewLCAGold(paths []string) (LCAGold, error) {
+	normalized := CanonicalizePaths(paths)
+	changedFiles, err := NonEmptyFromSlice(normalized)
+	if err != nil {
+		return LCAGold{}, &SchemaError{
+			Field:   "changed_files",
+			Message: "at least one changed file is required",
+		}
+	}
+
+	return LCAGold{
+		ChangedFiles:      changedFiles,
+		ChangedFilesCount: len(normalized),
+		ChangedFilesExts:  changedFileExts(normalized),
+	}, nil
+}
+
+// LCATask is the canonical pure LCA task model.
+type LCATask struct {
+	Identity LCATaskIdentity `json:"identity"`
+	Context  LCAContext      `json:"context"`
+	Gold     LCAGold         `json:"gold"`
+	Repo     *RepoSnapshot   `json:"repo,omitempty"`
+}
+
+// Validate rejects incomplete localization tasks.
+func (t LCATask) Validate() error {
+	if err := t.Identity.Validate(); err != nil {
+		return err
+	}
+	if err := t.Context.Validate(); err != nil {
+		return err
+	}
+	if err := t.Gold.ChangedFiles.Validate(); err != nil {
+		return &SchemaError{Field: "changed_files", Message: "at least one changed file is required"}
+	}
+	return nil
+}
+
+// TaskID delegates to the identity-based deterministic task ID.
+func (t LCATask) TaskID() TaskID {
+	return t.Identity.TaskID()
+}
+
+// ChangedFiles returns the normalized canonical gold changed files.
+func (t LCATask) ChangedFiles() []RepoRelPath {
+	return t.Gold.ChangedFiles.All()
+}
+
+// WithRepo returns a copy annotated with a concrete repository path.
+func (t LCATask) WithRepo(path HostPath) LCATask {
+	task := t
+	task.Repo = &RepoSnapshot{
+		Name: RepoName(t.Identity.RepoFullName()),
+		SHA:  RepoSHA(normalizeIdentityToken(t.Identity.BaseSHA)),
+		Path: path,
+	}
+	return task
+}
+
+// TaskSpec projects the LCA task into the existing generic Searchbench task
+// shape used by compare/report code.
+func (t LCATask) TaskSpec() TaskSpec {
+	repo := RepoSnapshot{
+		Name: RepoName(t.Identity.RepoFullName()),
+		SHA:  RepoSHA(normalizeIdentityToken(t.Identity.BaseSHA)),
+	}
+	if t.Repo != nil {
+		repo = *t.Repo
+	}
+
+	return TaskSpec{
+		ID:        t.TaskID(),
+		Benchmark: BenchmarkLCA,
+		Repo:      repo,
+		Input: TaskInput{
+			Title: strings.TrimSpace(t.Context.IssueTitle),
+			Body:  strings.TrimSpace(t.Context.IssueBody),
+		},
+		Oracle: TaskOracle{
+			GoldFiles: t.ChangedFiles(),
+		},
+	}
+}
+
+// LCAHFRow is the typed transport-edge shape for one Hugging Face dataset row.
+type LCAHFRow struct {
+	RepoOwner     string   `json:"repo_owner"`
+	RepoName      string   `json:"repo_name"`
+	BaseSHA       string   `json:"base_sha"`
+	IssueTitle    string   `json:"issue_title"`
+	IssueBody     string   `json:"issue_body"`
+	ChangedFiles  []string `json:"changed_files"`
+	IssueURL      string   `json:"issue_url,omitempty"`
+	PullURL       string   `json:"pull_url,omitempty"`
+	DiffURL       string   `json:"diff_url,omitempty"`
+	Diff          string   `json:"diff,omitempty"`
+	HeadSHA       string   `json:"head_sha,omitempty"`
+	RepoLanguage  string   `json:"repo_language,omitempty"`
+	RepoLanguages []string `json:"repo_languages,omitempty"`
+	RepoLicense   string   `json:"repo_license,omitempty"`
+	RepoStars     int      `json:"repo_stars,omitempty"`
+}
+
+// UnmarshalJSON preserves the Python loader behavior where changed_files may be
+// either a JSON array or a stringified Python/JSON list.
+func (r *LCAHFRow) UnmarshalJSON(data []byte) error {
+	type wire struct {
+		RepoOwner     string          `json:"repo_owner"`
+		RepoName      string          `json:"repo_name"`
+		BaseSHA       string          `json:"base_sha"`
+		IssueTitle    string          `json:"issue_title"`
+		IssueBody     string          `json:"issue_body"`
+		ChangedFiles  json.RawMessage `json:"changed_files"`
+		IssueURL      string          `json:"issue_url,omitempty"`
+		PullURL       string          `json:"pull_url,omitempty"`
+		DiffURL       string          `json:"diff_url,omitempty"`
+		Diff          string          `json:"diff,omitempty"`
+		HeadSHA       string          `json:"head_sha,omitempty"`
+		RepoLanguage  string          `json:"repo_language,omitempty"`
+		RepoLanguages []string        `json:"repo_languages,omitempty"`
+		RepoLicense   string          `json:"repo_license,omitempty"`
+		RepoStars     int             `json:"repo_stars,omitempty"`
+	}
+
+	var value wire
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+
+	changedFiles, err := parseChangedFilesField(value.ChangedFiles)
+	if err != nil {
+		return err
+	}
+
+	*r = LCAHFRow{
+		RepoOwner:     value.RepoOwner,
+		RepoName:      value.RepoName,
+		BaseSHA:       value.BaseSHA,
+		IssueTitle:    value.IssueTitle,
+		IssueBody:     value.IssueBody,
+		ChangedFiles:  changedFiles,
+		IssueURL:      value.IssueURL,
+		PullURL:       value.PullURL,
+		DiffURL:       value.DiffURL,
+		Diff:          value.Diff,
+		HeadSHA:       value.HeadSHA,
+		RepoLanguage:  value.RepoLanguage,
+		RepoLanguages: append([]string(nil), value.RepoLanguages...),
+		RepoLicense:   value.RepoLicense,
+		RepoStars:     value.RepoStars,
+	}
+	return nil
+}
+
+// ToTask converts one typed dataset row into the canonical LCA task model.
+func (r LCAHFRow) ToTask(datasetName string, datasetConfig string, datasetSplit string) (LCATask, error) {
+	identity := LCATaskIdentity{
+		DatasetName:   datasetName,
+		DatasetConfig: datasetConfig,
+		DatasetSplit:  datasetSplit,
+		RepoOwner:     r.RepoOwner,
+		RepoName:      r.RepoName,
+		BaseSHA:       r.BaseSHA,
+		IssueURL:      r.IssueURL,
+		PullURL:       r.PullURL,
+	}
+	if err := identity.Validate(); err != nil {
+		return LCATask{}, err
+	}
+
+	context := LCAContext{
+		IssueTitle:    r.IssueTitle,
+		IssueBody:     r.IssueBody,
+		DiffURL:       r.DiffURL,
+		Diff:          r.Diff,
+		HeadSHA:       r.HeadSHA,
+		RepoLanguage:  r.RepoLanguage,
+		RepoLanguages: append([]string(nil), r.RepoLanguages...),
+		RepoLicense:   r.RepoLicense,
+		RepoStars:     r.RepoStars,
+	}
+	if err := context.Validate(); err != nil {
+		return LCATask{}, err
+	}
+
+	gold, err := NewLCAGold(r.ChangedFiles)
+	if err != nil {
+		return LCATask{}, err
+	}
+
+	task := LCATask{
+		Identity: identity,
+		Context:  context,
+		Gold:     gold,
+	}
+	if err := task.Validate(); err != nil {
+		return LCATask{}, err
+	}
+	return task, nil
+}
+
+// CanonicalizePath normalizes one repo-relative path into a stable comparison
+// key.
+func CanonicalizePath(value string) RepoRelPath {
+	canonical := strings.TrimSpace(value)
+	if canonical == "" {
+		return ""
+	}
+
+	canonical = strings.ReplaceAll(canonical, "\\", "/")
+	canonical = strings.TrimPrefix(canonical, "./")
+	canonical = strings.TrimLeft(canonical, "/")
+	canonical = path.Clean(canonical)
+	for canonical == "." || strings.HasPrefix(canonical, "../") {
+		canonical = strings.TrimPrefix(canonical, "./")
+		canonical = strings.TrimPrefix(canonical, "../")
+		canonical = path.Clean(canonical)
+		if canonical == "." {
+			return ""
+		}
+	}
+	canonical = strings.TrimLeft(canonical, "/")
+	if canonical == "." || canonical == "" {
+		return ""
+	}
+	return RepoRelPath(strings.ToLower(canonical))
+}
+
+// CanonicalizePaths normalizes, deduplicates, and sorts repo-relative paths.
+func CanonicalizePaths(values []string) []RepoRelPath {
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := make(map[RepoRelPath]struct{}, len(values))
+	normalized := make([]RepoRelPath, 0, len(values))
+	for _, value := range values {
+		path := CanonicalizePath(value)
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		normalized = append(normalized, path)
+	}
+
+	sort.Slice(normalized, func(i int, j int) bool {
+		return normalized[i] < normalized[j]
+	})
+	return normalized
+}
+
+func normalizeIdentityToken(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func changedFileExts(paths []RepoRelPath) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(paths))
+	exts := make([]string, 0, len(paths))
+	for _, file := range paths {
+		ext := strings.ToLower(path.Ext(string(file)))
+		if ext == "" {
+			continue
+		}
+		if _, ok := seen[ext]; ok {
+			continue
+		}
+		seen[ext] = struct{}{}
+		exts = append(exts, ext)
+	}
+	sort.Strings(exts)
+	return exts
+}
+
+func parseChangedFilesField(data json.RawMessage) ([]string, error) {
+	if len(data) == 0 || string(data) == "null" {
+		return nil, &SchemaError{Field: "changed_files", Message: "value is required"}
+	}
+
+	var asSlice []string
+	if err := json.Unmarshal(data, &asSlice); err == nil {
+		return append([]string(nil), asSlice...), nil
+	}
+
+	var asString string
+	if err := json.Unmarshal(data, &asString); err != nil {
+		return nil, &SchemaError{
+			Field:   "changed_files",
+			Message: "must be a string array or a stringified list",
+		}
+	}
+
+	trimmed := strings.TrimSpace(asString)
+	if trimmed == "" {
+		return nil, &SchemaError{Field: "changed_files", Message: "value is required"}
+	}
+
+	jsonish := strings.ReplaceAll(trimmed, "'", "\"")
+	var fromStringified []string
+	if err := json.Unmarshal([]byte(jsonish), &fromStringified); err != nil {
+		return nil, &SchemaError{
+			Field:   "changed_files",
+			Message: "stringified list could not be parsed",
+		}
+	}
+	return fromStringified, nil
+}
 </file>
 
 <file path="internal/domain/pair_test.go">
@@ -3885,6 +4875,1215 @@ func NewStyles(color bool) Styles {
 }
 </file>
 
+<file path="internal/testing/modeltest/testdata/chat_completion_error.json">
+{
+  "error": {
+    "message": "rate limited by fixture",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+</file>
+
+<file path="internal/testing/modeltest/testdata/chat_completion_success.json">
+{
+  "id": "chatcmpl-fixture-success",
+  "object": "chat.completion",
+  "created": 1735689600,
+  "model": "gpt-4o-mini",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"files\":[\"pkg/example.go\"],\"reasoning\":\"fixture\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 6,
+    "total_tokens": 16
+  }
+}
+</file>
+
+<file path="internal/testing/modeltest/fixtures.go">
+package modeltest
+
+import (
+	"embed"
+	"fmt"
+)
+
+//go:embed testdata/*
+var fixtureFS embed.FS
+
+// Fixture returns a scrubbed test fixture body from this package's testdata
+// directory.
+func Fixture(name string) ([]byte, error) {
+	path := "testdata/" + name
+	body, err := fixtureFS.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read model fixture %q: %w", name, err)
+	}
+	return body, nil
+}
+
+// MustFixture returns a fixture body or panics.
+func MustFixture(name string) []byte {
+	body, err := Fixture(name)
+	if err != nil {
+		panic(err)
+	}
+	return body
+}
+</file>
+
+<file path="internal/testing/modeltest/openai_server_test.go">
+package modeltest
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+	"testing"
+
+	openai "github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/schema"
+)
+
+func TestFakeOpenAIServerReturnsFixtureSuccessResponse(t *testing.T) {
+	t.Parallel()
+
+	server := NewFakeOpenAIServer(FakeResponse{
+		Status: http.StatusOK,
+		Body:   string(MustFixture("chat_completion_success.json")),
+	})
+	defer server.Close()
+
+	response, err := http.Post(server.Server.URL+chatCompletionsPath, "application/json", strings.NewReader(`{"model":"test"}`))
+	if err != nil {
+		t.Fatalf("http.Post() error = %v", err)
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	if got, want := response.StatusCode, http.StatusOK; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
+	}
+	if got, want := strings.TrimSpace(string(body)), strings.TrimSpace(string(MustFixture("chat_completion_success.json"))); got != want {
+		t.Fatalf("body = %s, want %s", got, want)
+	}
+}
+
+func TestFakeOpenAIServerReturnsFixtureErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	server := NewFakeOpenAIServer(FakeResponse{
+		Status: http.StatusTooManyRequests,
+		Body:   string(MustFixture("chat_completion_error.json")),
+	})
+	defer server.Close()
+
+	response, err := http.Post(server.Server.URL+chatCompletionsPath, "application/json", strings.NewReader(`{"model":"test"}`))
+	if err != nil {
+		t.Fatalf("http.Post() error = %v", err)
+	}
+	defer response.Body.Close()
+
+	if got, want := response.StatusCode, http.StatusTooManyRequests; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
+	}
+}
+
+func TestFakeOpenAIServerRecordsRequestMethodPathAndBody(t *testing.T) {
+	t.Parallel()
+
+	server := NewFakeOpenAIServer(FakeResponse{
+		Status: http.StatusOK,
+		Body:   string(MustFixture("chat_completion_success.json")),
+	})
+	defer server.Close()
+
+	requestBody := `{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}`
+	response, err := http.Post(server.Server.URL+chatCompletionsPath, "application/json", strings.NewReader(requestBody))
+	if err != nil {
+		t.Fatalf("http.Post() error = %v", err)
+	}
+	response.Body.Close()
+
+	requests := server.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("len(Requests()) = %d, want 1", len(requests))
+	}
+	if got, want := requests[0].Method, http.MethodPost; got != want {
+		t.Fatalf("request method = %q, want %q", got, want)
+	}
+	if got, want := requests[0].Path, chatCompletionsPath; got != want {
+		t.Fatalf("request path = %q, want %q", got, want)
+	}
+	if got, want := strings.TrimSpace(string(requests[0].Body)), requestBody; got != want {
+		t.Fatalf("request body = %s, want %s", got, want)
+	}
+}
+
+func TestFakeOpenAIServerReturnsDeterministicErrorWhenResponsesExhausted(t *testing.T) {
+	t.Parallel()
+
+	server := NewFakeOpenAIServer()
+	defer server.Close()
+
+	response, err := http.Post(server.Server.URL+chatCompletionsPath, "application/json", strings.NewReader(`{"model":"test"}`))
+	if err != nil {
+		t.Fatalf("http.Post() error = %v", err)
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	if got, want := response.StatusCode, http.StatusInternalServerError; got != want {
+		t.Fatalf("status = %d, want %d", got, want)
+	}
+	if got, want := strings.TrimSpace(string(body)), `{"error":{"message":"no scripted fake response remaining","type":"fixture_exhausted"}}`; got != want {
+		t.Fatalf("body = %s, want %s", got, want)
+	}
+}
+
+func TestDefaultTestsDoNotRequireAPIKeysOrExternalEndpoint(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("OPENAI_BASE_URL", "")
+
+	server := NewFakeOpenAIServer(FakeResponse{
+		Status: http.StatusOK,
+		Body:   string(MustFixture("chat_completion_success.json")),
+	})
+	defer server.Close()
+
+	chatModel, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
+		APIKey:  "test-key",
+		BaseURL: server.BaseURL(),
+		Model:   "gpt-4o-mini",
+	})
+	if err != nil {
+		t.Fatalf("NewChatModel() error = %v", err)
+	}
+
+	message, err := chatModel.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "Say hello"},
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if got, want := message.Content, `{"files":["pkg/example.go"],"reasoning":"fixture"}`; got != want {
+		t.Fatalf("message content = %q, want %q", got, want)
+	}
+
+	requests := server.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("len(Requests()) = %d, want 1", len(requests))
+	}
+	if got, want := requests[0].Path, chatCompletionsPath; got != want {
+		t.Fatalf("request path = %q, want %q", got, want)
+	}
+
+	host, _, err := net.SplitHostPort(strings.TrimPrefix(server.Server.URL, "http://"))
+	if err != nil {
+		t.Fatalf("SplitHostPort() error = %v", err)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		t.Fatalf("server host = %q, want loopback address", host)
+	}
+
+	var requestPayload struct {
+		Model    string `json:"model"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(requests[0].Body, &requestPayload); err != nil {
+		t.Fatalf("Unmarshal(request) error = %v", err)
+	}
+	if got, want := requestPayload.Model, "gpt-4o-mini"; got != want {
+		t.Fatalf("request model = %q, want %q", got, want)
+	}
+	if got, want := len(requestPayload.Messages), 1; got != want {
+		t.Fatalf("len(request messages) = %d, want %d", got, want)
+	}
+}
+</file>
+
+<file path="internal/testing/modeltest/scripted_model.go">
+package modeltest
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sync"
+
+	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
+)
+
+var ErrNoScriptedResponses = errors.New("modeltest: no scripted responses remaining")
+
+var _ model.ToolCallingChatModel = (*ScriptedModel)(nil)
+
+// ScriptedResponse defines one deterministic model result.
+type ScriptedResponse struct {
+	Message *schema.Message
+	Stream  []*schema.Message
+	Err     error
+}
+
+// ScriptedCall records one Generate or Stream invocation.
+type ScriptedCall struct {
+	Method      string
+	Messages    []*schema.Message
+	OptionCount int
+	Tools       []*schema.ToolInfo
+}
+
+type scriptedState struct {
+	mu        sync.Mutex
+	responses []ScriptedResponse
+	calls     []ScriptedCall
+}
+
+// ScriptedModel is an in-process deterministic Eino-compatible chat model.
+type ScriptedModel struct {
+	state *scriptedState
+	tools []*schema.ToolInfo
+}
+
+// NewScriptedModel returns a scripted model that serves responses in order.
+func NewScriptedModel(responses ...ScriptedResponse) *ScriptedModel {
+	cloned := make([]ScriptedResponse, len(responses))
+	for i, response := range responses {
+		cloned[i] = cloneScriptedResponse(response)
+	}
+
+	return &ScriptedModel{
+		state: &scriptedState{
+			responses: cloned,
+		},
+	}
+}
+
+// Generate returns the next scripted final response.
+func (m *ScriptedModel) Generate(_ context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
+	response, err := m.recordAndDequeue("generate", input, opts)
+	if err != nil {
+		return nil, err
+	}
+	if response.Err != nil {
+		return nil, response.Err
+	}
+	if response.Message == nil {
+		return nil, nil
+	}
+	return cloneMessage(response.Message), nil
+}
+
+// Stream returns a deterministic message stream for the next scripted response.
+func (m *ScriptedModel) Stream(_ context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {
+	response, err := m.recordAndDequeue("stream", input, opts)
+	if err != nil {
+		return nil, err
+	}
+	if response.Err != nil {
+		return nil, response.Err
+	}
+
+	chunks := response.Stream
+	if len(chunks) == 0 && response.Message != nil {
+		chunks = []*schema.Message{response.Message}
+	}
+	if len(chunks) == 0 {
+		return schema.StreamReaderFromArray([]*schema.Message{}), nil
+	}
+
+	copied := make([]*schema.Message, len(chunks))
+	for i, chunk := range chunks {
+		copied[i] = cloneMessage(chunk)
+	}
+	return schema.StreamReaderFromArray(copied), nil
+}
+
+// WithTools returns a new view of this model with the supplied tools attached.
+func (m *ScriptedModel) WithTools(tools []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
+	if m == nil {
+		return nil, errors.New("modeltest: nil scripted model")
+	}
+
+	return &ScriptedModel{
+		state: m.state,
+		tools: cloneTools(tools),
+	}, nil
+}
+
+// Calls returns a snapshot of all recorded model calls.
+func (m *ScriptedModel) Calls() []ScriptedCall {
+	m.state.mu.Lock()
+	defer m.state.mu.Unlock()
+
+	calls := make([]ScriptedCall, len(m.state.calls))
+	for i, call := range m.state.calls {
+		calls[i] = ScriptedCall{
+			Method:      call.Method,
+			Messages:    cloneMessages(call.Messages),
+			OptionCount: call.OptionCount,
+			Tools:       cloneTools(call.Tools),
+		}
+	}
+	return calls
+}
+
+func (m *ScriptedModel) recordAndDequeue(method string, input []*schema.Message, opts []model.Option) (ScriptedResponse, error) {
+	if m == nil || m.state == nil {
+		return ScriptedResponse{}, errors.New("modeltest: nil scripted model")
+	}
+
+	m.state.mu.Lock()
+	defer m.state.mu.Unlock()
+
+	m.state.calls = append(m.state.calls, ScriptedCall{
+		Method:      method,
+		Messages:    cloneMessages(input),
+		OptionCount: len(opts),
+		Tools:       cloneTools(m.tools),
+	})
+
+	if len(m.state.responses) == 0 {
+		return ScriptedResponse{}, fmt.Errorf("%w for %s", ErrNoScriptedResponses, method)
+	}
+
+	response := m.state.responses[0]
+	m.state.responses = m.state.responses[1:]
+	return cloneScriptedResponse(response), nil
+}
+
+func cloneScriptedResponse(response ScriptedResponse) ScriptedResponse {
+	cloned := ScriptedResponse{
+		Err: response.Err,
+	}
+	if response.Message != nil {
+		cloned.Message = cloneMessage(response.Message)
+	}
+	if len(response.Stream) > 0 {
+		cloned.Stream = cloneMessages(response.Stream)
+	}
+	return cloned
+}
+
+func cloneMessages(messages []*schema.Message) []*schema.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	cloned := make([]*schema.Message, len(messages))
+	for i, message := range messages {
+		cloned[i] = cloneMessage(message)
+	}
+	return cloned
+}
+
+func cloneMessage(message *schema.Message) *schema.Message {
+	if message == nil {
+		return nil
+	}
+
+	cloned := *message
+
+	if len(message.ToolCalls) > 0 {
+		cloned.ToolCalls = append([]schema.ToolCall(nil), message.ToolCalls...)
+	}
+	if message.ResponseMeta != nil {
+		responseMeta := *message.ResponseMeta
+		cloned.ResponseMeta = &responseMeta
+	}
+	if len(message.MultiContent) > 0 {
+		cloned.MultiContent = append([]schema.ChatMessagePart(nil), message.MultiContent...)
+	}
+	if len(message.UserInputMultiContent) > 0 {
+		cloned.UserInputMultiContent = append([]schema.MessageInputPart(nil), message.UserInputMultiContent...)
+	}
+	if len(message.AssistantGenMultiContent) > 0 {
+		cloned.AssistantGenMultiContent = append([]schema.MessageOutputPart(nil), message.AssistantGenMultiContent...)
+	}
+	if message.Extra != nil {
+		cloned.Extra = make(map[string]any, len(message.Extra))
+		for key, value := range message.Extra {
+			cloned.Extra[key] = value
+		}
+	}
+
+	return &cloned
+}
+
+func cloneTools(tools []*schema.ToolInfo) []*schema.ToolInfo {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	cloned := make([]*schema.ToolInfo, len(tools))
+	for i, tool := range tools {
+		if tool == nil {
+			continue
+		}
+
+		copyTool := *tool
+		cloned[i] = &copyTool
+	}
+	return cloned
+}
+</file>
+
+<file path="prompts/issue-2.md">
+You are working in the searchbench-go repository.
+
+The target GitHub issue is:
+
+    Define deterministic model fixture testing for Eino/OpenAI-compatible calls
+
+Before making any changes, read the project guidance and architecture docs:
+
+1. AGENTS.md
+2. docs/engineering/issue-style-guide.md
+3. integration-shape.md
+4. todo.md
+5. Existing package docs, especially:
+   - internal/domain/doc.go
+   - internal/run/doc.go
+   - internal/compare/doc.go
+   - internal/backend/doc.go
+   - internal/score/doc.go
+
+Also use the GitHub CLI to find and read the full target GitHub issue.
+
+Run:
+
+    gh issue list --state open --search "Define deterministic model fixture testing for Eino/OpenAI-compatible calls"
+    gh issue view <ISSUE_NUMBER> --comments --json title,body,comments,labels,state,url
+
+If multiple issues match, choose the open issue whose title exactly matches:
+
+    Define deterministic model fixture testing for Eino/OpenAI-compatible calls
+
+Treat the GitHub issue body as the source of truth for the implementation contract.
+
+If no issue matches, stop and report that the target issue could not be found. Do not implement from memory.
+
+If this prompt conflicts with the GitHub issue, prefer the GitHub issue unless it clearly violates AGENTS.md or the repository architecture docs. In that case, stop and explain the conflict before editing.
+
+Do not start editing until you understand the existing package boundaries.
+
+Task: implement the issue “Define deterministic model fixture testing for Eino/OpenAI-compatible calls”.
+
+Goal:
+Create deterministic, reusable testing utilities for model-backed SearchBench-Go code without using real paid model APIs in the default test suite.
+
+This issue exists to prevent tests from accidentally depending on real OpenAI/OpenRouter/Anthropic calls, API keys, network access, or paid model usage.
+
+Core decisions to preserve:
+
+- SearchBench-Go uses three model testing tiers.
+- Tier 1 is an in-process scripted Eino-compatible model helper.
+- Tier 2 is a tiny fake OpenAI-compatible HTTP server using Go stdlib httptest.
+- Tier 3 is live model testing, opt-in only.
+- Default tests must never call real APIs.
+- These helpers are test infrastructure, not production architecture.
+- Do not introduce production model/provider abstractions unless the existing code already requires one.
+
+Architecture constraints:
+
+- Do not put these helpers in core domain/run/score/report/compare packages.
+- Do not leak test fixture types into production code.
+- Do not create a generic model framework.
+- Do not use Swagger, OpenAPI-generated mocks, Gin, Echo, chi, or another web framework.
+- Do not use map[string]any unless it is truly unavoidable and adapter/test-local.
+- Prefer typed structs and json.RawMessage at narrow fixture boundaries.
+- Keep everything boring, explicit, and small.
+
+Preferred package placement:
+
+    internal/testing/modeltest/
+      scripted_model.go
+      scripted_model_test.go
+      openai_server.go
+      openai_server_test.go
+      fixtures.go
+
+If the repo already has a stronger test utility convention, follow it, but do not place this in production domain packages.
+
+Implement Tier 1: scripted model helper.
+
+The helper should:
+
+- Return deterministic scripted responses in order.
+- Record calls for assertions.
+- Support model errors.
+- Be small and shaped around the Eino interfaces actually used or expected.
+- Avoid over-abstracting.
+- If exact Eino interfaces are not yet available in the repo, create the smallest local test helper that can later be adapted, and document the seam clearly.
+
+Conceptual behavior:
+
+    ScriptedModel
+      responses
+      calls
+      Generate(ctx, messages, options...)
+      Stream(ctx, messages, options...) if practical
+
+Required capabilities:
+
+- successful final text/JSON response
+- malformed final response
+- empty response
+- model error
+- call recording
+
+Implement Tier 2: fake OpenAI-compatible server.
+
+Use only:
+
+- net/http
+- net/http/httptest
+- http.ServeMux or a tiny custom handler
+
+The fake server should:
+
+- Be fixture-driven.
+- Return scripted responses by request order.
+- Record method, path, body, and headers.
+- Return deterministic error if no scripted response remains.
+- Support success and provider-error fixtures.
+- Bind only locally through httptest.
+- Never proxy to a real provider.
+
+Suggested shape:
+
+    type FakeOpenAIServer struct {
+        Server    *httptest.Server
+        Requests  []RecordedRequest
+        Responses []FakeResponse
+    }
+
+    type FakeResponse struct {
+        Status int
+        Body   string
+        Header map[string]string
+    }
+
+    type RecordedRequest struct {
+        Method string
+        Path   string
+        Body   []byte
+        Header http.Header
+    }
+
+Adjust names and details to fit the project’s style.
+
+The fake server should support the endpoint family actually needed by tests. If no Eino adapter is wired yet, support Chat Completions as the initial narrow shape:
+
+    POST /v1/chat/completions
+
+Do not implement a full OpenAI API mock.
+
+Fixture policy:
+
+- Fixture files should be small and scrubbed.
+- Do not commit real prompts, API keys, secrets, large traces, or raw provider dumps.
+- Fixture names should describe behavior.
+- Use testdata under the modeltest package.
+
+Suggested fixtures:
+
+    internal/testing/modeltest/testdata/
+      chat_completion_success.json
+      chat_completion_error.json
+
+Only add more fixtures if needed by tests.
+
+Request assertion policy:
+
+Good assertions:
+
+- request method is POST
+- request path is the configured endpoint
+- request body is recorded
+- response order is deterministic
+
+Avoid brittle assertions:
+
+- exact JSON field ordering
+- full prompt snapshots
+- incidental provider fields
+- broad OpenAI API completeness
+
+Tests to add:
+
+1. scripted model returns responses in order
+2. scripted model records calls
+3. scripted model can return a model error
+4. fake OpenAI-compatible server returns fixture success response
+5. fake OpenAI-compatible server returns fixture error response
+6. fake server records request method and path
+7. fake server records request body
+8. fake server returns deterministic error when scripted responses are exhausted
+9. default tests do not require API keys
+10. default tests do not call a real external endpoint
+
+Important non-goals:
+
+Do not implement:
+
+- minimal Eino evaluator loop
+- MCP
+- Iterative Context
+- jCodeMunch
+- repo materialization
+- policy artifacts
+- policy injection
+- graph-distance scoring
+- writer agent
+- optimization loop
+- LangSmith tracing
+- GitHub issue automation
+- live model tests enabled by default
+- a full OpenAI API mock
+- Swagger/OpenAPI mock generation
+- third-party HTTP framework
+- production model abstraction
+
+Acceptance criteria:
+
+- There is a documented three-tier model testing strategy.
+- Default tests do not require API keys.
+- Default tests do not call real model APIs.
+- Default tests do not require external network access.
+- A Tier 1 scripted model helper exists.
+- The scripted model returns deterministic responses.
+- The scripted model records calls for assertions.
+- A Tier 2 fake OpenAI-compatible httptest server exists.
+- The fake server uses net/http and net/http/httptest.
+- The fake server does not use Swagger/OpenAPI-generated code.
+- The fake server does not use a third-party web framework.
+- The fake server returns fixture responses by request order.
+- The fake server records method, path, headers, and body.
+- The fake server supports at least one success response and one provider error response.
+- The fake server returns deterministic error when no scripted response remains.
+- Fixture files are small and scrubbed.
+- Any live model test path is opt-in only if added at all.
+- Testing utilities do not leak into production domain packages.
+
+Be especially careful not to invent a parallel model system. This repository already has strong core nouns. The testing helper should be a narrow utility for later executor/evaluator tests.
+
+Before handing off, run:
+
+    gofmt -w .
+    go test ./...
+    go mod tidy
+
+Then summarize:
+
+- files changed
+- package created
+- tests added
+- any deliberate deviations from the issue
+- whether any Eino interface mismatch required a smaller local seam
+</file>
+
+<file path="prompts/issue-3.md">
+You are working in the searchbench-go repository.
+
+  The target GitHub issue is #3:
+
+      Define deterministic model fixture testing for Eino/OpenAI-compatible calls
+
+  Before making any changes, read the project guidance and architecture docs:
+
+  1. AGENTS.md
+  2. docs/engineering/issue-style-guide.md
+  3. integration-shape.md
+  4. todo.md
+  5. Existing package docs, especially:
+     - internal/domain/doc.go
+     - internal/run/doc.go
+     - internal/compare/doc.go
+     - internal/backend/doc.go
+     - internal/score/doc.go
+
+  Also use the GitHub CLI to find and read the full target GitHub issue.
+
+  Run:
+
+      gh issue list --state open --search "Define deterministic model fixture testing for
+  Eino/OpenAI-compatible calls"
+      gh issue view <ISSUE_NUMBER> --comments --json title,body,comments,labels,state,url
+
+  If multiple issues match, choose the open issue whose title exactly matches:
+
+      Define deterministic model fixture testing for Eino/OpenAI-compatible calls
+
+  Treat the GitHub issue body as the source of truth for the implementation contract.
+
+  If no issue matches, stop and report that the target issue could not be found. Do not
+  implement from memory.
+
+  If this prompt conflicts with the GitHub issue, prefer the GitHub issue unless it
+  clearly violates AGENTS.md or the repository architecture docs. In that case, stop and
+  explain the conflict before editing.
+
+  Do not start editing until you understand the existing package boundaries.
+
+  Task: implement the issue “Define deterministic model fixture testing for Eino/OpenAI-
+  compatible calls”.
+
+  Goal:
+  Create deterministic, reusable testing utilities for model-backed SearchBench-Go code
+  without using real paid model APIs in the default test suite.
+
+  This issue exists to prevent tests from accidentally depending on real OpenAI/
+  OpenRouter/Anthropic calls, API keys, network access, or paid model usage.
+
+  Core decisions to preserve:
+
+  - SearchBench-Go uses three model testing tiers.
+  - Tier 1 is an in-process scripted Eino-compatible model helper.
+  - Tier 2 is a tiny fake OpenAI-compatible HTTP server using Go stdlib httptest.
+  - Tier 3 is live model testing, opt-in only.
+  - Default tests must never call real APIs.
+  - These helpers are test infrastructure, not production architecture.
+  - Do not introduce production model/provider abstractions unless the existing code
+  already requires one.
+
+  Architecture constraints:
+
+  - Do not put these helpers in core domain/run/score/report/compare packages.
+  - Do not leak test fixture types into production code.
+  - Do not create a generic model framework.
+  - Do not use Swagger, OpenAPI-generated mocks, Gin, Echo, chi, or another web
+  framework.
+  - Do not use map[string]any unless it is truly unavoidable and adapter/test-local.
+  - Prefer typed structs and json.RawMessage at narrow fixture boundaries.
+  - Keep everything boring, explicit, and small.
+
+  Preferred package placement:
+
+      internal/testing/modeltest/
+        scripted_model.go
+        scripted_model_test.go
+        openai_server.go
+        openai_server_test.go
+        fixtures.go
+
+  If the repo already has a stronger test utility convention, follow it, but do not place
+  this in production domain packages.
+
+  Implement Tier 1: scripted model helper.
+
+  The helper should:
+
+  - Return deterministic scripted responses in order.
+  - Record calls for assertions.
+  - Support model errors.
+  - Be small and shaped around the Eino interfaces actually used or expected.
+  - Avoid over-abstracting.
+  - If exact Eino interfaces are not yet available in the repo, create the smallest local
+  test helper that can later be adapted, and document the seam clearly.
+
+  Conceptual behavior:
+
+      ScriptedModel
+        responses
+        calls
+        Generate(ctx, messages, options...)
+        Stream(ctx, messages, options...) if practical
+
+  Required capabilities:
+
+  - successful final text/JSON response
+  - malformed final response
+  - empty response
+  - model error
+  - call recording
+
+  Implement Tier 2: fake OpenAI-compatible server.
+
+  Use only:
+
+  - net/http
+  - net/http/httptest
+  - http.ServeMux or a tiny custom handler
+
+  The fake server should:
+
+  - Be fixture-driven.
+  - Return scripted responses by request order.
+  - Record method, path, body, and headers.
+  - Return deterministic error if no scripted response remains.
+  - Support success and provider-error fixtures.
+  - Bind only locally through httptest.
+  - Never proxy to a real provider.
+
+  Suggested shape:
+
+      type FakeOpenAIServer struct {
+          Server    *httptest.Server
+          Requests  []RecordedRequest
+          Responses []FakeResponse
+      }
+
+      type FakeResponse struct {
+          Status int
+          Body   string
+          Header map[string]string
+      }
+
+      type RecordedRequest struct {
+          Method string
+          Path   string
+          Body   []byte
+          Header http.Header
+      }
+
+  Adjust names and details to fit the project’s style.
+
+  The fake server should support the endpoint family actually needed by tests. If no Eino
+  adapter is wired yet, support Chat Completions as the initial narrow shape:
+
+      POST /v1/chat/completions
+
+  Do not implement a full OpenAI API mock.
+
+  Fixture policy:
+
+  - Fixture files should be small and scrubbed.
+  - Do not commit real prompts, API keys, secrets, large traces, or raw provider dumps.
+  - Fixture names should describe behavior.
+  - Use testdata under the modeltest package.
+
+  Suggested fixtures:
+
+      internal/testing/modeltest/testdata/
+        chat_completion_success.json
+        chat_completion_error.json
+
+  Only add more fixtures if needed by tests.
+
+  Request assertion policy:
+
+  Good assertions:
+
+  - request method is POST
+  - request path is the configured endpoint
+  - request body is recorded
+  - response order is deterministic
+
+  Avoid brittle assertions:
+
+  - exact JSON field ordering
+  - full prompt snapshots
+  - incidental provider fields
+  - broad OpenAI API completeness
+
+  Tests to add:
+
+  1. scripted model returns responses in order
+  2. scripted model records calls
+  3. scripted model can return a model error
+  4. fake OpenAI-compatible server returns fixture success response
+  5. fake OpenAI-compatible server returns fixture error response
+  6. fake server records request method and path
+  7. fake server records request body
+  8. fake server returns deterministic error when scripted responses are exhausted
+  9. default tests do not require API keys
+  10. default tests do not call a real external endpoint
+
+  Important non-goals:
+
+  Do not implement:
+
+  - minimal Eino evaluator loop
+  - MCP
+  - Iterative Context
+  - jCodeMunch
+  - repo materialization
+  - policy artifacts
+  - policy injection
+  - graph-distance scoring
+  - writer agent
+  - optimization loop
+  - LangSmith tracing
+  - GitHub issue automation
+  - live model tests enabled by default
+  - a full OpenAI API mock
+  - Swagger/OpenAPI mock generation
+  - third-party HTTP framework
+  - production model abstraction
+
+  Acceptance criteria:
+
+  - There is a documented three-tier model testing strategy.
+  - Default tests do not require API keys.
+  - Default tests do not call real model APIs.
+  - Default tests do not require external network access.
+  - A Tier 1 scripted model helper exists.
+  - The scripted model returns deterministic responses.
+  - The scripted model records calls for assertions.
+  - A Tier 2 fake OpenAI-compatible httptest server exists.
+  - The fake server uses net/http and net/http/httptest.
+  - The fake server does not use Swagger/OpenAPI-generated code.
+  - The fake server does not use a third-party web framework.
+  - The fake server returns fixture responses by request order.
+  - The fake server records method, path, headers, and body.
+  - The fake server supports at least one success response and one provider error
+  response.
+  - The fake server returns deterministic error when no scripted response remains.
+  - Fixture files are small and scrubbed.
+  - Any live model test path is opt-in only if added at all.
+  - Testing utilities do not leak into production domain packages.
+
+  Be especially careful not to invent a parallel model system. This repository already
+  has strong core nouns. The testing helper should be a narrow utility for later
+  executor/evaluator tests.
+
+  Before handing off, run:
+
+      gofmt -w .
+      go test ./...
+      go mod tidy
+
+  Then summarize:
+
+  - files changed
+  - package created
+  - tests added
+  - any deliberate deviations from the issue
+  - whether any Eino interface mismatch required a smaller local seam
+</file>
+
+<file path="scripts/openai-netwatch.sh">
+#!/usr/bin/env nix-shell
+#! nix-shell -i bash -p bash coreutils gnugrep gnused gawk iproute2 lsof dnsutils procps strace tcpdump
+
+set -euo pipefail
+
+DOMAINS_DEFAULT="api.openai.com chatgpt.com chat.openai.com gateway.openai.com"
+DOMAINS="${OPENAI_DOMAINS:-$DOMAINS_DEFAULT}"
+INTERVAL="${INTERVAL:-2}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./openai-netwatch list
+  ./openai-netwatch watch
+  ./openai-netwatch sniff
+  ./openai-netwatch trace <pid>
+
+What it does:
+  list   - show active HTTPS connections to OpenAI/ChatGPT-related hosts
+  watch  - refresh the connection list repeatedly
+  sniff  - show packet activity to those hosts with tcpdump
+  trace  - attach strace to a Codex/OpenAI process and show network syscalls
+
+Notes:
+  - This cannot read request/response bodies because HTTPS is encrypted.
+  - One TCP connection may carry many OpenAI requests via HTTP/2, so this counts active connections, not exact API calls.
+  - Run with sudo if process names/PIDs or tcpdump output are incomplete.
+
+Environment:
+  OPENAI_DOMAINS="api.openai.com chatgpt.com ..." ./openai-netwatch watch
+  INTERVAL=1 ./openai-netwatch watch
+EOF
+}
+
+resolve_ips() {
+  for domain in $DOMAINS; do
+    dig +short A "$domain" || true
+    dig +short AAAA "$domain" || true
+  done \
+    | grep -E '^[0-9a-fA-F:.]+$' \
+    | sort -u
+}
+
+print_targets() {
+  echo "Domains:"
+  for domain in $DOMAINS; do
+    echo "  - $domain"
+  done
+
+  echo
+  echo "Resolved IPs:"
+  resolve_ips | sed 's/^/  - /' || true
+}
+
+list_connections() {
+  mapfile -t IPS < <(resolve_ips)
+
+  if [[ "${#IPS[@]}" -eq 0 ]]; then
+    echo "No IPs resolved for: $DOMAINS"
+    exit 1
+  fi
+
+  echo "OpenAI/ChatGPT-ish active HTTPS connections"
+  echo "Time: $(date)"
+  echo
+
+  printf "%-8s %-8s %-24s %-24s %-10s %s\n" \
+    "PID" "STATE" "LOCAL" "REMOTE" "QUEUE" "PROCESS"
+  printf "%-8s %-8s %-24s %-24s %-10s %s\n" \
+    "--------" "--------" "------------------------" "------------------------" "----------" "----------------"
+
+  ss -H -tnp state established '( dport = :443 or sport = :443 )' 2>/dev/null \
+    | while read -r line; do
+        matched=0
+        for ip in "${IPS[@]}"; do
+          if grep -q "$ip" <<<"$line"; then
+            matched=1
+            break
+          fi
+        done
+
+        [[ "$matched" -eq 1 ]] || continue
+
+        state="$(awk '{print $1}' <<<"$line")"
+        recvq="$(awk '{print $2}' <<<"$line")"
+        sendq="$(awk '{print $3}' <<<"$line")"
+        local_addr="$(awk '{print $4}' <<<"$line")"
+        remote_addr="$(awk '{print $5}' <<<"$line")"
+        queue="${recvq}/${sendq}"
+
+        pid="$(grep -oE 'pid=[0-9]+' <<<"$line" | head -n1 | cut -d= -f2 || true)"
+        proc="unknown"
+
+        if [[ -n "${pid:-}" && -r "/proc/$pid/cmdline" ]]; then
+          proc="$(tr '\0' ' ' < "/proc/$pid/cmdline" | sed 's/[[:space:]]*$//')"
+          [[ -n "$proc" ]] || proc="$(cat "/proc/$pid/comm" 2>/dev/null || echo unknown)"
+        fi
+
+        printf "%-8s %-8s %-24s %-24s %-10s %s\n" \
+          "${pid:-?}" "$state" "$local_addr" "$remote_addr" "$queue" "$proc"
+      done
+
+  echo
+  echo "Detailed TCP info for matching connections:"
+  echo
+
+  for ip in "${IPS[@]}"; do
+    ss -tinp dst "$ip":443 2>/dev/null || true
+    ss -tinp src "$ip":443 2>/dev/null || true
+  done | sed '/^$/d' | sed 's/^/  /'
+}
+
+watch_connections() {
+  while true; do
+    clear
+    print_targets
+    echo
+    list_connections
+    echo
+    echo "Refreshing every ${INTERVAL}s. Ctrl-C to stop."
+    sleep "$INTERVAL"
+  done
+}
+
+sniff_packets() {
+  mapfile -t IPS < <(resolve_ips)
+
+  if [[ "${#IPS[@]}" -eq 0 ]]; then
+    echo "No IPs resolved for: $DOMAINS"
+    exit 1
+  fi
+
+  filter="tcp port 443 and ("
+  first=1
+  for ip in "${IPS[@]}"; do
+    if [[ "$first" -eq 0 ]]; then
+      filter+=" or "
+    fi
+    filter+="host $ip"
+    first=0
+  done
+  filter+=")"
+
+  echo "Running tcpdump with filter:"
+  echo "  $filter"
+  echo
+  echo "You may need sudo. Packet flow means the session is not completely idle."
+  echo
+
+  exec tcpdump -i any -nn -tttt "$filter"
+}
+
+trace_pid() {
+  local pid="${1:-}"
+
+  if [[ -z "$pid" ]]; then
+    echo "Missing PID."
+    echo
+    usage
+    exit 1
+  fi
+
+  if [[ ! -d "/proc/$pid" ]]; then
+    echo "No such PID: $pid"
+    exit 1
+  fi
+
+  echo "Tracing network syscalls for PID $pid."
+  echo "You may need sudo."
+  echo
+  exec strace -f -p "$pid" \
+    -e trace=network,read,write,poll,ppoll,select,pselect6,epoll_wait,epoll_pwait,connect,recvfrom,sendto \
+    -s 128
+}
+
+cmd="${1:-list}"
+
+case "$cmd" in
+  list)
+    print_targets
+    echo
+    list_connections
+    ;;
+  watch)
+    watch_connections
+    ;;
+  sniff)
+    sniff_packets
+    ;;
+  trace)
+    trace_pid "${2:-}"
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $cmd"
+    echo
+    usage
+    exit 1
+    ;;
+esac
+</file>
+
 <file path="testdata/fixtures/reports/.keep">
 
 </file>
@@ -5876,6 +8075,363 @@ type Input struct {
 	Run   run.ExecutedRun
 	Graph codegraph.Graph
 }
+</file>
+
+<file path="internal/testing/modeltest/doc.go">
+// Package modeltest provides deterministic model-testing fixtures.
+//
+// SearchBench-Go uses three testing tiers for model-backed code:
+//
+//   - Tier 1: an in-process scripted Eino-compatible chat model
+//   - Tier 2: a tiny local OpenAI-compatible httptest server
+//   - Tier 3: opt-in live model tests only
+//
+// Default tests must remain offline, deterministic, and safe to run without
+// real API keys or paid provider calls.
+//
+// See docs/engineering/model-testing.md for usage guidance, current helper
+// capabilities, and how later executor issues should use Tier 1 and Tier 2.
+package modeltest
+</file>
+
+<file path="internal/testing/modeltest/openai_server.go">
+package modeltest
+
+import (
+	"encoding/json"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"sync"
+)
+
+const chatCompletionsPath = "/v1/chat/completions"
+
+// FakeResponse defines one scripted HTTP response.
+type FakeResponse struct {
+	Status int
+	Body   string
+	Header map[string]string
+}
+
+// RecordedRequest captures one received HTTP request.
+type RecordedRequest struct {
+	Method string
+	Path   string
+	Body   []byte
+	Header http.Header
+}
+
+// FakeOpenAIServer is a tiny local OpenAI-compatible fixture server.
+type FakeOpenAIServer struct {
+	Server *httptest.Server
+
+	mu        sync.Mutex
+	requests  []RecordedRequest
+	responses []FakeResponse
+}
+
+// NewFakeOpenAIServer starts a local fixture server for chat completions.
+func NewFakeOpenAIServer(responses ...FakeResponse) *FakeOpenAIServer {
+	server := &FakeOpenAIServer{
+		responses: append([]FakeResponse(nil), responses...),
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(chatCompletionsPath, server.handleChatCompletions)
+
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		panic(err)
+	}
+
+	unstarted := httptest.NewUnstartedServer(mux)
+	unstarted.Listener = listener
+	unstarted.Start()
+	server.Server = unstarted
+	return server
+}
+
+// BaseURL returns the OpenAI-compatible base URL for Eino OpenAI adapters.
+func (s *FakeOpenAIServer) BaseURL() string {
+	return s.Server.URL + "/v1"
+}
+
+// Close shuts down the local test server.
+func (s *FakeOpenAIServer) Close() {
+	if s != nil && s.Server != nil {
+		s.Server.Close()
+	}
+}
+
+// Requests returns a copy of all recorded requests.
+func (s *FakeOpenAIServer) Requests() []RecordedRequest {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	requests := make([]RecordedRequest, len(s.requests))
+	for i, request := range s.requests {
+		requests[i] = RecordedRequest{
+			Method: request.Method,
+			Path:   request.Path,
+			Body:   slices.Clone(request.Body),
+			Header: request.Header.Clone(),
+		}
+	}
+	return requests
+}
+
+func (s *FakeOpenAIServer) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, `{"error":{"message":"failed to read request body"}}`, http.StatusInternalServerError)
+		return
+	}
+
+	s.mu.Lock()
+	s.requests = append(s.requests, RecordedRequest{
+		Method: r.Method,
+		Path:   r.URL.Path,
+		Body:   slices.Clone(body),
+		Header: r.Header.Clone(),
+	})
+	s.mu.Unlock()
+
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, `{"error":{"message":"method not allowed"}}`, nil)
+		return
+	}
+
+	s.mu.Lock()
+	response, ok := s.dequeueLocked()
+	s.mu.Unlock()
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, `{"error":{"message":"no scripted fake response remaining","type":"fixture_exhausted"}}`, nil)
+		return
+	}
+
+	writeJSON(w, response.Status, response.Body, response.Header)
+}
+
+func (s *FakeOpenAIServer) dequeueLocked() (FakeResponse, bool) {
+	if len(s.responses) == 0 {
+		return FakeResponse{}, false
+	}
+
+	response := s.responses[0]
+	s.responses = s.responses[1:]
+	return response, true
+}
+
+func writeJSON(w http.ResponseWriter, status int, body string, header map[string]string) {
+	for key, value := range header {
+		w.Header().Set(key, value)
+	}
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
+	w.WriteHeader(status)
+	_, _ = io.WriteString(w, body)
+}
+
+// DecodeRecordedRequest unmarshals a recorded JSON request body into dst.
+func DecodeRecordedRequest[T any](request RecordedRequest, dst *T) error {
+	return json.Unmarshal(request.Body, dst)
+}
+</file>
+
+<file path="internal/testing/modeltest/scripted_model_test.go">
+package modeltest
+
+import (
+	"context"
+	"errors"
+	"io"
+	"testing"
+
+	"github.com/cloudwego/eino/schema"
+)
+
+func TestScriptedModelReturnsResponsesInOrder(t *testing.T) {
+	t.Parallel()
+
+	model := NewScriptedModel(
+		ScriptedResponse{
+			Message: &schema.Message{Role: schema.Assistant, Content: `{"files":["pkg/first.go"]}`},
+		},
+		ScriptedResponse{
+			Message: &schema.Message{Role: schema.Assistant, Content: `{"files":["pkg/second.go"]}`},
+		},
+	)
+
+	first, err := model.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "first"},
+	})
+	if err != nil {
+		t.Fatalf("first Generate() error = %v", err)
+	}
+	second, err := model.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "second"},
+	})
+	if err != nil {
+		t.Fatalf("second Generate() error = %v", err)
+	}
+
+	if got, want := first.Content, `{"files":["pkg/first.go"]}`; got != want {
+		t.Fatalf("first response = %q, want %q", got, want)
+	}
+	if got, want := second.Content, `{"files":["pkg/second.go"]}`; got != want {
+		t.Fatalf("second response = %q, want %q", got, want)
+	}
+}
+
+func TestScriptedModelRecordsCalls(t *testing.T) {
+	t.Parallel()
+
+	model := NewScriptedModel(
+		ScriptedResponse{
+			Message: &schema.Message{Role: schema.Assistant, Content: "ok"},
+		},
+	)
+
+	withTools, err := model.WithTools([]*schema.ToolInfo{{
+		Name: "resolve_file",
+		Desc: "Resolve a file candidate.",
+	}})
+	if err != nil {
+		t.Fatalf("WithTools() error = %v", err)
+	}
+
+	_, err = withTools.Generate(context.Background(), []*schema.Message{
+		{Role: schema.System, Content: "system prompt"},
+		{Role: schema.User, Content: "user prompt"},
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	calls := model.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("len(Calls()) = %d, want 1", len(calls))
+	}
+	if got, want := calls[0].Method, "generate"; got != want {
+		t.Fatalf("call method = %q, want %q", got, want)
+	}
+	if got, want := len(calls[0].Messages), 2; got != want {
+		t.Fatalf("len(call messages) = %d, want %d", got, want)
+	}
+	if got, want := calls[0].Messages[1].Content, "user prompt"; got != want {
+		t.Fatalf("call user prompt = %q, want %q", got, want)
+	}
+	if got, want := len(calls[0].Tools), 1; got != want {
+		t.Fatalf("len(call tools) = %d, want %d", got, want)
+	}
+	if got, want := calls[0].Tools[0].Name, "resolve_file"; got != want {
+		t.Fatalf("tool name = %q, want %q", got, want)
+	}
+}
+
+func TestScriptedModelReturnsModelError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("provider unavailable")
+	model := NewScriptedModel(ScriptedResponse{Err: wantErr})
+
+	_, err := model.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "trigger error"},
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Generate() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestScriptedModelSupportsMalformedAndEmptyResponses(t *testing.T) {
+	t.Parallel()
+
+	model := NewScriptedModel(
+		ScriptedResponse{
+			Message: &schema.Message{Role: schema.Assistant, Content: "{"},
+		},
+		ScriptedResponse{
+			Message: &schema.Message{Role: schema.Assistant, Content: ""},
+		},
+	)
+
+	malformed, err := model.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "malformed"},
+	})
+	if err != nil {
+		t.Fatalf("malformed Generate() error = %v", err)
+	}
+	empty, err := model.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "empty"},
+	})
+	if err != nil {
+		t.Fatalf("empty Generate() error = %v", err)
+	}
+
+	if got, want := malformed.Content, "{"; got != want {
+		t.Fatalf("malformed response = %q, want %q", got, want)
+	}
+	if got, want := empty.Content, ""; got != want {
+		t.Fatalf("empty response = %q, want empty string", got)
+	}
+}
+
+func TestScriptedModelStreamReturnsScriptedChunks(t *testing.T) {
+	t.Parallel()
+
+	model := NewScriptedModel(
+		ScriptedResponse{
+			Stream: []*schema.Message{
+				{Role: schema.Assistant, Content: "part-1"},
+				{Role: schema.Assistant, Content: "part-2"},
+			},
+		},
+	)
+
+	stream, err := model.Stream(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "stream"},
+	})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	defer stream.Close()
+
+	first, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("first Recv() error = %v", err)
+	}
+	second, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("second Recv() error = %v", err)
+	}
+	_, err = stream.Recv()
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("third Recv() error = %v, want %v", err, io.EOF)
+	}
+
+	if got, want := first.Content, "part-1"; got != want {
+		t.Fatalf("first chunk = %q, want %q", got, want)
+	}
+	if got, want := second.Content, "part-2"; got != want {
+		t.Fatalf("second chunk = %q, want %q", got, want)
+	}
+}
+</file>
+
+<file path="internal/testing/doc.go">
+// Package testing contains SearchBench-Go test-only infrastructure.
+//
+// It is the home for reusable helpers that support deterministic tests without
+// leaking test fixtures or external SDK details into the production packages.
+//
+// See docs/engineering/model-testing.md for the current testing-tier contract
+// and how execution-layer issues should consume the helpers under
+// internal/testing/modeltest.
+package testing
 </file>
 
 <file path="agents.md">
@@ -8714,35 +11270,6 @@ type Engine interface {
 }
 </file>
 
-<file path="go.mod">
-module github.com/becker63/searchbench-go
-
-go 1.26.2
-
-require (
-	github.com/alecthomas/kong v1.15.0
-	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/hmdsefi/gograph v0.7.0
-	go.uber.org/zap v1.27.1
-)
-
-require (
-	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
-	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
-	github.com/charmbracelet/x/ansi v0.8.0 // indirect
-	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
-	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
-	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-)
-</file>
-
 <file path="internal/compare/runner.go">
 package compare
 
@@ -9447,6 +11974,66 @@ type AnyMetric struct {
 	Explanation string        `json:"explanation,omitempty"`
 	Evidence    []EvidenceRef `json:"evidence,omitempty"`
 }
+</file>
+
+<file path="go.mod">
+module github.com/becker63/searchbench-go
+
+go 1.26.2
+
+require (
+	github.com/alecthomas/kong v1.15.0
+	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/cloudwego/eino v0.8.11
+	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
+	github.com/hmdsefi/gograph v0.7.0
+	go.uber.org/zap v1.27.1
+)
+
+require (
+	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/bytedance/gopkg v0.1.3 // indirect
+	github.com/bytedance/sonic v1.15.0 // indirect
+	github.com/bytedance/sonic/loader v0.5.0 // indirect
+	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
+	github.com/charmbracelet/x/ansi v0.8.0 // indirect
+	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
+	github.com/charmbracelet/x/term v0.2.1 // indirect
+	github.com/cloudwego/base64x v0.1.6 // indirect
+	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17 // indirect
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/eino-contrib/jsonschema v1.0.3 // indirect
+	github.com/evanphx/json-patch v0.5.2 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/goph/emperror v0.17.2 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
+	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
+	github.com/meguminnnnnnnnn/go-openai v0.1.2 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/muesli/termenv v0.16.0 // indirect
+	github.com/nikolalohinski/gonja v1.5.3 // indirect
+	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
+	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
+	github.com/yargevad/filepathx v1.0.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
+	golang.org/x/arch v0.11.0 // indirect
+	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
 </file>
 
 </files>
