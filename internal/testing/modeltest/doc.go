@@ -8,4 +8,7 @@
 //
 // Default tests must remain offline, deterministic, and safe to run without
 // real API keys or paid provider calls.
+//
+// See docs/engineering/model-testing.md for usage guidance, current helper
+// capabilities, and how later executor issues should use Tier 1 and Tier 2.
 package modeltest

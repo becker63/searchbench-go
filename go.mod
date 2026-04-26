@@ -5,6 +5,8 @@ go 1.26.2
 require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/cloudwego/eino v0.8.11
+	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/hmdsefi/gograph v0.7.0
 	go.uber.org/zap v1.27.1
 )
@@ -21,8 +23,6 @@ require (
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/cloudwego/eino v0.8.11 // indirect
-	github.com/cloudwego/eino-ext/components/model/openai v0.1.13 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eino-contrib/jsonschema v1.0.3 // indirect

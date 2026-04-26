@@ -102,6 +102,39 @@ func TestScriptedModelReturnsModelError(t *testing.T) {
 	}
 }
 
+func TestScriptedModelSupportsMalformedAndEmptyResponses(t *testing.T) {
+	t.Parallel()
+
+	model := NewScriptedModel(
+		ScriptedResponse{
+			Message: &schema.Message{Role: schema.Assistant, Content: "{"},
+		},
+		ScriptedResponse{
+			Message: &schema.Message{Role: schema.Assistant, Content: ""},
+		},
+	)
+
+	malformed, err := model.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "malformed"},
+	})
+	if err != nil {
+		t.Fatalf("malformed Generate() error = %v", err)
+	}
+	empty, err := model.Generate(context.Background(), []*schema.Message{
+		{Role: schema.User, Content: "empty"},
+	})
+	if err != nil {
+		t.Fatalf("empty Generate() error = %v", err)
+	}
+
+	if got, want := malformed.Content, "{"; got != want {
+		t.Fatalf("malformed response = %q, want %q", got, want)
+	}
+	if got, want := empty.Content, ""; got != want {
+		t.Fatalf("empty response = %q, want empty string", got)
+	}
+}
+
 func TestScriptedModelStreamReturnsScriptedChunks(t *testing.T) {
 	t.Parallel()
 

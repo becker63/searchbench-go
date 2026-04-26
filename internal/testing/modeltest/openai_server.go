@@ -100,16 +100,18 @@ func (s *FakeOpenAIServer) handleChatCompletions(w http.ResponseWriter, r *http.
 		Body:   slices.Clone(body),
 		Header: r.Header.Clone(),
 	})
+	s.mu.Unlock()
 
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, `{"error":{"message":"method not allowed"}}`, nil)
+		return
+	}
+
+	s.mu.Lock()
 	response, ok := s.dequeueLocked()
 	s.mu.Unlock()
 	if !ok {
 		writeJSON(w, http.StatusInternalServerError, `{"error":{"message":"no scripted fake response remaining","type":"fixture_exhausted"}}`, nil)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, `{"error":{"message":"method not allowed"}}`, nil)
 		return
 	}
 
