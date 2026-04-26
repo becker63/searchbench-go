@@ -1,0 +1,7 @@
+{
+  "error": {
+    "message": "rate limited by fixture",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}

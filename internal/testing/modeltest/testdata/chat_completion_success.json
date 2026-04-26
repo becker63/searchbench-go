@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-fixture-success",
+  "object": "chat.completion",
+  "created": 1735689600,
+  "model": "gpt-4o-mini",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"files\":[\"pkg/example.go\"],\"reasoning\":\"fixture\"}"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 6,
+    "total_tokens": 16
+  }
+}
