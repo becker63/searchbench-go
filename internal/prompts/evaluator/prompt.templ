@@ -1,0 +1,31 @@
+package evaluator
+
+templ Prompt(in Input) {
+	<searchbench-prompt>
+		<role>You are the SearchBench evaluator agent.</role>
+		<task>Use the available tools to localize the bug described by the issue.</task>
+		<task-id>{ in.TaskID }</task-id>
+		<repo>
+			<name>{ in.RepoName }</name>
+			<sha>{ in.RepoSHA }</sha>
+		</repo>
+		<issue>
+			<title>{ in.IssueTitle }</title>
+			<body>{ in.IssueBody }</body>
+		</issue>
+		<available-tools>
+			for _, toolName := range in.AllowedTools {
+				<tool>{ toolName }</tool>
+			}
+		</available-tools>
+		<constraints>
+			for _, constraint := range in.Constraints {
+				<constraint>{ constraint }</constraint>
+			}
+		</constraints>
+		<output-contract>
+			Return strict JSON matching this schema:
+			<json-schema>{ in.OutputSchemaJSON }</json-schema>
+		</output-contract>
+	</searchbench-prompt>
+}
