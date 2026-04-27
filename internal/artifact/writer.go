@@ -49,13 +49,14 @@ func newWriter() writer {
 
 func (w writer) WriteBundle(ctx context.Context, request BundleRequest) (BundleRef, error) {
 	const (
-		phaseValidate = "validate_bundle_request"
-		phasePrepare  = "prepare_bundle_directory"
-		phaseResolved = "serialize_resolved_input"
-		phaseReport   = "serialize_report"
-		phaseScore    = "serialize_score_evidence"
-		phaseMetadata = "serialize_metadata"
-		phaseFinalize = "finalize_bundle"
+		phaseValidate  = "validate_bundle_request"
+		phasePrepare   = "prepare_bundle_directory"
+		phaseResolved  = "serialize_resolved_input"
+		phaseReport    = "serialize_report"
+		phaseScore     = "serialize_score_evidence"
+		phaseObjective = "serialize_objective_result"
+		phaseMetadata  = "serialize_metadata"
+		phaseFinalize  = "finalize_bundle"
 	)
 
 	if err := ctx.Err(); err != nil {
@@ -102,7 +103,7 @@ func (w writer) WriteBundle(ctx context.Context, request BundleRequest) (BundleR
 		_ = w.removeAll(stageDir)
 	}()
 
-	files := make([]BundleFile, 0, 6)
+	files := make([]BundleFile, 0, 7)
 
 	resolvedBytes, err := w.marshalJSON(request.ResolvedInput)
 	if err != nil {
@@ -131,11 +132,7 @@ func (w writer) WriteBundle(ctx context.Context, request BundleRequest) (BundleR
 		files = append(files, fileRecord("rendered_report", rendered.FileName, rendered.MediaType, sha256Bytes(renderedBytes)))
 	}
 
-	scoreEvidence, err := report.ProjectScoreEvidence(request.CandidateReport)
-	if err != nil {
-		return BundleRef{}, &Error{Phase: phaseScore, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
-	}
-	scoreBytes, err := w.marshalJSON(scoreEvidence)
+	scoreBytes, err := w.marshalJSON(request.ScoreEvidence)
 	if err != nil {
 		return BundleRef{}, &Error{Phase: phaseScore, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
 	}
@@ -143,6 +140,17 @@ func (w writer) WriteBundle(ctx context.Context, request BundleRequest) (BundleR
 		return BundleRef{}, &Error{Phase: phaseScore, Kind: FailureKindFilesystemFailed, Path: stageDir, Err: err}
 	}
 	files = append(files, fileRecord("score", "score.json", "application/json", sha256Bytes(scoreBytes)))
+
+	if request.ObjectiveResult != nil {
+		objectiveBytes, err := w.marshalJSON(*request.ObjectiveResult)
+		if err != nil {
+			return BundleRef{}, &Error{Phase: phaseObjective, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
+		}
+		if err := w.writeArtifact(stageDir, "objective.json", objectiveBytes); err != nil {
+			return BundleRef{}, &Error{Phase: phaseObjective, Kind: FailureKindFilesystemFailed, Path: stageDir, Err: err}
+		}
+		files = append(files, fileRecord("objective", "objective.json", "application/json", sha256Bytes(objectiveBytes)))
+	}
 
 	completeBytes := []byte(completeMarkerContent)
 	metadataFiles := append([]BundleFile(nil), files...)
@@ -216,6 +224,14 @@ func validateRequest(request BundleRequest) error {
 	}
 	if err := request.CandidateReport.Spec.Validate(); err != nil {
 		return fmt.Errorf("candidate report spec: %w", err)
+	}
+	if err := request.ScoreEvidence.Validate(); err != nil {
+		return fmt.Errorf("score evidence: %w", err)
+	}
+	if request.ObjectiveResult != nil {
+		if err := request.ObjectiveResult.Validate(); err != nil {
+			return fmt.Errorf("objective result: %w", err)
+		}
 	}
 	if request.RenderedReport != nil {
 		rendered := normalizedRenderedReport(*request.RenderedReport)

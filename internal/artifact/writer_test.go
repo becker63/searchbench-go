@@ -42,6 +42,64 @@ func TestWriteBundleSerializesCandidateReport(t *testing.T) {
 	assertFileExists(t, filepath.Join(string(ref.Path), completeMarkerName))
 }
 
+func TestWriteBundleSerializesProvidedScoreEvidence(t *testing.T) {
+	t.Parallel()
+
+	request := sampleBundleRequest(t)
+	request.ScoreEvidence.Usage.TotalTokens = 999
+	ref, err := WriteBundle(context.Background(), request)
+	if err != nil {
+		t.Fatalf("WriteBundle() error = %v", err)
+	}
+
+	var got score.ScoreEvidenceDocument
+	decodeJSONFile(t, filepath.Join(string(ref.Path), "score.json"), &got)
+	if got.Usage.TotalTokens != 999 {
+		t.Fatalf("score.json usage.total_tokens = %d, want 999 from provided score evidence", got.Usage.TotalTokens)
+	}
+}
+
+func TestWriteBundleSerializesObjectiveWhenProvided(t *testing.T) {
+	t.Parallel()
+
+	request := sampleBundleRequestWithObjective(t)
+	ref, err := WriteBundle(context.Background(), request)
+	if err != nil {
+		t.Fatalf("WriteBundle() error = %v", err)
+	}
+
+	assertFileExists(t, filepath.Join(string(ref.Path), "objective.json"))
+
+	var got score.ObjectiveResult
+	decodeJSONFile(t, filepath.Join(string(ref.Path), "objective.json"), &got)
+	if got.ObjectiveID != request.ObjectiveResult.ObjectiveID {
+		t.Fatalf("objective.json objective_id = %q, want %q", got.ObjectiveID, request.ObjectiveResult.ObjectiveID)
+	}
+	if len(got.Values) != len(request.ObjectiveResult.Values) {
+		t.Fatalf("len(objective.json values) = %d, want %d", len(got.Values), len(request.ObjectiveResult.Values))
+	}
+	if findObjectiveValue(t, got.Values, "regressionPenalty").Value != 1.0 {
+		t.Fatalf("objective.json missing preserved named penalty value: %#v", got.Values)
+	}
+	if final, ok := got.FinalValue(); !ok || final.Name != "final" || final.Value != 0.77 {
+		t.Fatalf("objective.json final value = %#v, want final=0.77", final)
+	}
+}
+
+func TestWriteBundleOmitsObjectiveWhenAbsent(t *testing.T) {
+	t.Parallel()
+
+	request := sampleBundleRequest(t)
+	ref, err := WriteBundle(context.Background(), request)
+	if err != nil {
+		t.Fatalf("WriteBundle() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(string(ref.Path), "objective.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("objective.json stat error = %v, want not-exist", err)
+	}
+}
+
 func TestWriteBundleWritesCompleteMarkerLast(t *testing.T) {
 	t.Parallel()
 
@@ -59,6 +117,30 @@ func TestWriteBundleWritesCompleteMarkerLast(t *testing.T) {
 
 	if got, want := writes[len(writes)-1], completeMarkerName; got != want {
 		t.Fatalf("last write = %q, want %q (writes=%v)", got, want, writes)
+	}
+}
+
+func TestWriteBundleObjectiveSerializationIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	requestOne := sampleBundleRequestWithObjective(t)
+	requestTwo := sampleBundleRequestWithObjective(t)
+	requestTwo.RootPath = domain.HostPath(filepath.Join(t.TempDir(), "artifacts"))
+	requestTwo.BundleID = requestOne.BundleID
+
+	refOne, err := WriteBundle(context.Background(), requestOne)
+	if err != nil {
+		t.Fatalf("WriteBundle(requestOne) error = %v", err)
+	}
+	refTwo, err := WriteBundle(context.Background(), requestTwo)
+	if err != nil {
+		t.Fatalf("WriteBundle(requestTwo) error = %v", err)
+	}
+
+	left := mustReadFile(t, filepath.Join(string(refOne.Path), "objective.json"))
+	right := mustReadFile(t, filepath.Join(string(refTwo.Path), "objective.json"))
+	if !bytes.Equal(left, right) {
+		t.Fatal("objective.json differs between deterministic bundle writes")
 	}
 }
 
@@ -114,6 +196,25 @@ func TestWriteBundleFailsWhenCompletedBundleExists(t *testing.T) {
 	}
 }
 
+func TestWriteBundleRejectsMissingScoreEvidence(t *testing.T) {
+	t.Parallel()
+
+	request := sampleBundleRequest(t)
+	request.ScoreEvidence = score.ScoreEvidenceDocument{}
+
+	_, err := WriteBundle(context.Background(), request)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	bundleErr := new(Error)
+	if !errors.As(err, &bundleErr) {
+		t.Fatalf("error = %T, want *Error", err)
+	}
+	if got, want := bundleErr.Kind, FailureKindValidationFailed; got != want {
+		t.Fatalf("Kind = %q, want %q", got, want)
+	}
+}
+
 func TestSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
 	t.Parallel()
 
@@ -122,6 +223,51 @@ func TestSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
 	w.marshalJSON = func(v any) ([]byte, error) {
 		if _, ok := v.(score.ScoreEvidenceDocument); ok {
 			return nil, errors.New("fixture score serialization failed")
+		}
+		return marshalDeterministic(v)
+	}
+
+	_, err := w.WriteBundle(context.Background(), request)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	finalDir := filepath.Join(string(request.RootPath), "runs", request.BundleID)
+	if _, statErr := os.Stat(filepath.Join(finalDir, completeMarkerName)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("COMPLETE stat error = %v, want not-exist", statErr)
+	}
+}
+
+func TestInvalidObjectiveResultFailsBeforeFinalization(t *testing.T) {
+	t.Parallel()
+
+	request := sampleBundleRequestWithObjective(t)
+	request.ObjectiveResult.Final = "missing"
+
+	_, err := WriteBundle(context.Background(), request)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	bundleErr := new(Error)
+	if !errors.As(err, &bundleErr) {
+		t.Fatalf("error = %T, want *Error", err)
+	}
+	if got, want := bundleErr.Kind, FailureKindValidationFailed; got != want {
+		t.Fatalf("Kind = %q, want %q", got, want)
+	}
+	finalDir := filepath.Join(string(request.RootPath), "runs", request.BundleID)
+	if _, statErr := os.Stat(filepath.Join(finalDir, completeMarkerName)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("COMPLETE stat error = %v, want not-exist", statErr)
+	}
+}
+
+func TestObjectiveSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
+	t.Parallel()
+
+	request := sampleBundleRequestWithObjective(t)
+	w := newWriter()
+	w.marshalJSON = func(v any) ([]byte, error) {
+		if _, ok := v.(score.ObjectiveResult); ok {
+			return nil, errors.New("fixture objective serialization failed")
 		}
 		return marshalDeterministic(v)
 	}
@@ -159,6 +305,30 @@ func TestMetadataListsEveryGeneratedArtifact(t *testing.T) {
 	}
 }
 
+func TestMetadataIncludesObjectiveOnlyWhenPresent(t *testing.T) {
+	t.Parallel()
+
+	withObjective, err := WriteBundle(context.Background(), sampleBundleRequestWithObjective(t))
+	if err != nil {
+		t.Fatalf("WriteBundle(with objective) error = %v", err)
+	}
+	var withMetadata BundleMetadata
+	decodeJSONFile(t, filepath.Join(string(withObjective.Path), "metadata.json"), &withMetadata)
+	if !metadataHasPath(withMetadata, "objective.json") {
+		t.Fatalf("metadata files = %#v, want objective.json present", withMetadata.Files)
+	}
+
+	withoutObjective, err := WriteBundle(context.Background(), sampleBundleRequest(t))
+	if err != nil {
+		t.Fatalf("WriteBundle(without objective) error = %v", err)
+	}
+	var withoutMetadata BundleMetadata
+	decodeJSONFile(t, filepath.Join(string(withoutObjective.Path), "metadata.json"), &withoutMetadata)
+	if metadataHasPath(withoutMetadata, "objective.json") {
+		t.Fatalf("metadata files = %#v, want objective.json absent", withoutMetadata.Files)
+	}
+}
+
 func TestReportSafeOutputsDoNotLeakPolicySource(t *testing.T) {
 	t.Parallel()
 
@@ -173,8 +343,12 @@ func TestReportSafeOutputsDoNotLeakPolicySource(t *testing.T) {
 		t.Fatal("expected candidate policy ref")
 	}
 	rawSource := "def score(task):\n    return 'candidate'\n"
-	for _, name := range []string{"report.json", "score.json", "metadata.json", "report.md"} {
-		content := string(mustReadFile(t, filepath.Join(string(ref.Path), name)))
+	for _, name := range []string{"report.json", "score.json", "metadata.json", "report.md", "objective.json"} {
+		path := filepath.Join(string(ref.Path), name)
+		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		content := string(mustReadFile(t, path))
 		if strings.Contains(content, rawSource) {
 			t.Fatalf("%s leaked raw policy source", name)
 		}
@@ -209,6 +383,7 @@ func TestArtifactPackageAvoidsForbiddenImports(t *testing.T) {
 		"langsmith",
 		"langfuse",
 		"materialization",
+		"tracing",
 		"tree-sitter",
 		"treesitter",
 	}
@@ -246,9 +421,13 @@ func TestArtifactPackageNoLongerDefinesScoreEvidenceTypes(t *testing.T) {
 	}
 
 	forbiddenTypeNames := map[string]struct{}{
-		"ScoreEvidence":  {},
-		"MetricEvidence": {},
-		"RoleCounts":     {},
+		"ScoreEvidence":        {},
+		"MetricEvidence":       {},
+		"RoleCounts":           {},
+		"ObjectiveResult":      {},
+		"ObjectiveValue":       {},
+		"ObjectiveEvidenceRef": {},
+		"ObjectiveBounds":      {},
 	}
 
 	for _, pkg := range pkgs {
@@ -328,6 +507,11 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 	)
 	candidateReport.CreatedAt = time.Date(2026, 4, 26, 15, 4, 5, 0, time.UTC)
 
+	scoreEvidence, err := report.ProjectScoreEvidence(candidateReport)
+	if err != nil {
+		t.Fatalf("ProjectScoreEvidence() error = %v", err)
+	}
+
 	return BundleRequest{
 		RootPath: domain.HostPath(filepath.Join(t.TempDir(), "artifacts")),
 		BundleID: "bundle-2026-04-26-fixed",
@@ -344,12 +528,78 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 			},
 		},
 		CandidateReport: candidateReport,
+		ScoreEvidence:   scoreEvidence,
 		RenderedReport: &RenderedReport{
 			FileName: "report.md",
 			Content:  "# Candidate Report\n\nPROMOTE? review first.\n",
 		},
 		CreatedAt: time.Date(2026, 4, 26, 16, 0, 0, 0, time.UTC),
 	}
+}
+
+func sampleBundleRequestWithObjective(t *testing.T) BundleRequest {
+	t.Helper()
+
+	request := sampleBundleRequest(t)
+	request.ObjectiveResult = sampleObjectiveResult()
+	return request
+}
+
+func sampleObjectiveResult() *score.ObjectiveResult {
+	min := 0.0
+	max := 1.0
+
+	return &score.ObjectiveResult{
+		SchemaVersion: score.ObjectiveSchemaVersion,
+		ObjectiveID:   "candidate_vs_parent_v1",
+		EvidenceRefs: []score.ObjectiveEvidenceRef{
+			{
+				Name:       "current",
+				BundlePath: "artifacts/runs/current",
+				ScorePath:  "artifacts/runs/current/score.json",
+				SHA256:     "abc123",
+			},
+			{
+				Name:       "parent",
+				BundlePath: "artifacts/runs/parent",
+				ScorePath:  "artifacts/runs/parent/score.json",
+				ReportPath: "artifacts/runs/parent/report.json",
+			},
+		},
+		Values: []score.ObjectiveValue{
+			{Name: "currentLocalizationQuality", Value: 0.82, Kind: score.ObjectiveValueIntermediate},
+			{Name: "parentLocalizationQuality", Value: 0.74, Kind: score.ObjectiveValueIntermediate},
+			{Name: "improvementVsParent", Value: 0.08, Kind: score.ObjectiveValueIntermediate},
+			{Name: "tokenEfficiency", Value: 0.91, Kind: score.ObjectiveValueIntermediate},
+			{Name: "base", Value: 0.77, Kind: score.ObjectiveValueIntermediate},
+			{Name: "regressionPenalty", Value: 1.0, Kind: score.ObjectiveValuePenalty},
+			{Name: "invalidPredictionPenalty", Value: 1.0, Kind: score.ObjectiveValuePenalty},
+			{Name: "final", Value: 0.77, Kind: score.ObjectiveValueFinal},
+		},
+		Final:  "final",
+		Bounds: &score.ObjectiveBounds{Min: &min, Max: &max},
+	}
+}
+
+func metadataHasPath(metadata BundleMetadata, path string) bool {
+	for _, file := range metadata.Files {
+		if file.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func findObjectiveValue(t *testing.T, values []score.ObjectiveValue, name string) score.ObjectiveValue {
+	t.Helper()
+
+	for _, value := range values {
+		if value.Name == name {
+			return value
+		}
+	}
+	t.Fatalf("objective value %q not found", name)
+	return score.ObjectiveValue{}
 }
 
 func sampleBaselineSystem() domain.SystemSpec {

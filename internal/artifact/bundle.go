@@ -5,6 +5,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/domain"
 	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/score"
 )
 
 const (
@@ -51,6 +52,8 @@ type BundleRequest struct {
 	BundleID        string
 	ResolvedInput   ResolvedComparisonInput
 	CandidateReport report.CandidateReport
+	ScoreEvidence   score.ScoreEvidenceDocument
+	ObjectiveResult *score.ObjectiveResult
 	RenderedReport  *RenderedReport
 	CreatedAt       time.Time
 }

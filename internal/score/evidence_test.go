@@ -37,6 +37,20 @@ func TestAggregateUsageIsHonestAboutAvailability(t *testing.T) {
 	}
 }
 
+func TestScoreEvidenceValidateRejectsMissingIdentity(t *testing.T) {
+	t.Parallel()
+
+	doc := ScoreEvidenceDocument{}
+	if err := doc.Validate(); err == nil || !strings.Contains(err.Error(), ErrMissingEvidenceSchemaVersion.Error()) {
+		t.Fatalf("Validate() error = %v, want missing schema version error", err)
+	}
+
+	doc.SchemaVersion = EvidenceSchemaVersion
+	if err := doc.Validate(); err == nil || !strings.Contains(err.Error(), ErrMissingEvidenceReportID.Error()) {
+		t.Fatalf("Validate() error = %v, want missing report id error", err)
+	}
+}
+
 func TestExtractLocalizationDistanceProjectsNamedMetrics(t *testing.T) {
 	t.Parallel()
 

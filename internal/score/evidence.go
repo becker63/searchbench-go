@@ -2,13 +2,20 @@ package score
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/becker63/searchbench-go/internal/domain"
 )
 
 const EvidenceSchemaVersion = "searchbench.score_evidence.v1"
 
-var ErrUnsupportedMetricDirection = errors.New("score: unsupported metric direction")
+var (
+	ErrUnsupportedMetricDirection   = errors.New("score: unsupported metric direction")
+	ErrInvalidScoreEvidence         = errors.New("score: invalid score evidence")
+	ErrMissingEvidenceSchemaVersion = errors.New("score: missing score evidence schema version")
+	ErrMissingEvidenceReportID      = errors.New("score: missing score evidence report id")
+)
 
 // ScoreEvidenceDocument is the objective-ready raw evidence view derived from a
 // candidate report.
@@ -96,6 +103,18 @@ type InvalidPredictionEvidence struct {
 type PromotionDecisionEvidence struct {
 	Decision string `json:"decision"`
 	Reason   string `json:"reason,omitempty"`
+}
+
+// Validate checks that the evidence document has the minimum structure needed
+// for persistence and future objective use.
+func (d ScoreEvidenceDocument) Validate() error {
+	if strings.TrimSpace(d.SchemaVersion) == "" {
+		return fmt.Errorf("%w: %w", ErrInvalidScoreEvidence, ErrMissingEvidenceSchemaVersion)
+	}
+	if strings.TrimSpace(d.ReportID.String()) == "" {
+		return fmt.Errorf("%w: %w", ErrInvalidScoreEvidence, ErrMissingEvidenceReportID)
+	}
+	return nil
 }
 
 // NewMetricEvidence constructs evidence for one metric comparison using the
