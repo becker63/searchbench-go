@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -119,7 +120,7 @@ func TestSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
 	request := sampleBundleRequest(t)
 	w := newWriter()
 	w.marshalJSON = func(v any) ([]byte, error) {
-		if _, ok := v.(ScoreEvidence); ok {
+		if _, ok := v.(score.ScoreEvidenceDocument); ok {
 			return nil, errors.New("fixture score serialization failed")
 		}
 		return marshalDeterministic(v)
@@ -219,6 +220,51 @@ func TestArtifactPackageAvoidsForbiddenImports(t *testing.T) {
 				for _, forbidden := range forbiddenSubstrings {
 					if strings.Contains(strings.ToLower(path), forbidden) {
 						t.Fatalf("forbidden import %q contains %q", path, forbidden)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestArtifactPackageNoLongerDefinesScoreEvidenceTypes(t *testing.T) {
+	t.Parallel()
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller(0) failed")
+	}
+
+	dir := filepath.Dir(currentFile)
+	fs := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
+		name := info.Name()
+		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatalf("parser.ParseDir() error = %v", err)
+	}
+
+	forbiddenTypeNames := map[string]struct{}{
+		"ScoreEvidence":  {},
+		"MetricEvidence": {},
+		"RoleCounts":     {},
+	}
+
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Files {
+			for _, decl := range file.Decls {
+				gen, ok := decl.(*ast.GenDecl)
+				if !ok || gen.Tok != token.TYPE {
+					continue
+				}
+				for _, spec := range gen.Specs {
+					typeSpec, ok := spec.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					if _, forbidden := forbiddenTypeNames[typeSpec.Name.Name]; forbidden {
+						t.Fatalf("artifact package still defines forbidden score evidence type %q", typeSpec.Name.Name)
 					}
 				}
 			}

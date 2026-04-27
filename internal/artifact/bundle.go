@@ -5,7 +5,6 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/domain"
 	"github.com/becker63/searchbench-go/internal/report"
-	"github.com/becker63/searchbench-go/internal/score"
 )
 
 const (
@@ -78,32 +77,4 @@ type BundleMetadata struct {
 	BundleID      string       `json:"bundle_id"`
 	CreatedAt     time.Time    `json:"created_at"`
 	Files         []BundleFile `json:"files"`
-}
-
-// ScoreEvidence is the report-derived score projection written into score.json.
-type ScoreEvidence struct {
-	PromotionDecision report.PromotionDecision `json:"promotion_decision"`
-	RunCounts         RoleCounts               `json:"run_counts"`
-	FailureCounts     RoleCounts               `json:"failure_counts"`
-	Metrics           []MetricEvidence         `json:"metrics"`
-	Regressions       []report.Regression      `json:"regressions,omitempty"`
-}
-
-// RoleCounts records baseline/candidate counts in stable role order.
-type RoleCounts struct {
-	Baseline  int `json:"baseline"`
-	Candidate int `json:"candidate"`
-}
-
-// MetricEvidence preserves the metric-level comparison shape already present in
-// the report, plus canonical direction/improvement flags from the score
-// package.
-type MetricEvidence struct {
-	Metric    score.MetricName `json:"metric"`
-	Direction score.Direction  `json:"direction,omitempty"`
-	Baseline  float64          `json:"baseline"`
-	Candidate float64          `json:"candidate"`
-	Delta     float64          `json:"delta"`
-	Improved  bool             `json:"improved"`
-	Regressed bool             `json:"regressed"`
 }

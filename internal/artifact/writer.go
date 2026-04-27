@@ -131,7 +131,11 @@ func (w writer) WriteBundle(ctx context.Context, request BundleRequest) (BundleR
 		files = append(files, fileRecord("rendered_report", rendered.FileName, rendered.MediaType, sha256Bytes(renderedBytes)))
 	}
 
-	scoreBytes, err := w.marshalJSON(buildScoreEvidence(request.CandidateReport))
+	scoreEvidence, err := report.ProjectScoreEvidence(request.CandidateReport)
+	if err != nil {
+		return BundleRef{}, &Error{Phase: phaseScore, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
+	}
+	scoreBytes, err := w.marshalJSON(scoreEvidence)
 	if err != nil {
 		return BundleRef{}, &Error{Phase: phaseScore, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
 	}
