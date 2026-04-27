@@ -11,13 +11,15 @@ package eino
 type Phase string
 
 const (
-	PhaseRenderPrompt       Phase = "render_prompt"
-	PhasePrepareCallbacks   Phase = "prepare_callbacks"
-	PhaseRunEvaluator       Phase = "run_evaluator"
-	PhaseFinalizePrediction Phase = "finalize_prediction"
-	PhasePrepareRetry       Phase = "prepare_retry"
-	PhaseExhausted          Phase = "exhausted"
-	PhaseComplete           Phase = "complete"
+	PhaseRenderPrompt           Phase = "render_prompt"
+	PhasePrepareCallbacks       Phase = "prepare_callbacks"
+	PhasePrepareUsageAccounting Phase = "prepare_usage_accounting"
+	PhaseRunEvaluator           Phase = "run_evaluator"
+	PhaseFinalizeUsage          Phase = "finalize_usage"
+	PhaseFinalizePrediction     Phase = "finalize_prediction"
+	PhasePrepareRetry           Phase = "prepare_retry"
+	PhaseExhausted              Phase = "exhausted"
+	PhaseComplete               Phase = "complete"
 )
 
 // FailureKind is the evaluator-local failure classification.
@@ -27,12 +29,13 @@ const (
 type FailureKind string
 
 const (
-	FailureKindCallbackSetupFailed FailureKind = "callback_setup_failed"
-	FailureKindPromptRenderFailed  FailureKind = "prompt_render_failed"
-	FailureKindEvaluatorFailed     FailureKind = "evaluator_failed"
-	FailureKindToolCallFailed      FailureKind = "tool_call_failed"
-	FailureKindFinalizationFailed  FailureKind = "finalization_failed"
-	FailureKindInvalidPrediction   FailureKind = "invalid_prediction"
-	FailureKindRetriesExhausted    FailureKind = "retries_exhausted"
-	FailureKindUnexpectedInternal  FailureKind = "unexpected_internal_failure"
+	FailureKindCallbackSetupFailed        FailureKind = "callback_setup_failed"
+	FailureKindUsageAccountingSetupFailed FailureKind = "usage_accounting_setup_failed"
+	FailureKindPromptRenderFailed         FailureKind = "prompt_render_failed"
+	FailureKindEvaluatorFailed            FailureKind = "evaluator_failed"
+	FailureKindToolCallFailed             FailureKind = "tool_call_failed"
+	FailureKindFinalizationFailed         FailureKind = "finalization_failed"
+	FailureKindInvalidPrediction          FailureKind = "invalid_prediction"
+	FailureKindRetriesExhausted           FailureKind = "retries_exhausted"
+	FailureKindUnexpectedInternal         FailureKind = "unexpected_internal_failure"
 )

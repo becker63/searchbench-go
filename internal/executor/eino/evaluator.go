@@ -17,10 +17,14 @@ import (
 	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/executor/eino/callbacks"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
+	"github.com/becker63/searchbench-go/internal/usage"
 )
 
 // RenderPromptFunc renders the evaluator prompt from its typed prompt contract.
 type RenderPromptFunc func(ctx context.Context, input evaluatorprompt.Input) (string, error)
+
+// UsageCollectorFactory constructs one run-local usage collector.
+type UsageCollectorFactory func(spec run.Spec) (*usage.Collector, error)
 
 const defaultAgentMaxIterations = 20
 
@@ -35,15 +39,17 @@ const defaultAgentMaxIterations = 20
 // CallbackFactories are optional per-attempt callback constructors. They are
 // composed through the sibling callbacks package and must remain cold.
 type Config struct {
-	Model             model.ToolCallingChatModel
-	Tools             []tool.BaseTool
-	CallbackFactories []evaluatorcallbacks.Factory
-	RenderPrompt      RenderPromptFunc
-	WorkDir           string
-	RetryPolicy       *RetryPolicy
-	SessionID         domain.SessionID
-	TraceID           domain.TraceID
-	Now               func() time.Time
+	Model                  model.ToolCallingChatModel
+	Tools                  []tool.BaseTool
+	CallbackFactories      []evaluatorcallbacks.Factory
+	UsageCollectorFactory  UsageCollectorFactory
+	DisableUsageAccounting bool
+	RenderPrompt           RenderPromptFunc
+	WorkDir                string
+	RetryPolicy            *RetryPolicy
+	SessionID              domain.SessionID
+	TraceID                domain.TraceID
+	Now                    func() time.Time
 }
 
 // Result is the typed outcome for one evaluator run.
@@ -58,6 +64,8 @@ type Result struct {
 	Attempts       []Attempt
 	RenderedPrompt string
 	RawOutput      string
+	UsageRecords   []usage.Record
+	UsageSummary   usage.Summary
 }
 
 // Success reports whether the evaluator completed with a normalized
@@ -72,14 +80,16 @@ func (r Result) Success() bool {
 // concerns local: prompt rendering, retry boundaries, finalization, and typed
 // run results.
 type Evaluator struct {
-	model             model.ToolCallingChatModel
-	tools             []tool.BaseTool
-	callbackFactories []evaluatorcallbacks.Factory
-	renderPrompt      RenderPromptFunc
-	retryPolicy       RetryPolicy
-	sessionID         domain.SessionID
-	traceID           domain.TraceID
-	now               func() time.Time
+	model                  model.ToolCallingChatModel
+	tools                  []tool.BaseTool
+	callbackFactories      []evaluatorcallbacks.Factory
+	usageCollectorFactory  UsageCollectorFactory
+	disableUsageAccounting bool
+	renderPrompt           RenderPromptFunc
+	retryPolicy            RetryPolicy
+	sessionID              domain.SessionID
+	traceID                domain.TraceID
+	now                    func() time.Time
 }
 
 // New constructs a cold evaluator runner.
@@ -112,15 +122,27 @@ func New(config Config) (*Evaluator, error) {
 		sessionID = domain.SessionID("eino-local")
 	}
 
+	usageCollectorFactory := config.UsageCollectorFactory
+	if usageCollectorFactory == nil {
+		usageCollectorFactory = func(spec run.Spec) (*usage.Collector, error) {
+			return usage.NewCollector(usage.Config{
+				DefaultProvider: spec.System.Model.Provider,
+				DefaultModel:    spec.System.Model.Name,
+			})
+		}
+	}
+
 	return &Evaluator{
-		model:             config.Model,
-		tools:             append([]tool.BaseTool(nil), config.Tools...),
-		callbackFactories: append([]evaluatorcallbacks.Factory(nil), config.CallbackFactories...),
-		renderPrompt:      renderPrompt,
-		retryPolicy:       normalizeRetryPolicy(config.RetryPolicy),
-		sessionID:         sessionID,
-		traceID:           config.TraceID,
-		now:               now,
+		model:                  config.Model,
+		tools:                  append([]tool.BaseTool(nil), config.Tools...),
+		callbackFactories:      append([]evaluatorcallbacks.Factory(nil), config.CallbackFactories...),
+		usageCollectorFactory:  usageCollectorFactory,
+		disableUsageAccounting: config.DisableUsageAccounting,
+		renderPrompt:           renderPrompt,
+		retryPolicy:            normalizeRetryPolicy(config.RetryPolicy),
+		sessionID:              sessionID,
+		traceID:                config.TraceID,
+		now:                    now,
 	}, nil
 }
 
@@ -210,6 +232,61 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 			return result
 		}
 
+		var usageCallback *evaluatorcallbacks.UsageCallback
+		if !e.disableUsageAccounting {
+			usageCallback, err = evaluatorcallbacks.NewUsageCallback(evaluatorcallbacks.UsageConfig{
+				Phase:           string(PhaseRunEvaluator),
+				DefaultProvider: spec.System.Model.Provider,
+				DefaultModel:    spec.System.Model.Name,
+			})
+			if err != nil {
+				failure := &Failure{
+					Phase:   PhasePrepareCallbacks,
+					Kind:    FailureKindCallbackSetupFailed,
+					Message: "build usage callback",
+					Cause:   err,
+					Attempt: attemptNumber,
+				}
+				attempt.Failure = failure
+				result.Attempts = append(result.Attempts, attempt)
+				result.Failure = failure
+				return result
+			}
+			callbackHandlers = append(callbackHandlers, usageCallback.Handler())
+		}
+
+		var usageCollector *usage.Collector
+		if usageCallback != nil {
+			recordPhase(PhasePrepareUsageAccounting)
+			usageCollector, err = e.usageCollectorFactory(spec)
+			if err != nil {
+				failure := &Failure{
+					Phase:   PhasePrepareUsageAccounting,
+					Kind:    FailureKindUsageAccountingSetupFailed,
+					Message: "create usage collector",
+					Cause:   err,
+					Attempt: attemptNumber,
+				}
+				attempt.Failure = failure
+				result.Attempts = append(result.Attempts, attempt)
+				result.Failure = failure
+				return result
+			}
+			if err := usageCallback.AttachCollector(usageCollector); err != nil {
+				failure := &Failure{
+					Phase:   PhasePrepareUsageAccounting,
+					Kind:    FailureKindUsageAccountingSetupFailed,
+					Message: "attach usage collector",
+					Cause:   err,
+					Attempt: attemptNumber,
+				}
+				attempt.Failure = failure
+				result.Attempts = append(result.Attempts, attempt)
+				result.Failure = failure
+				return result
+			}
+		}
+
 		recordPhase(PhaseRunEvaluator)
 		startedAt := e.now().UTC()
 		rawOutput, toolErr, err := e.runEvaluator(ctx, renderedPrompt, maxIterationsForSpec(spec), callbackHandlers)
@@ -230,6 +307,12 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 			}
 			result.Failure = failure
 			return result
+		}
+
+		if usageCollector != nil {
+			recordPhase(PhaseFinalizeUsage)
+			result.UsageRecords = usageCollector.Records()
+			result.UsageSummary = usageCollector.Summary()
 		}
 
 		recordPhase(PhaseFinalizePrediction)
@@ -265,7 +348,7 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 		executed := run.NewExecuted(
 			prepared,
 			prediction,
-			domain.UsageSummary{},
+			result.UsageSummary.DomainSummary(),
 			e.traceID,
 			startedAt,
 			e.now().UTC(),

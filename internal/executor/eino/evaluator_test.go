@@ -17,6 +17,7 @@ import (
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
+	"github.com/becker63/searchbench-go/internal/usage"
 )
 
 func TestEvaluatorConstructionIsCold(t *testing.T) {
@@ -81,7 +82,9 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	if got, want := result.Phases, []Phase{
 		PhaseRenderPrompt,
 		PhasePrepareCallbacks,
+		PhasePrepareUsageAccounting,
 		PhaseRunEvaluator,
+		PhaseFinalizeUsage,
 		PhaseFinalizePrediction,
 		PhaseComplete,
 	}; !equalPhases(got, want) {
@@ -93,6 +96,15 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	}
 	if got, want := result.Executed.Prediction.Reasoning, "fake tool matched the retry path"; got != want {
 		t.Fatalf("Prediction.Reasoning = %q, want %q", got, want)
+	}
+	if got, want := result.UsageSummary.CallCount, 2; got != want {
+		t.Fatalf("UsageSummary.CallCount = %d, want %d", got, want)
+	}
+	if len(result.UsageRecords) != 2 {
+		t.Fatalf("len(UsageRecords) = %d, want 2", len(result.UsageRecords))
+	}
+	if result.Executed.Usage.Empty() {
+		t.Fatal("Executed.Usage = empty, want usage summary")
 	}
 
 	calls := model.Calls()
@@ -110,6 +122,82 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	}
 	if !strings.Contains(toolMessage.Content, "src/main.go") {
 		t.Fatalf("tool message content = %q, want tool result", toolMessage.Content)
+	}
+}
+
+func TestEvaluatorUsageAccountingWorksWithoutTracing(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"],"reasoning":"usage without tracing"}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:   model,
+		WorkDir: "/repo",
+		Now:     fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if result.Executed == nil {
+		t.Fatal("expected executed run")
+	}
+	if got, want := result.UsageSummary.CallCount, 1; got != want {
+		t.Fatalf("UsageSummary.CallCount = %d, want %d", got, want)
+	}
+	if len(result.UsageRecords) != 1 {
+		t.Fatalf("len(UsageRecords) = %d, want 1", len(result.UsageRecords))
+	}
+	if got := result.UsageRecords[0].Source; got != usage.SourceEstimated {
+		t.Fatalf("UsageRecords[0].Source = %q, want %q", got, usage.SourceEstimated)
+	}
+}
+
+func TestEvaluatorRunCanDisableUsageAccounting(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"],"reasoning":"usage disabled"}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:                  model,
+		WorkDir:                "/repo",
+		DisableUsageAccounting: true,
+		UsageCollectorFactory: func(run.Spec) (*usage.Collector, error) {
+			return nil, errors.New("usage collector should not be constructed when accounting is disabled")
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if result.Executed == nil {
+		t.Fatal("expected executed run")
+	}
+	if result.UsageSummary.CallCount != 0 {
+		t.Fatalf("UsageSummary.CallCount = %d, want 0", result.UsageSummary.CallCount)
+	}
+	if len(result.UsageRecords) != 0 {
+		t.Fatalf("len(UsageRecords) = %d, want 0", len(result.UsageRecords))
+	}
+	if !result.Executed.Usage.Empty() {
+		t.Fatalf("Executed.Usage = %#v, want empty usage when disabled", result.Executed.Usage)
 	}
 }
 
@@ -172,6 +260,9 @@ func TestEvaluatorRunCanAttachCallbacks(t *testing.T) {
 	if snapshot.ToolStarts == 0 || snapshot.ToolEnds == 0 {
 		t.Fatalf("tool callback snapshot = %#v, want tool lifecycle events", snapshot)
 	}
+	if got, want := result.UsageSummary.CallCount, 2; got != want {
+		t.Fatalf("UsageSummary.CallCount = %d, want %d", got, want)
+	}
 }
 
 func TestEvaluatorCallbackSetupFailureReturnsTypedFailure(t *testing.T) {
@@ -218,6 +309,45 @@ func TestEvaluatorCallbackSetupFailureReturnsTypedFailure(t *testing.T) {
 	}
 	if !strings.Contains(result.Failure.Error(), "fixture callback setup failed") {
 		t.Fatalf("Failure.Error() = %q, want callback setup detail", result.Failure.Error())
+	}
+}
+
+func TestEvaluatorUsageAccountingSetupFailureReturnsTypedFailure(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:   model,
+		WorkDir: "/repo",
+		UsageCollectorFactory: func(run.Spec) (*usage.Collector, error) {
+			return nil, errors.New("fixture usage setup failed")
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+	// Usage-accounting setup is separate from generic callback construction so
+	// the harness can fail closed before evaluation if the run-local collector
+	// cannot be created or attached.
+	if got, want := result.Failure.Kind, FailureKindUsageAccountingSetupFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := result.Failure.Phase, PhasePrepareUsageAccounting; got != want {
+		t.Fatalf("Failure.Phase = %q, want %q", got, want)
+	}
+	if got, want := len(model.Calls()), 0; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
 	}
 }
 
