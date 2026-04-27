@@ -20,7 +20,15 @@ import (
 // RenderPromptFunc renders the evaluator prompt from its typed prompt contract.
 type RenderPromptFunc func(ctx context.Context, input evaluatorprompt.Input) (string, error)
 
+const defaultAgentMaxIterations = 20
+
 // Config defines the minimal evaluator runner dependencies.
+//
+// The harness owns evaluator-level bounds such as retry count and context
+// cancellation. Lower-level bounds such as max model turns, tool-call limits,
+// and token budgets belong to the configured Eino model/agent runtime rather
+// than to evaluator business logic here. The evaluator maps
+// spec.System.Runtime.MaxSteps onto Eino's MaxIterations bound when provided.
 type Config struct {
 	Model        model.ToolCallingChatModel
 	Tools        []tool.BaseTool
@@ -33,6 +41,10 @@ type Config struct {
 }
 
 // Result is the typed outcome for one evaluator run.
+//
+// A run is one bounded attempt to solve one task. The underlying Eino agent
+// may take multiple model turns and tool calls during that run, but the result
+// always captures one final prediction or one typed failure.
 type Result struct {
 	Executed       *run.ExecutedRun
 	Failure        *Failure
@@ -49,6 +61,10 @@ func (r Result) Success() bool {
 }
 
 // Evaluator is the minimal Eino-backed evaluator executor.
+//
+// It delegates the internal model/tool loop to Eino and keeps only harness
+// concerns local: prompt rendering, retry boundaries, finalization, and typed
+// run results.
 type Evaluator struct {
 	model        model.ToolCallingChatModel
 	tools        []tool.BaseTool
@@ -110,8 +126,15 @@ func (e *Evaluator) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun
 	return *result.Executed, nil
 }
 
-// Run executes the minimal evaluator path and returns a typed structured
-// result.
+// Run executes one bounded evaluator attempt sequence for one task and returns
+// a typed structured result.
+//
+// Each evaluator attempt renders a fresh prompt, lets Eino drive its internal
+// model/tool loop until it returns a final assistant message or an error, then
+// finalizes exactly one prediction. Retry attempts are new evaluator attempts,
+// not continuations of earlier model/tool turns.
+//
+// Run does not execute CLI validation or writer repair pipeline behavior.
 func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 	result := Result{}
 	recordPhase := func(phase Phase) {
@@ -162,7 +185,7 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 
 		recordPhase(PhaseRunEvaluator)
 		startedAt := e.now().UTC()
-		rawOutput, toolErr, err := e.runEvaluator(ctx, renderedPrompt)
+		rawOutput, toolErr, err := e.runEvaluator(ctx, renderedPrompt, maxIterationsForSpec(spec))
 		attempt.RawOutput = rawOutput
 		result.RawOutput = rawOutput
 		if err != nil {
@@ -245,12 +268,13 @@ func (e *Evaluator) allowedToolNames(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string) (string, error, error) {
+func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string, maxIterations int) (string, error, error) {
 	recorder := &toolErrorRecorder{}
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "searchbench_evaluator",
-		Description: "Minimal SearchBench evaluator agent",
-		Model:       e.model,
+		Name:          "searchbench_evaluator",
+		Description:   "Minimal SearchBench evaluator agent",
+		Model:         e.model,
+		MaxIterations: maxIterations,
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: e.tools,
@@ -288,6 +312,9 @@ func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string) (st
 			return "", recorder.err, err
 		}
 
+		// Eino may emit multiple assistant/tool turns inside one evaluator run.
+		// The harness keeps only the final assistant message without tool calls as
+		// the candidate prediction payload for strict finalization.
 		if event.Output.MessageOutput.Role == schema.Assistant && len(message.ToolCalls) == 0 {
 			finalOutput = message.Content
 		}
@@ -298,6 +325,13 @@ func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string) (st
 
 func defaultRenderPrompt(ctx context.Context, input evaluatorprompt.Input) (string, error) {
 	return evaluatorprompt.Render(ctx, input)
+}
+
+func maxIterationsForSpec(spec run.Spec) int {
+	if spec.System.Runtime.MaxSteps > 0 {
+		return spec.System.Runtime.MaxSteps
+	}
+	return defaultAgentMaxIterations
 }
 
 func (e *Evaluator) shouldRetry(failure *Failure, attemptNumber int) bool {

@@ -7,6 +7,9 @@ import (
 )
 
 // RetryPolicy controls bounded evaluator retries for recoverable failures.
+//
+// These retries happen across evaluator attempts. They do not limit or count
+// Eino-internal model turns or tool calls inside a single attempt.
 type RetryPolicy struct {
 	MaxAttempts                int
 	RetryOnModelError          bool
@@ -15,7 +18,10 @@ type RetryPolicy struct {
 	RetryOnInvalidPrediction   bool
 }
 
-// Attempt records one evaluator-local attempt outcome.
+// Attempt records one evaluator-local retry attempt outcome.
+//
+// An Attempt is a fresh evaluator pass over the task after a prior attempt
+// failed in a retryable way. It is not a model turn and it is not a tool call.
 type Attempt struct {
 	Number         int
 	RenderedPrompt string
@@ -24,6 +30,10 @@ type Attempt struct {
 }
 
 // DefaultRetryPolicy returns the minimal retry policy for the evaluator loop.
+//
+// The default policy retries evaluator-owned failures only. It does not
+// continue partial Eino conversations and it does not cover writer-side
+// validation pipelines.
 func DefaultRetryPolicy() RetryPolicy {
 	return RetryPolicy{
 		MaxAttempts:                2,

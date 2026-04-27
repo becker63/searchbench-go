@@ -6,8 +6,10 @@ import (
 
 // Failure is the typed failed outcome for one evaluator run.
 //
-// This remains evaluator-local because it carries retry details that are not
-// yet shared across executors.
+// This remains evaluator-local because it carries retry/attempt details that
+// are not yet shared across executors. The failure refers to one evaluator
+// attempt or to retry exhaustion across attempts, not to an individual
+// Eino-internal model turn.
 type Failure struct {
 	Phase       Phase
 	Kind        FailureKind

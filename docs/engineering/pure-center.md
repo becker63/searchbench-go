@@ -205,6 +205,15 @@ The same principle applies to CLI validation:
 
 Once effects are converted into typed data, the rest of the system becomes easier to reason about.
 
+For evaluator execution, keep a different separation:
+
+    Eino internal model/tool loop -> one final Prediction
+    retry policy -> new evaluator attempt
+    CLI validation -> writer/repair flow only
+
+The evaluator may take multiple model turns and tool calls inside one bounded
+run, but it should not absorb writer-side validation or repair concerns.
+
 ## Tooling that expands the pure center
 
 This architectural taste shows up in many tools.

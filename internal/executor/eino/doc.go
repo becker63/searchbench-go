@@ -1,8 +1,15 @@
-// Package eino implements the minimal Eino-backed evaluator execution path.
+// Package eino implements the bounded Eino-backed evaluator execution path.
 //
-// It owns prompt rendering orchestration, Eino agent execution, strict
-// prediction finalization, and evaluator-local phase/failure typing.
+// One evaluator Run may include multiple model turns and multiple tool calls
+// inside Eino's internal agent loop, but it still returns exactly one final
+// normalized prediction or one typed evaluator failure.
 //
-// It does not own benchmark schemas, scoring, backend adapters, or MCP
-// integration.
+// SearchBench-Go owns prompt rendering orchestration, retry policy, strict
+// prediction finalization, evaluator-local phase/failure typing, and context
+// cancellation propagation. Eino owns the internal model/tool loop. The
+// harness can supply a run-level turn bound through SystemSpec.Runtime.MaxSteps,
+// which the evaluator maps to Eino's iteration limit.
+//
+// This package does not own writer repair flows, CLI validation pipelines,
+// benchmark schemas, scoring, backend adapters, or MCP integration.
 package eino

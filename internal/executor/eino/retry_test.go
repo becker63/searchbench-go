@@ -55,6 +55,74 @@ func TestMalformedFinalOutputRetriesAndSucceeds(t *testing.T) {
 	}
 }
 
+func TestRetryAttemptsAreDistinctFromInternalModelTurns(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-1",
+				Function: schema.FunctionCall{
+					Name:      "fake_resolve",
+					Arguments: `{"query":"retry interceptor"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`not json`, nil),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"],"reasoning":"retry attempt succeeded"}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:   model,
+		WorkDir: "/repo",
+		Tools: []tool.BaseTool{fakeTool{
+			name:   "fake_resolve",
+			result: `{"resolved_path":"src/main.go"}`,
+		}},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if result.Executed == nil {
+		t.Fatal("Executed = nil, want success")
+	}
+	if got, want := len(result.Attempts), 2; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if got, want := len(model.Calls()), 3; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+	if result.Attempts[0].Failure == nil || result.Attempts[0].Failure.Kind != FailureKindFinalizationFailed {
+		t.Fatalf("first attempt failure = %#v, want finalization_failed", result.Attempts[0].Failure)
+	}
+	if got, want := result.Attempts[0].Number, 1; got != want {
+		t.Fatalf("first attempt number = %d, want %d", got, want)
+	}
+	if got, want := result.Attempts[1].Number, 2; got != want {
+		t.Fatalf("second attempt number = %d, want %d", got, want)
+	}
+
+	firstRetryAttemptLastMessage := model.Calls()[1].Messages[len(model.Calls()[1].Messages)-1]
+	if firstRetryAttemptLastMessage.Role != schema.Tool {
+		t.Fatalf("second model call last message role = %q, want tool", firstRetryAttemptLastMessage.Role)
+	}
+
+	secondAttemptPrompt := model.Calls()[2].Messages[0].Content
+	if !strings.Contains(secondAttemptPrompt, "Previous attempt returned malformed JSON.") {
+		t.Fatalf("second attempt prompt missing retry feedback:\n%s", secondAttemptPrompt)
+	}
+}
+
 func TestEmptyPredictionRetriesAccordingToPolicy(t *testing.T) {
 	t.Parallel()
 

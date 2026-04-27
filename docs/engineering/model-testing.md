@@ -43,6 +43,8 @@ It provides:
 This is the default path for:
 
 - evaluator-loop tests
+- multi-turn evaluator agent-loop tests
+- multi-tool-call evaluator tests
 - prompt-to-model integration tests
 - malformed final-output tests
 - empty-prediction tests
@@ -234,10 +236,13 @@ Optional provider-boundary test:
 Recommended coverage shape:
 
 - success final prediction via `ScriptedModel`
+- success with multiple model turns and tool calls inside one evaluator run
+- configured `SystemSpec.Runtime.MaxSteps` bounds evaluator turns through the runtime
 - malformed final output via `ScriptedModel`
 - empty predicted files via `ScriptedModel`
 - evaluator/model error via `ScriptedModel`
 - tool failure with deterministic local fake tool
+- evaluator retry attempts that are distinct from model/tool turns inside one run
 - optional tool-call-shaped scripted model responses if the runner uses them cleanly
 
 The minimal Eino issue should not:

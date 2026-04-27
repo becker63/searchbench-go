@@ -110,6 +110,139 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	}
 }
 
+func TestEvaluatorRunCanUseMultipleToolCallsAndModelTurns(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-1",
+				Function: schema.FunctionCall{
+					Name:      "fake_search",
+					Arguments: `{"query":"retry interceptor"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-2",
+				Function: schema.FunctionCall{
+					Name:      "fake_read",
+					Arguments: `{"path":"src/main.go"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"],"reasoning":"combined search and file read evidence"}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:   model,
+		WorkDir: "/repo",
+		Tools: []tool.BaseTool{
+			fakeTool{name: "fake_search", result: `{"hits":["src/main.go"]}`},
+			fakeTool{name: "fake_read", result: `{"path":"src/main.go","snippet":"func retry() {}"}`},
+		},
+		RetryPolicy: &RetryPolicy{MaxAttempts: 1},
+		Now:         fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if result.Executed == nil {
+		t.Fatal("expected executed run")
+	}
+	if got, want := len(result.Attempts), 1; got != want {
+		t.Fatalf("len(Attempts) = %d, want %d", got, want)
+	}
+	if got, want := len(model.Calls()), 3; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+	if got, want := result.Executed.Prediction.Files, []domain.RepoRelPath{"src/main.go"}; len(got) != len(want) || got[0] != want[0] {
+		t.Fatalf("Prediction.Files = %#v, want %#v", got, want)
+	}
+	if got, want := result.Executed.Prediction.Reasoning, "combined search and file read evidence"; got != want {
+		t.Fatalf("Prediction.Reasoning = %q, want %q", got, want)
+	}
+
+	secondCallMessages := model.Calls()[1].Messages
+	lastSecondCallMessage := secondCallMessages[len(secondCallMessages)-1]
+	if lastSecondCallMessage.Role != schema.Tool || !strings.Contains(lastSecondCallMessage.Content, "src/main.go") {
+		t.Fatalf("second call last message = %#v, want tool result for fake_search", lastSecondCallMessage)
+	}
+
+	thirdCallMessages := model.Calls()[2].Messages
+	lastThirdCallMessage := thirdCallMessages[len(thirdCallMessages)-1]
+	if lastThirdCallMessage.Role != schema.Tool || !strings.Contains(lastThirdCallMessage.Content, "func retry() {}") {
+		t.Fatalf("third call last message = %#v, want tool result for fake_read", lastThirdCallMessage)
+	}
+}
+
+func TestEvaluatorRunUsesSystemRuntimeMaxStepsBound(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-1",
+				Function: schema.FunctionCall{
+					Name:      "fake_search",
+					Arguments: `{"query":"retry interceptor"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-2",
+				Function: schema.FunctionCall{
+					Name:      "fake_read",
+					Arguments: `{"path":"src/main.go"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"],"reasoning":"would have succeeded on the second turn"}`, nil),
+		},
+	)
+
+	spec := sampleRunSpec()
+	spec.System.Runtime.MaxSteps = 1
+
+	evaluator, err := New(Config{
+		Model:   model,
+		WorkDir: "/repo",
+		Tools: []tool.BaseTool{
+			fakeTool{name: "fake_search", result: `{"hits":["src/main.go"]}`},
+			fakeTool{name: "fake_read", result: `{"path":"src/main.go","snippet":"func retry() {}"}`},
+		},
+		RetryPolicy: &RetryPolicy{MaxAttempts: 1},
+		Now:         fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), spec)
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+	if got, want := result.Failure.Kind, FailureKindEvaluatorFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := len(model.Calls()), 1; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+	if !strings.Contains(strings.ToLower(result.Failure.Error()), "iteration") {
+		t.Fatalf("Failure.Error() = %q, want iteration-limit detail", result.Failure.Error())
+	}
+}
+
 func TestEvaluatorRunFailures(t *testing.T) {
 	t.Parallel()
 
