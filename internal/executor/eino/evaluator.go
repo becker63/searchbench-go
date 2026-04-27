@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/adk"
+	einocallbacks "github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/executor/eino/callbacks"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
 )
@@ -29,15 +31,19 @@ const defaultAgentMaxIterations = 20
 // and token budgets belong to the configured Eino model/agent runtime rather
 // than to evaluator business logic here. The evaluator maps
 // spec.System.Runtime.MaxSteps onto Eino's MaxIterations bound when provided.
+//
+// CallbackFactories are optional per-attempt callback constructors. They are
+// composed through the sibling callbacks package and must remain cold.
 type Config struct {
-	Model        model.ToolCallingChatModel
-	Tools        []tool.BaseTool
-	RenderPrompt RenderPromptFunc
-	WorkDir      string
-	RetryPolicy  *RetryPolicy
-	SessionID    domain.SessionID
-	TraceID      domain.TraceID
-	Now          func() time.Time
+	Model             model.ToolCallingChatModel
+	Tools             []tool.BaseTool
+	CallbackFactories []evaluatorcallbacks.Factory
+	RenderPrompt      RenderPromptFunc
+	WorkDir           string
+	RetryPolicy       *RetryPolicy
+	SessionID         domain.SessionID
+	TraceID           domain.TraceID
+	Now               func() time.Time
 }
 
 // Result is the typed outcome for one evaluator run.
@@ -66,13 +72,14 @@ func (r Result) Success() bool {
 // concerns local: prompt rendering, retry boundaries, finalization, and typed
 // run results.
 type Evaluator struct {
-	model        model.ToolCallingChatModel
-	tools        []tool.BaseTool
-	renderPrompt RenderPromptFunc
-	retryPolicy  RetryPolicy
-	sessionID    domain.SessionID
-	traceID      domain.TraceID
-	now          func() time.Time
+	model             model.ToolCallingChatModel
+	tools             []tool.BaseTool
+	callbackFactories []evaluatorcallbacks.Factory
+	renderPrompt      RenderPromptFunc
+	retryPolicy       RetryPolicy
+	sessionID         domain.SessionID
+	traceID           domain.TraceID
+	now               func() time.Time
 }
 
 // New constructs a cold evaluator runner.
@@ -106,13 +113,14 @@ func New(config Config) (*Evaluator, error) {
 	}
 
 	return &Evaluator{
-		model:        config.Model,
-		tools:        append([]tool.BaseTool(nil), config.Tools...),
-		renderPrompt: renderPrompt,
-		retryPolicy:  normalizeRetryPolicy(config.RetryPolicy),
-		sessionID:    sessionID,
-		traceID:      config.TraceID,
-		now:          now,
+		model:             config.Model,
+		tools:             append([]tool.BaseTool(nil), config.Tools...),
+		callbackFactories: append([]evaluatorcallbacks.Factory(nil), config.CallbackFactories...),
+		renderPrompt:      renderPrompt,
+		retryPolicy:       normalizeRetryPolicy(config.RetryPolicy),
+		sessionID:         sessionID,
+		traceID:           config.TraceID,
+		now:               now,
 	}, nil
 }
 
@@ -131,8 +139,9 @@ func (e *Evaluator) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun
 //
 // Each evaluator attempt renders a fresh prompt, lets Eino drive its internal
 // model/tool loop until it returns a final assistant message or an error, then
-// finalizes exactly one prediction. Retry attempts are new evaluator attempts,
-// not continuations of earlier model/tool turns.
+// finalizes exactly one prediction. Callback construction happens in a separate
+// prepare_callbacks phase before Eino execution begins. Retry attempts are new
+// evaluator attempts, not continuations of earlier model/tool turns.
 //
 // Run does not execute CLI validation or writer repair pipeline behavior.
 func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
@@ -183,9 +192,27 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 			return result
 		}
 
+		recordPhase(PhasePrepareCallbacks)
+		callbackHandlers, err := evaluatorcallbacks.BuildCallbacks(ctx, evaluatorcallbacks.Config{
+			Factories: e.callbackFactories,
+		})
+		if err != nil {
+			failure := &Failure{
+				Phase:   PhasePrepareCallbacks,
+				Kind:    FailureKindCallbackSetupFailed,
+				Message: "build evaluator callbacks",
+				Cause:   err,
+				Attempt: attemptNumber,
+			}
+			attempt.Failure = failure
+			result.Attempts = append(result.Attempts, attempt)
+			result.Failure = failure
+			return result
+		}
+
 		recordPhase(PhaseRunEvaluator)
 		startedAt := e.now().UTC()
-		rawOutput, toolErr, err := e.runEvaluator(ctx, renderedPrompt, maxIterationsForSpec(spec))
+		rawOutput, toolErr, err := e.runEvaluator(ctx, renderedPrompt, maxIterationsForSpec(spec), callbackHandlers)
 		attempt.RawOutput = rawOutput
 		result.RawOutput = rawOutput
 		if err != nil {
@@ -268,7 +295,7 @@ func (e *Evaluator) allowedToolNames(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string, maxIterations int) (string, error, error) {
+func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string, maxIterations int, callbackHandlers []einocallbacks.Handler) (string, error, error) {
 	recorder := &toolErrorRecorder{}
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          "searchbench_evaluator",
@@ -288,11 +315,15 @@ func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string, max
 		return "", nil, err
 	}
 
-	iterator := agent.Run(ctx, &adk.AgentInput{
-		Messages: []adk.Message{
-			schema.UserMessage(renderedPrompt),
-		},
-	})
+	runOptions := make([]adk.AgentRunOption, 0, 1)
+	if len(callbackHandlers) > 0 {
+		runOptions = append(runOptions, adk.WithCallbacks(callbackHandlers...))
+	}
+
+	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
+	iterator := runner.Run(ctx, []adk.Message{
+		schema.UserMessage(renderedPrompt),
+	}, runOptions...)
 
 	var finalOutput string
 	for {

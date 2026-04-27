@@ -9,7 +9,8 @@ import (
 // RetryPolicy controls bounded evaluator retries for recoverable failures.
 //
 // These retries happen across evaluator attempts. They do not limit or count
-// Eino-internal model turns or tool calls inside a single attempt.
+// Eino-internal model turns or tool calls inside a single attempt. Callback
+// setup failures are not retryable because execution never began.
 type RetryPolicy struct {
 	MaxAttempts                int
 	RetryOnModelError          bool

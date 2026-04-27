@@ -8,10 +8,12 @@ import (
 	"testing"
 	"time"
 
+	cloudcallbacks "github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 
 	"github.com/becker63/searchbench-go/internal/domain"
+	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/executor/eino/callbacks"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/run"
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
@@ -78,6 +80,7 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 
 	if got, want := result.Phases, []Phase{
 		PhaseRenderPrompt,
+		PhasePrepareCallbacks,
 		PhaseRunEvaluator,
 		PhaseFinalizePrediction,
 		PhaseComplete,
@@ -107,6 +110,114 @@ func TestEvaluatorRunSuccessWithToolCall(t *testing.T) {
 	}
 	if !strings.Contains(toolMessage.Content, "src/main.go") {
 		t.Fatalf("tool message content = %q, want tool result", toolMessage.Content)
+	}
+}
+
+func TestEvaluatorRunCanAttachCallbacks(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage("", []schema.ToolCall{{
+				ID: "call-1",
+				Function: schema.FunctionCall{
+					Name:      "fake_resolve",
+					Arguments: `{"query":"retry interceptor"}`,
+				},
+			}}),
+		},
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"],"reasoning":"callback observed execution"}`, nil),
+		},
+	)
+
+	recorder := &evaluatorcallbacks.FakeTestRecorder{}
+	evaluator, err := New(Config{
+		Model:   model,
+		WorkDir: "/repo",
+		Tools: []tool.BaseTool{fakeTool{
+			name:   "fake_resolve",
+			result: `{"resolved_path":"src/main.go"}`,
+		}},
+		CallbackFactories: []evaluatorcallbacks.Factory{
+			evaluatorcallbacks.NewFakeTestCallbackFactory(recorder),
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure != nil {
+		t.Fatalf("unexpected failure: %v", result.Failure)
+	}
+	if result.Executed == nil {
+		t.Fatal("expected executed run")
+	}
+
+	// The fake callback is only proving the seam here: construction happened
+	// during prepare_callbacks, then Eino invoked the attached handler while the
+	// agent/model/tool execution ran.
+	snapshot := recorder.Snapshot()
+	if got, want := snapshot.Constructed, 1; got != want {
+		t.Fatalf("Constructed = %d, want %d", got, want)
+	}
+	if snapshot.Attached == 0 || snapshot.AgentStarts == 0 || snapshot.AgentEnds == 0 {
+		t.Fatalf("agent callback snapshot = %#v, want agent lifecycle events", snapshot)
+	}
+	if snapshot.ModelStarts == 0 || snapshot.ModelEnds == 0 {
+		t.Fatalf("model callback snapshot = %#v, want model lifecycle events", snapshot)
+	}
+	if snapshot.ToolStarts == 0 || snapshot.ToolEnds == 0 {
+		t.Fatalf("tool callback snapshot = %#v, want tool lifecycle events", snapshot)
+	}
+}
+
+func TestEvaluatorCallbackSetupFailureReturnsTypedFailure(t *testing.T) {
+	t.Parallel()
+
+	model := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"predicted_files":["src/main.go"]}`, nil),
+		},
+	)
+
+	evaluator, err := New(Config{
+		Model:   model,
+		WorkDir: "/repo",
+		CallbackFactories: []evaluatorcallbacks.Factory{
+			func(context.Context) (cloudcallbacks.Handler, error) {
+				return nil, errors.New("fixture callback setup failed")
+			},
+		},
+		Now: fixedClock(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	result := evaluator.Run(context.Background(), sampleRunSpec())
+	if result.Failure == nil {
+		t.Fatal("expected failure")
+	}
+
+	// Callback setup is its own harness phase. If the callback factory fails, the
+	// evaluator must fail closed before handing control to Eino execution.
+	if got, want := result.Failure.Kind, FailureKindCallbackSetupFailed; got != want {
+		t.Fatalf("Failure.Kind = %q, want %q", got, want)
+	}
+	if got, want := result.Failure.Phase, PhasePrepareCallbacks; got != want {
+		t.Fatalf("Failure.Phase = %q, want %q", got, want)
+	}
+
+	// Cold setup means no model call is allowed to happen after callback
+	// construction fails.
+	if got, want := len(model.Calls()), 0; got != want {
+		t.Fatalf("len(model.Calls()) = %d, want %d", got, want)
+	}
+	if !strings.Contains(result.Failure.Error(), "fixture callback setup failed") {
+		t.Fatalf("Failure.Error() = %q, want callback setup detail", result.Failure.Error())
 	}
 }
 

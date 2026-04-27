@@ -10,6 +10,9 @@
 // harness can supply a run-level turn bound through SystemSpec.Runtime.MaxSteps,
 // which the evaluator maps to Eino's iteration limit.
 //
+// Per-run Eino callbacks are composed through the sibling callbacks package so
+// observability wiring stays separate from evaluator business logic.
+//
 // This package does not own writer repair flows, CLI validation pipelines,
 // benchmark schemas, scoring, backend adapters, or MCP integration.
 package eino

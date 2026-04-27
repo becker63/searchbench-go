@@ -9,7 +9,8 @@ import (
 // This remains evaluator-local because it carries retry/attempt details that
 // are not yet shared across executors. The failure refers to one evaluator
 // attempt or to retry exhaustion across attempts, not to an individual
-// Eino-internal model turn.
+// Eino-internal model turn. Callback setup failures are reported here before
+// evaluator execution begins.
 type Failure struct {
 	Phase       Phase
 	Kind        FailureKind
