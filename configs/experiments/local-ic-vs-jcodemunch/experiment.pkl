@@ -1,0 +1,65 @@
+amends "../../schema/SearchBenchExperiment.pkl"
+
+name = "local-ic-vs-jcodemunch-lca-dev"
+
+mode = "evaluator_only"
+
+dataset {
+  config = "py"
+  split = "dev"
+  maxItems = 5
+}
+
+systems {
+  baseline {
+    id = "jcodemunch-baseline"
+    name = "jCodeMunch baseline"
+    backend = "jcodemunch"
+  }
+
+  candidate {
+    id = "iterative-context-candidate"
+    name = "Iterative Context candidate"
+    backend = "iterative_context"
+
+    policy {
+      id = "candidate-policy-dev"
+      path = "policies/candidate_policy.py"
+    }
+  }
+}
+
+evaluator {
+  model {
+    provider = "openrouter"
+    name = "moonshotai/kimi-k2"
+    maxOutputTokens = 2000
+  }
+
+  bounds {
+    maxModelTurns = 8
+    maxToolCalls = 24
+    timeoutSeconds = 300
+  }
+
+  retry {
+    maxAttempts = 2
+    retryOnModelError = true
+    retryOnToolFailure = false
+    retryOnFinalizationFailure = true
+    retryOnInvalidPrediction = true
+  }
+}
+
+scoring {
+  objective = "scoring/localization-objective.pkl"
+}
+
+outputConfig {
+  reportFormat = "pretty"
+  bundleRoot = "artifacts/runs"
+
+  traces {
+    enabled = false
+  }
+}

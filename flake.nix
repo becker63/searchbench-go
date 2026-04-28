@@ -22,6 +22,8 @@
             gopls
             gotools
             go-tools
+            pkl
+            pkl-lsp
           ];
 
           shellHook = ''

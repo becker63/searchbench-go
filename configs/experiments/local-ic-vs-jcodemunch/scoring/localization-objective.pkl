@@ -1,5 +1,6 @@
-// Non-executable example fixture for the future SearchBench-Go Pkl scoring
-// interface. This file illustrates the reviewable math shape only.
+// Non-executable example fixture for the local experiment bundle.
+// This mirrors the repo-level scoring example, but keeps the experiment's
+// referenced inputs self-contained under one directory tree.
 
 module searchbench.scoring
 
@@ -39,12 +40,3 @@ invalidPredictionPenalty =
   if (current.invalidPredictions.known && current.invalidPredictions.count > 0) 0.0 else 1.0
 
 final = base * regressionPenalty * invalidPredictionPenalty
-
-// A future runner would map this file into score.ObjectiveResult:
-//
-// - objectiveId -> ObjectiveResult.ObjectiveID
-// - evidenceRefs -> ObjectiveResult.EvidenceRefs
-// - each named value -> ObjectiveValue{Name, Value, Kind}
-// - final -> ObjectiveResult.Final = "final"
-//
-// This example is deliberately not wired into production config or execution.

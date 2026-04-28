@@ -1,0 +1,133 @@
+@go.Package { name = "github.com/becker63/searchbench-go/internal/surface/config/generated" }
+module searchbench.config.Experiment
+
+import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/go.pkl"
+
+name: String
+
+mode: RunMode = "evaluator_only"
+
+dataset: Dataset
+
+systems: Systems
+
+evaluator: Evaluator
+
+writer: Writer?
+
+scoring: Scoring
+
+outputConfig: Output = new {}
+
+typealias RunMode =
+  "evaluator_only" |
+  "writer_optimization" |
+  "optimization_kickoff"
+
+typealias DatasetKind = "lca"
+typealias Backend = "iterative_context" | "jcodemunch" | "fake"
+typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
+typealias PolicyLanguage = "python"
+typealias ReportFormat = "pretty" | "json" | "both"
+typealias TracingProvider = "langsmith"
+
+class Dataset {
+  kind: DatasetKind = "lca"
+  name: String = "JetBrains-Research/lca-bug-localization"
+  config: String
+  split: String
+  maxItems: Int(this > 0)?
+}
+
+class Systems {
+  baseline: System
+  candidate: System
+}
+
+class System {
+  id: String
+  name: String = id
+  backend: Backend
+  promptBundle: PromptBundle = new {}
+  runtime: Runtime = new {}
+  policy: Policy?
+}
+
+class PromptBundle {
+  name: String = "default"
+  version: String? = "dev"
+}
+
+class Runtime {
+  maxSteps: Int(this > 0) = 16
+  timeoutSeconds: Int(this > 0) = 300
+}
+
+class Policy {
+  id: String
+  language: PolicyLanguage = "python"
+  entrypoint: String = "score"
+  path: String
+}
+
+class Model {
+  provider: Provider
+  name: String
+  routing: String?
+  systemPrompt: String?
+  maxOutputTokens: Int(this > 0)? = 2000
+}
+
+class AgentBounds {
+  maxModelTurns: Int(this > 0) = 8
+  maxToolCalls: Int(this >= 0) = 24
+  timeoutSeconds: Int(this > 0) = 300
+}
+
+class Evaluator {
+  model: Model
+  bounds: AgentBounds = new {}
+  retry: RetryPolicy = new {}
+}
+
+class RetryPolicy {
+  maxAttempts: Int(this > 0) = 2
+  retryOnModelError: Boolean = true
+  retryOnToolFailure: Boolean = false
+  retryOnFinalizationFailure: Boolean = true
+  retryOnInvalidPrediction: Boolean = true
+}
+
+class Writer {
+  enabled: Boolean = true
+  model: Model
+  maxAttempts: Int(this > 0) = 3
+  pipeline: PipelineProfile?
+}
+
+class PipelineProfile {
+  name: String
+  steps: Listing<PipelineStep> = new {}
+}
+
+class PipelineStep {
+  name: String
+  argv: Listing<String>
+  timeoutSeconds: Int(this > 0)? = 120
+}
+
+class Scoring {
+  objective: String
+}
+
+class Output {
+  reportFormat: ReportFormat = "pretty"
+  bundleRoot: String = "artifacts/runs"
+  traces: Tracing = new {}
+}
+
+class Tracing {
+  enabled: Boolean = false
+  provider: TracingProvider?
+  project: String?
+}
