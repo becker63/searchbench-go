@@ -87,6 +87,12 @@ func marshalScoreEvidencePkl(doc score.ScoreEvidenceDocument) ([]byte, error) {
 	return []byte(w.String()), nil
 }
 
+// MarshalScoreEvidencePKL deterministically serializes score evidence into the
+// Pkl-native score artifact format used by local scoring and bundles.
+func MarshalScoreEvidencePKL(doc score.ScoreEvidenceDocument) ([]byte, error) {
+	return marshalScoreEvidencePkl(doc)
+}
+
 func writeSystemRef(w *pklWriter, name string, ref domain.SystemRef) {
 	w.object(name, func() {
 		w.linef("id = %s", pklString(ref.ID.String()))

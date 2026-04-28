@@ -24,8 +24,14 @@ var (
 type Request struct {
 	ScoringPath string
 	CurrentRef  score.ObjectiveEvidenceRef
-	ParentRef   *score.ObjectiveEvidenceRef
-	PklCommand  []string
+	// CurrentScorePath overrides the on-disk Pkl module imported for current
+	// evidence while preserving CurrentRef as the durable evidence identity.
+	CurrentScorePath string
+	ParentRef        *score.ObjectiveEvidenceRef
+	// ParentScorePath overrides the on-disk Pkl module imported for parent
+	// evidence while preserving ParentRef as the durable evidence identity.
+	ParentScorePath string
+	PklCommand      []string
 }
 
 // Evaluate executes one Pkl scoring file against score evidence and returns
@@ -38,13 +44,13 @@ func Evaluate(ctx context.Context, request Request) (score.ObjectiveResult, erro
 	if err := validateRequest(normalized); err != nil {
 		return score.ObjectiveResult{}, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	currentScorePath, err := resolveScorePath(normalized.CurrentRef.ScorePath)
+	currentScorePath, err := resolveScorePath(firstNonEmpty(normalized.CurrentScorePath, normalized.CurrentRef.ScorePath))
 	if err != nil {
 		return score.ObjectiveResult{}, fmt.Errorf("%w: current score path: %w", ErrInvalidRequest, err)
 	}
 	var parentScorePath string
 	if normalized.ParentRef != nil {
-		parentScorePath, err = resolveScorePath(normalized.ParentRef.ScorePath)
+		parentScorePath, err = resolveScorePath(firstNonEmpty(normalized.ParentScorePath, normalized.ParentRef.ScorePath))
 		if err != nil {
 			return score.ObjectiveResult{}, fmt.Errorf("%w: parent score path: %w", ErrInvalidRequest, err)
 		}
@@ -175,4 +181,13 @@ func renderEvidenceRef(name string, ref score.ObjectiveEvidenceRef) string {
 
 func fileURI(path string) string {
 	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

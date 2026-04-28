@@ -24,6 +24,8 @@
             go-tools
             pkl
             pkl-lsp
+            # for pkl
+            jdk25
           ];
 
           shellHook = ''
