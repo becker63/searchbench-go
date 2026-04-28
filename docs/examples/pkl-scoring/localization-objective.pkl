@@ -1,0 +1,50 @@
+// Non-executable example fixture for the future SearchBench-Go Pkl scoring
+// interface. This file illustrates the reviewable math shape only.
+
+module searchbench.scoring
+
+objectiveId = "localization-v1"
+
+constants {
+  maxHop = 12.0
+  tokenBudget = 20000.0
+}
+
+evidenceRefs = new Listing {
+  ["current"] {
+    scorePath = "artifacts/runs/run-current/score.json"
+  }
+  ["parent"] {
+    scorePath = "artifacts/runs/run-parent/score.json"
+  }
+}
+
+currentLocalizationQuality =
+  1.0 - min(current.localizationDistance.goldHop.candidate, constants.maxHop) / constants.maxHop
+
+parentLocalizationQuality =
+  1.0 - min(parent.localizationDistance.goldHop.candidate, constants.maxHop) / constants.maxHop
+
+improvementVsParent = currentLocalizationQuality - parentLocalizationQuality
+
+tokenEfficiency =
+  1.0 - min(current.usage.totalTokens, constants.tokenBudget) / constants.tokenBudget
+
+base = (currentLocalizationQuality * 0.8) + (tokenEfficiency * 0.2)
+
+regressionPenalty =
+  if (current.regressions.severeCount > 0) 0.0 else 1.0
+
+invalidPredictionPenalty =
+  if (current.invalidPredictions.known && current.invalidPredictions.count > 0) 0.0 else 1.0
+
+final = base * regressionPenalty * invalidPredictionPenalty
+
+// A future runner would map this file into score.ObjectiveResult:
+//
+// - objectiveId -> ObjectiveResult.ObjectiveID
+// - evidenceRefs -> ObjectiveResult.EvidenceRefs
+// - each named value -> ObjectiveValue{Name, Value, Kind}
+// - final -> ObjectiveResult.Final = "final"
+//
+// This example is deliberately not wired into production config or execution.
