@@ -1,4 +1,4 @@
-@go.Package { name = "github.com/becker63/searchbench-go/internal/surface/config/generated" }
+@go.Package { name = "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated" }
 module searchbench.config.Experiment
 
 import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/go.pkl"

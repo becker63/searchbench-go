@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/becker63/searchbench-go/internal/codegraph"
-	"github.com/becker63/searchbench-go/internal/compare"
-	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/report"
-	"github.com/becker63/searchbench-go/internal/run"
-	"github.com/becker63/searchbench-go/internal/score"
-	"github.com/becker63/searchbench-go/internal/surface/logging"
+	"github.com/becker63/searchbench-go/internal/app/compare"
+	"github.com/becker63/searchbench-go/internal/app/logging"
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+	"github.com/becker63/searchbench-go/internal/pure/run"
+	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
 const demoPolicySource = "def score(task):\n    return \"candidate\"\n"

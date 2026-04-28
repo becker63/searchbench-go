@@ -4,7 +4,7 @@
 
 This document defines the visible Pkl-based objective scoring interface in SearchBench-Go.
 
-SearchBench-Go now has a narrow executable scoring seam in `internal/surface/scoring`:
+SearchBench-Go now has a narrow executable scoring seam in `internal/adapters/scoring/pkl`:
 
 - Go supplies `score.ScoreEvidenceDocument` inputs
 - a Pkl objective file is evaluated with `pkl-go`
@@ -16,8 +16,8 @@ This still does not add parent-run discovery, experiment execution, or optimizer
 
 SearchBench-Go already has the pure Go types needed to support a visible scoring layer:
 
-- raw score evidence in `internal/score.ScoreEvidenceDocument`
-- typed objective results in `internal/score.ObjectiveResult`
+- raw score evidence in `internal/pure/score.ScoreEvidenceDocument`
+- typed objective results in `internal/pure/score.ObjectiveResult`
 - immutable bundle persistence for `score.pkl` and optional `objective.json`
 
 The missing piece is the contract between those two layers. That contract must make scoring math durable, reviewable, and file-native instead of hiding it behind Go reducer names or transform enums.
@@ -45,14 +45,14 @@ This interface does not define:
 
 The current pure Go boundary is:
 
-- `internal/score/evidence.go`
+- `internal/pure/score/evidence.go`
   - `ScoreEvidenceDocument`
-- `internal/score/objective.go`
+- `internal/pure/score/objective.go`
   - `ObjectiveResult`
   - `ObjectiveValue`
   - `ObjectiveEvidenceRef`
   - `ObjectiveBounds`
-- `internal/report/evidence.go`
+- `internal/pure/report/evidence.go`
   - `ProjectScoreEvidence(report.CandidateReport)`
 
 Those types stay authoritative. Pkl is a future producer of objective values, not a replacement for Go-owned evidence or validation.

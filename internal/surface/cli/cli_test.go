@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 )
 
 func TestDemoReportCommandRuns(t *testing.T) {

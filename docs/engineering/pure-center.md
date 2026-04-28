@@ -28,11 +28,11 @@ The pure center is where the project’s real nouns live.
 
 In SearchBench-Go, that center is things like:
 
-    domain
-    run
-    score
-    report
-    codegraph
+    internal/pure/domain
+    internal/pure/run
+    internal/pure/score
+    internal/pure/report
+    internal/pure/codegraph
 
 These packages describe the stable model:
 
@@ -72,7 +72,7 @@ The pure center should not depend outward on them.
 
 A useful dependency direction is:
 
-    adapters -> pure model
+    adapters -> ports -> pure model
 
 not:
 

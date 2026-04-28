@@ -211,7 +211,7 @@ The domain-schema issue is a prerequisite for execution code, not execution code
 What this issue may rely on from the testing strategy:
 
 - the repository already has a strict rule that default model tests are offline
-- future execution-layer tests already have a home and should not push model fixtures into `internal/domain`
+- future execution-layer tests already have a home and should not push model fixtures into `internal/pure/domain`
 
 What this issue should prepare for:
 
@@ -305,7 +305,7 @@ Then assert:
 
 Do not:
 
-- put model fixtures in `internal/domain`, `internal/run`, `internal/score`, or `internal/compare`
+- put model fixtures in `internal/pure/domain`, `internal/pure/run`, `internal/pure/score`, or `internal/app/compare`
 - introduce a generic provider abstraction just for tests
 - add real provider calls to default tests
 - copy raw provider dumps with secrets or giant payloads

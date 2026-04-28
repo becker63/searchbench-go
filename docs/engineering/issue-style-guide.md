@@ -291,7 +291,7 @@ Current decision:
 
 Expected shape:
 
-    internal/prompts/evaluator/
+    internal/pure/prompts/evaluator/
       input.go
       prompt.templ
       render.go
@@ -397,7 +397,7 @@ Use language like:
 
     Prefer using the existing project structure. If no better location already exists, a reasonable shape is:
 
-        internal/prompts/evaluator/
+        internal/pure/prompts/evaluator/
           input.go
           prompt.templ
           render.go

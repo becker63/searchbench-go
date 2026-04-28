@@ -7,9 +7,9 @@ SearchBench-Go uses Pkl here as a human-authored experiment surface, not as the 
 The intended flow is:
 
 1. a human writes `experiment.pkl`
-2. `pkl-go` resolves the manifest into typed Go config structs
+2. `pkl-go` resolves the manifest into typed Go config structs via `internal/adapters/config/pkl`
 3. Go validates SearchBench-specific cross-field rules
-4. future code projects that validated config into domain, compare, executor, and pipeline inputs
+4. future code projects that validated config into pure/app/adapter inputs
 
 This does not make Pkl drive full SearchBench execution yet.
 
@@ -17,7 +17,7 @@ This does not make Pkl drive full SearchBench execution yet.
 
 Go owns:
 
-- domain models
+- pure domain models
 - task identity
 - run lifecycle
 - evaluator execution
@@ -102,6 +102,7 @@ This first manifest surface proves:
 - SearchBench can carry typed Pkl experiment files
 - `pkl-go` can resolve them into Go structs
 - Go can validate SearchBench-specific invariants afterward
+- the manifest surface stays in `internal/adapters/config/pkl` instead of leaking Pkl runtime concerns into pure packages
 
 It does not yet implement:
 

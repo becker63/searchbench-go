@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/becker63/searchbench-go/internal/compare"
+	"github.com/becker63/searchbench-go/internal/app/compare"
 	"github.com/becker63/searchbench-go/internal/surface/console"
 )
 

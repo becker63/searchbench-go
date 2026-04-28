@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/becker63/searchbench-go/internal/domain"
-	"github.com/becker63/searchbench-go/internal/report"
-	"github.com/becker63/searchbench-go/internal/run"
-	"github.com/becker63/searchbench-go/internal/score"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+	"github.com/becker63/searchbench-go/internal/pure/run"
+	"github.com/becker63/searchbench-go/internal/pure/score"
 	"github.com/charmbracelet/lipgloss"
 )
 

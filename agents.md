@@ -11,16 +11,16 @@ This project is intentionally type-first, boring, and explicit. Do not add cleve
 Current package responsibilities:
 
 ```text
-internal/domain    stable vocabulary: IDs, tasks, systems, policies, repos, predictions, usage
-internal/run       run lifecycle: specs, phases, executed runs, failures
-internal/score     metric types, score sets, metric direction, scored runs
-internal/report    candidate reports, comparison specs, regressions, promotion decisions
-internal/compare   orchestration: plans, runner, task comparison, aggregation, parallelism
-internal/backend   future backend/session/tool boundary
-internal/codegraph graph model used by ingestion/scoring
-internal/logging   safe structured/event logging
-internal/console   human terminal rendering
-internal/cli       thin command-line surface
+internal/pure/domain        stable vocabulary: IDs, tasks, systems, policies, repos, predictions, usage
+internal/pure/run           run lifecycle: specs, phases, executed runs, failures
+internal/pure/score         metric types, score sets, metric direction, scored runs
+internal/pure/report        candidate reports, comparison specs, regressions, promotion decisions
+internal/pure/codegraph     graph model used by ingestion/scoring
+internal/app/compare        orchestration: plans, runner, task comparison, aggregation, parallelism
+internal/ports/backend      backend/session/tool contracts
+internal/app/logging        safe structured/event logging
+internal/surface/console    human terminal rendering
+internal/surface/cli        thin command-line surface
 ```
 
 The intended flow is:
@@ -217,7 +217,7 @@ internal/console
 Structured report data belongs in:
 
 ```text
-internal/report
+internal/pure/report
 ```
 
 ### Do not make `compare` know concrete backends
@@ -505,12 +505,12 @@ Place tests near the package that owns the invariant.
 Examples:
 
 ```text
-score invariants       -> internal/score
-report safety          -> internal/report
-console output safety  -> internal/console
-logging safety         -> internal/logging
-runner orchestration   -> internal/compare
-CLI smoke tests        -> internal/cli
+score invariants       -> internal/pure/score
+report safety          -> internal/pure/report
+console output safety  -> internal/surface/console
+logging safety         -> internal/app/logging
+runner orchestration   -> internal/app/compare
+CLI smoke tests        -> internal/surface/cli
 ```
 
 Do not test everything through the CLI.
