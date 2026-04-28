@@ -90,7 +90,7 @@ The experiment manifest does not define objective math.
 
 The scoring objective file answers:
 
-- how bundled `score.json` evidence is turned into named objective values
+- how bundled `score.pkl` evidence is turned into named objective values
 - which value is final
 
 That scoring behavior remains separate from experiment configuration.

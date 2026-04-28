@@ -1,0 +1,50 @@
+module searchbench.scoring.Objective
+
+typealias ObjectiveValueKind = "intermediate" | "penalty" | "final"
+
+class ObjectiveEvidenceRef {
+  name: String
+  bundlePath: String?
+  scorePath: String?
+  reportPath: String?
+  sha256: String?
+}
+
+class ObjectiveValue {
+  name: String
+  value: Number
+  kind: ObjectiveValueKind
+  unit: String?
+  description: String?
+}
+
+class ObjectiveBounds {
+  min: Number?
+  max: Number?
+}
+
+hidden current: Dynamic = new Dynamic {}
+hidden parent: Dynamic?
+hidden currentRef: ObjectiveEvidenceRef
+hidden parentRef: ObjectiveEvidenceRef?
+
+schemaVersion: String = "searchbench.objective_result.v1"
+
+objectiveId: String
+
+evidenceRefs: Listing<ObjectiveEvidenceRef> =
+  if (parentRef != null)
+    new {
+      currentRef
+      parentRef
+    }
+  else
+    new {
+      currentRef
+    }
+
+values: Listing<ObjectiveValue>
+
+final: String
+
+bounds: ObjectiveBounds?

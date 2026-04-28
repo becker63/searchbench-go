@@ -36,7 +36,7 @@ func TestWriteBundleSerializesCandidateReport(t *testing.T) {
 	}
 	assertFileExists(t, filepath.Join(string(ref.Path), "resolved.json"))
 	assertFileExists(t, filepath.Join(string(ref.Path), "report.json"))
-	assertFileExists(t, filepath.Join(string(ref.Path), "score.json"))
+	assertFileExists(t, filepath.Join(string(ref.Path), "score.pkl"))
 	assertFileExists(t, filepath.Join(string(ref.Path), "metadata.json"))
 	assertFileExists(t, filepath.Join(string(ref.Path), "report.md"))
 	assertFileExists(t, filepath.Join(string(ref.Path), completeMarkerName))
@@ -52,10 +52,12 @@ func TestWriteBundleSerializesProvidedScoreEvidence(t *testing.T) {
 		t.Fatalf("WriteBundle() error = %v", err)
 	}
 
-	var got score.ScoreEvidenceDocument
-	decodeJSONFile(t, filepath.Join(string(ref.Path), "score.json"), &got)
-	if got.Usage.TotalTokens != 999 {
-		t.Fatalf("score.json usage.total_tokens = %d, want 999 from provided score evidence", got.Usage.TotalTokens)
+	scorePkl := string(mustReadFile(t, filepath.Join(string(ref.Path), "score.pkl")))
+	if !strings.Contains(scorePkl, "totalTokens = 999") {
+		t.Fatalf("score.pkl = %q, want provided usage totalTokens value", scorePkl)
+	}
+	if !strings.Contains(scorePkl, "localizationDistance {") {
+		t.Fatalf("score.pkl = %q, want Pkl-native camelCase evidence fields", scorePkl)
 	}
 }
 
@@ -161,7 +163,7 @@ func TestWriteBundleDeterministicSerialization(t *testing.T) {
 		t.Fatalf("WriteBundle(requestTwo) error = %v", err)
 	}
 
-	files := []string{"resolved.json", "report.json", "report.md", "score.json", "metadata.json", completeMarkerName}
+	files := []string{"resolved.json", "report.json", "report.md", "score.pkl", "metadata.json", completeMarkerName}
 	for _, name := range files {
 		left := mustReadFile(t, filepath.Join(string(refOne.Path), name))
 		right := mustReadFile(t, filepath.Join(string(refTwo.Path), name))
@@ -220,11 +222,8 @@ func TestSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
 
 	request := sampleBundleRequest(t)
 	w := newWriter()
-	w.marshalJSON = func(v any) ([]byte, error) {
-		if _, ok := v.(score.ScoreEvidenceDocument); ok {
-			return nil, errors.New("fixture score serialization failed")
-		}
-		return marshalDeterministic(v)
+	w.marshalScorePKL = func(score.ScoreEvidenceDocument) ([]byte, error) {
+		return nil, errors.New("fixture score serialization failed")
 	}
 
 	_, err := w.WriteBundle(context.Background(), request)
@@ -297,7 +296,7 @@ func TestMetadataListsEveryGeneratedArtifact(t *testing.T) {
 	for _, file := range metadata.Files {
 		gotPaths = append(gotPaths, file.Path)
 	}
-	wantPaths := []string{"resolved.json", "report.json", "report.md", "score.json", "metadata.json", completeMarkerName}
+	wantPaths := []string{"resolved.json", "report.json", "report.md", "score.pkl", "metadata.json", completeMarkerName}
 	slices.Sort(gotPaths)
 	slices.Sort(wantPaths)
 	if !slices.Equal(gotPaths, wantPaths) {
@@ -343,7 +342,7 @@ func TestReportSafeOutputsDoNotLeakPolicySource(t *testing.T) {
 		t.Fatal("expected candidate policy ref")
 	}
 	rawSource := "def score(task):\n    return 'candidate'\n"
-	for _, name := range []string{"report.json", "score.json", "metadata.json", "report.md", "objective.json"} {
+	for _, name := range []string{"report.json", "score.pkl", "metadata.json", "report.md", "objective.json"} {
 		path := filepath.Join(string(ref.Path), name)
 		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 			continue
@@ -556,13 +555,13 @@ func sampleObjectiveResult() *score.ObjectiveResult {
 			{
 				Name:       "current",
 				BundlePath: "artifacts/runs/current",
-				ScorePath:  "artifacts/runs/current/score.json",
+				ScorePath:  "artifacts/runs/current/score.pkl",
 				SHA256:     "abc123",
 			},
 			{
 				Name:       "parent",
 				BundlePath: "artifacts/runs/parent",
-				ScorePath:  "artifacts/runs/parent/score.json",
+				ScorePath:  "artifacts/runs/parent/score.pkl",
 				ReportPath: "artifacts/runs/parent/report.json",
 			},
 		},

@@ -1,0 +1,24 @@
+module searchbench.scoring.ObjectiveHelpers
+
+import "SearchBenchObjective.pkl" as objective
+
+function intermediate(valueName: String, amount: Number) =
+  new objective.ObjectiveValue {
+    name = valueName
+    value = amount
+    kind = "intermediate"
+  }
+
+function penalty(valueName: String, amount: Number) =
+  new objective.ObjectiveValue {
+    name = valueName
+    value = amount
+    kind = "penalty"
+  }
+
+function finalValue(valueName: String, amount: Number) =
+  new objective.ObjectiveValue {
+    name = valueName
+    value = amount
+    kind = "final"
+  }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/domain"
 	"github.com/becker63/searchbench-go/internal/report"
+	"github.com/becker63/searchbench-go/internal/score"
 )
 
 const completeMarkerContent = "complete\n"
@@ -23,20 +24,22 @@ func WriteBundle(ctx context.Context, request BundleRequest) (BundleRef, error) 
 }
 
 type writer struct {
-	now         func() time.Time
-	marshalJSON func(any) ([]byte, error)
-	rename      func(string, string) error
-	writeFile   func(string, []byte) error
-	mkdirAll    func(string) error
-	removeAll   func(string) error
-	afterWrite  func(string)
+	now             func() time.Time
+	marshalJSON     func(any) ([]byte, error)
+	marshalScorePKL func(score.ScoreEvidenceDocument) ([]byte, error)
+	rename          func(string, string) error
+	writeFile       func(string, []byte) error
+	mkdirAll        func(string) error
+	removeAll       func(string) error
+	afterWrite      func(string)
 }
 
 func newWriter() writer {
 	return writer{
-		now:         func() time.Time { return time.Now().UTC() },
-		marshalJSON: marshalDeterministic,
-		rename:      os.Rename,
+		now:             func() time.Time { return time.Now().UTC() },
+		marshalJSON:     marshalDeterministic,
+		marshalScorePKL: marshalScoreEvidencePkl,
+		rename:          os.Rename,
 		writeFile: func(path string, data []byte) error {
 			return os.WriteFile(path, data, 0o644)
 		},
@@ -132,14 +135,14 @@ func (w writer) WriteBundle(ctx context.Context, request BundleRequest) (BundleR
 		files = append(files, fileRecord("rendered_report", rendered.FileName, rendered.MediaType, sha256Bytes(renderedBytes)))
 	}
 
-	scoreBytes, err := w.marshalJSON(request.ScoreEvidence)
+	scoreBytes, err := w.marshalScorePKL(request.ScoreEvidence)
 	if err != nil {
 		return BundleRef{}, &Error{Phase: phaseScore, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
 	}
-	if err := w.writeArtifact(stageDir, "score.json", scoreBytes); err != nil {
+	if err := w.writeArtifact(stageDir, "score.pkl", scoreBytes); err != nil {
 		return BundleRef{}, &Error{Phase: phaseScore, Kind: FailureKindFilesystemFailed, Path: stageDir, Err: err}
 	}
-	files = append(files, fileRecord("score", "score.json", "application/json", sha256Bytes(scoreBytes)))
+	files = append(files, fileRecord("score", "score.pkl", "text/plain", sha256Bytes(scoreBytes)))
 
 	if request.ObjectiveResult != nil {
 		objectiveBytes, err := w.marshalJSON(*request.ObjectiveResult)

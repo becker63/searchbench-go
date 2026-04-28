@@ -28,21 +28,21 @@ var (
 // It stores named intermediate values and identifies the final value by name.
 // The model intentionally does not encode how those values were produced.
 type ObjectiveResult struct {
-	SchemaVersion string                 `json:"schema_version"`
-	ObjectiveID   string                 `json:"objective_id"`
-	EvidenceRefs  []ObjectiveEvidenceRef `json:"evidence_refs,omitempty"`
-	Values        []ObjectiveValue       `json:"values"`
-	Final         string                 `json:"final"`
-	Bounds        *ObjectiveBounds       `json:"bounds,omitempty"`
+	SchemaVersion string                 `json:"schema_version" pkl:"schemaVersion"`
+	ObjectiveID   string                 `json:"objective_id" pkl:"objectiveId"`
+	EvidenceRefs  []ObjectiveEvidenceRef `json:"evidence_refs,omitempty" pkl:"evidenceRefs"`
+	Values        []ObjectiveValue       `json:"values" pkl:"values"`
+	Final         string                 `json:"final" pkl:"final"`
+	Bounds        *ObjectiveBounds       `json:"bounds,omitempty" pkl:"bounds"`
 }
 
 // ObjectiveValue is one named output from a future objective calculation.
 type ObjectiveValue struct {
-	Name        string             `json:"name"`
-	Value       float64            `json:"value"`
-	Kind        ObjectiveValueKind `json:"kind"`
-	Unit        string             `json:"unit,omitempty"`
-	Description string             `json:"description,omitempty"`
+	Name        string             `json:"name" pkl:"name"`
+	Value       float64            `json:"value" pkl:"value"`
+	Kind        ObjectiveValueKind `json:"kind" pkl:"kind"`
+	Unit        string             `json:"unit,omitempty" pkl:"unit"`
+	Description string             `json:"description,omitempty" pkl:"description"`
 }
 
 // ObjectiveValueKind classifies one objective value.
@@ -57,17 +57,17 @@ const (
 // ObjectiveEvidenceRef is a typed reference to evidence used by a future
 // objective calculation.
 type ObjectiveEvidenceRef struct {
-	Name       string `json:"name"`
-	BundlePath string `json:"bundle_path,omitempty"`
-	ScorePath  string `json:"score_path,omitempty"`
-	ReportPath string `json:"report_path,omitempty"`
-	SHA256     string `json:"sha256,omitempty"`
+	Name       string `json:"name" pkl:"name"`
+	BundlePath string `json:"bundle_path,omitempty" pkl:"bundlePath"`
+	ScorePath  string `json:"score_path,omitempty" pkl:"scorePath"`
+	ReportPath string `json:"report_path,omitempty" pkl:"reportPath"`
+	SHA256     string `json:"sha256,omitempty" pkl:"sha256"`
 }
 
 // ObjectiveBounds optionally constrains the final objective value.
 type ObjectiveBounds struct {
-	Min *float64 `json:"min,omitempty"`
-	Max *float64 `json:"max,omitempty"`
+	Min *float64 `json:"min,omitempty" pkl:"min"`
+	Max *float64 `json:"max,omitempty" pkl:"max"`
 }
 
 // Validate checks that the objective result is structurally meaningful and

@@ -28,6 +28,22 @@ func TestObjectiveResultValidateAcceptsFuturePklShapedResult(t *testing.T) {
 	}
 }
 
+func TestObjectiveResultFinalValueIsSelectedByFinalName(t *testing.T) {
+	t.Parallel()
+
+	result := sampleObjectiveResult()
+	setObjectiveValue(t, &result, "base", 0.55)
+	result.Final = "base"
+
+	finalValue, ok := result.FinalValue()
+	if !ok {
+		t.Fatal("FinalValue() = missing, want present")
+	}
+	if finalValue.Name != "base" || finalValue.Value != 0.55 {
+		t.Fatalf("FinalValue() = %#v, want base=0.55 selected by Final", finalValue)
+	}
+}
+
 func TestObjectiveResultValidateAcceptsCurrentAndParentEvidenceRefs(t *testing.T) {
 	t.Parallel()
 
@@ -192,7 +208,7 @@ func TestObjectiveResultRejectsDuplicateEvidenceRefNames(t *testing.T) {
 	result := sampleObjectiveResult()
 	result.EvidenceRefs = append(result.EvidenceRefs, ObjectiveEvidenceRef{
 		Name:      "current",
-		ScorePath: "artifacts/runs/current/score.json",
+		ScorePath: "artifacts/runs/current/score.pkl",
 	})
 
 	if err := result.Validate(); err == nil || !strings.Contains(err.Error(), ErrDuplicateEvidenceRef.Error()) {
@@ -279,13 +295,13 @@ func sampleObjectiveResult() ObjectiveResult {
 			{
 				Name:       "current",
 				BundlePath: "artifacts/runs/current",
-				ScorePath:  "artifacts/runs/current/score.json",
+				ScorePath:  "artifacts/runs/current/score.pkl",
 				SHA256:     "abc123",
 			},
 			{
 				Name:       "parent",
 				BundlePath: "artifacts/runs/parent",
-				ScorePath:  "artifacts/runs/parent/score.json",
+				ScorePath:  "artifacts/runs/parent/score.pkl",
 				ReportPath: "artifacts/runs/parent/report.json",
 			},
 		},

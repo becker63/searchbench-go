@@ -2,9 +2,15 @@
 
 ## Status
 
-This document defines the future interface for visible Pkl-based objective scoring in SearchBench-Go.
+This document defines the visible Pkl-based objective scoring interface in SearchBench-Go.
 
-It is intentionally design-only. It does not add executable Pkl evaluation, bundle loading, parent resolution, experiment manifests, or runtime configuration.
+SearchBench-Go now has a narrow executable scoring seam in `internal/surface/scoring`:
+
+- Go supplies `score.ScoreEvidenceDocument` inputs
+- a Pkl objective file is evaluated with `pkl-go`
+- Go validates the returned `score.ObjectiveResult`
+
+This still does not add parent-run discovery, experiment execution, or optimizer/runtime configuration ownership to Pkl.
 
 ## Goals
 
@@ -12,7 +18,7 @@ SearchBench-Go already has the pure Go types needed to support a visible scoring
 
 - raw score evidence in `internal/score.ScoreEvidenceDocument`
 - typed objective results in `internal/score.ObjectiveResult`
-- immutable bundle persistence for `score.json` and optional `objective.json`
+- immutable bundle persistence for `score.pkl` and optional `objective.json`
 
 The missing piece is the contract between those two layers. That contract must make scoring math durable, reviewable, and file-native instead of hiding it behind Go reducer names or transform enums.
 
@@ -27,7 +33,6 @@ The intended flow is:
 
 This interface does not define:
 
-- executable Pkl integration
 - experiment manifests
 - dataset configuration
 - evaluator, backend, writer, or optimizer configuration in Pkl
@@ -54,11 +59,11 @@ Those types stay authoritative. Pkl is a future producer of objective values, no
 
 ## Lifecycle
 
-The future scoring lifecycle is:
+The scoring lifecycle is:
 
 1. `report.CandidateReport` is projected into `score.ScoreEvidenceDocument`.
-2. Artifact writing persists that evidence as `score.json`.
-3. A future scoring runner resolves explicit evidence references for:
+2. Artifact writing persists that evidence as `score.pkl`.
+3. A scoring runner resolves explicit evidence references for:
    - the current run
    - an optional parent run
 4. Pkl evaluates pure scoring math over those resolved evidence documents.
@@ -68,16 +73,18 @@ The future scoring lifecycle is:
 
 The scoring runner is intentionally narrow. It evaluates formulas over evidence. It does not own execution orchestration, bundle mutation, or system configuration.
 
+The current implementation imports explicit `score.pkl` evidence modules directly, converts them to `Dynamic`, and evaluates the objective file against that Pkl-native shape.
+
 ## Evidence Inputs
 
-Pkl should only read explicit, durable evidence inputs. The first-class source is bundled `score.json`, which already exposes field-addressable evidence such as:
+Pkl should only read explicit, durable evidence inputs. The first-class source is bundled `score.pkl`, which already exposes field-addressable evidence such as:
 
 - `current.metrics`
 - `current.localizationDistance`
 - `current.usage`
 - `current.regressions`
 - `current.invalidPredictions`
-- `current.promotionDecision`
+- `current.promotion_decision`
 
 If parent-aware scoring is added later, the parent input must also be explicit. It must not be discovered implicitly from lineage or mutable global state.
 
@@ -90,7 +97,7 @@ A future runner should resolve inputs into a shape conceptually equivalent to:
 - `constants`
   - scorer-owned constants from the scoring file
 
-Pkl must not read `report.json` tables or Go-specific reducer internals when `score.json` already exposes the needed evidence.
+Pkl must not read `report.json` tables or Go-specific reducer internals when `score.pkl` already exposes the needed evidence.
 
 ## Evidence References
 
@@ -161,19 +168,30 @@ Kinds map onto `score.ObjectiveValueKind`:
 
 The final score must remain explicit and must be referenced by name through `ObjectiveResult.Final`.
 
+Visible objective files should stay compact. Shared Pkl helpers may construct
+`ObjectiveValue` entries so the scoring file reads like objective math plus a
+small export block, for example:
+
+- `helpers.intermediate("base", base)`
+- `helpers.penalty("regressionPenalty", regressionPenalty)`
+- `helpers.finalValue("final", finalScore)`
+
+Those helpers are only constructor conveniences. They do not replace the
+authoritative final selector, which remains `final = "final"`.
+
 ## Example Formula Style
 
-The visible scoring layer should support formulas of the form:
+The visible scoring layer supports formulas of the form:
 
-`currentLocalizationQuality = 1.0 - min(current.localizationDistance.goldHop.candidate, constants.maxHop) / constants.maxHop`
+`currentLocalizationQuality = 1.0 - current.localizationDistance.goldHop.candidate / maxHop`
 
-`tokenEfficiency = 1.0 - min(current.usage.totalTokens, constants.tokenBudget) / constants.tokenBudget`
+`tokenEfficiency = 1.0 - current.usage.totalTokens / tokenBudget`
 
 `final = base * regressionPenalty * invalidPredictionPenalty`
 
 The important property is not the specific math. It is that the formula is durable and human-readable in a file instead of being encoded as opaque reducer wiring in Go.
 
-The current evidence document does not expose a canonical `localizationDistance.mean` field. A future scorer must either:
+The current evidence document does not expose a canonical `localizationDistance.mean` field. A scorer must either:
 
 - use the existing named evidence fields such as `goldHop` or `issueHop`, or
 - add a new pure evidence field in a separate issue before depending on it in Pkl
@@ -193,7 +211,7 @@ The current `ObjectiveResult.Validate()` contract already rejects:
 - duplicate or malformed evidence refs
 - final values outside declared bounds
 
-Future executable Pkl support should add runner-level failures around that validation, but it must still terminate by producing a validated `ObjectiveResult` or a typed failure.
+The current executable runner wraps those validation failures at the scoring boundary, but it still terminates by producing a validated `ObjectiveResult` or a typed failure.
 
 ## Bundle Integration
 
@@ -201,15 +219,13 @@ Immutable run bundles already persist:
 
 - `resolved.json`
 - `report.json`
-- `score.json`
+- `score.pkl`
 - optional `objective.json`
 - `metadata.json`
 - optional rendered report
 - `COMPLETE`
 
-When future executable scoring is added:
-
-- `score.json` remains the raw evidence input
+- `score.pkl` remains the raw evidence input
 - `objective.json` remains the validated scoring output
 
 The scoring source file should also be copied into the bundle as a reviewable artifact so the exact visible math used for that run is immutable. A reasonable future shape is:
@@ -220,11 +236,11 @@ or
 
 - `objective.pkl`
 
-This issue does not implement that artifact. It only makes the requirement explicit so executable support does not hide scoring source outside the bundle.
+The current scorer does not yet copy the scoring source into bundles automatically. That remains a follow-up persistence concern.
 
 ## Failure Modes
 
-The future runner should treat these as explicit failures, not silent fallbacks:
+The scorer should treat these as explicit failures, not silent fallbacks:
 
 - Pkl runtime unavailable
 - scoring file missing
@@ -257,13 +273,12 @@ Pkl belongs between score evidence and objective result production. It does not 
 
 ## Implementation Boundary For Future Work
 
-A future implementation should add only the minimum executable seam needed:
+The current implementation adds that minimum seam:
 
-1. resolve explicit evidence refs
+1. resolve explicit evidence refs supplied by Go
 2. load the scoring source file
 3. run Pkl against score evidence inputs
-4. map named output values into `score.ObjectiveResult`
+4. map the output directly into `score.ObjectiveResult`
 5. validate the result in Go
-6. persist `objective.json` and copied scoring source into the bundle
 
-That implementation should remain fixture-driven and scoring-specific. It should not expand into a generic manifest or plugin framework unless a later issue explicitly requires it.
+Bundle persistence of `objective.json` is already supported once a caller supplies the validated result. Automatic scoring-source copying remains future work.

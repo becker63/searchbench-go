@@ -1,42 +1,49 @@
-// Non-executable example fixture for the local experiment bundle.
-// This mirrors the repo-level scoring example, but keeps the experiment's
-// referenced inputs self-contained under one directory tree.
+amends "../../../schema/SearchBenchObjective.pkl"
+import "../../../schema/SearchBenchObjectiveHelpers.pkl" as helpers
 
-module searchbench.scoring
+local maxHop = 12.0
+local tokenBudget = 20000.0
 
 objectiveId = "localization-v1"
 
-constants {
-  maxHop = 12.0
-  tokenBudget = 20000.0
-}
+local currentLocalizationQuality =
+  1.0 - (if (current.localizationDistance.goldHop.candidate < maxHop) current.localizationDistance.goldHop.candidate else maxHop) / maxHop
 
-evidenceRefs = new Listing {
-  ["current"] {
-    scorePath = "artifacts/runs/run-current/score.json"
-  }
-  ["parent"] {
-    scorePath = "artifacts/runs/run-parent/score.json"
-  }
-}
+local parentLocalizationQuality =
+  if (parent != null)
+    1.0 - (if (parent.localizationDistance.goldHop.candidate < maxHop) parent.localizationDistance.goldHop.candidate else maxHop) / maxHop
+  else
+    currentLocalizationQuality
 
-currentLocalizationQuality =
-  1.0 - min(current.localizationDistance.goldHop.candidate, constants.maxHop) / constants.maxHop
+local improvementVsParent = currentLocalizationQuality - parentLocalizationQuality
 
-parentLocalizationQuality =
-  1.0 - min(parent.localizationDistance.goldHop.candidate, constants.maxHop) / constants.maxHop
+local tokenEfficiency =
+  1.0 - (if (current.usage.totalTokens < tokenBudget) current.usage.totalTokens else tokenBudget) / tokenBudget
 
-improvementVsParent = currentLocalizationQuality - parentLocalizationQuality
+local base = (currentLocalizationQuality * 0.8) + (tokenEfficiency * 0.2)
 
-tokenEfficiency =
-  1.0 - min(current.usage.totalTokens, constants.tokenBudget) / constants.tokenBudget
-
-base = (currentLocalizationQuality * 0.8) + (tokenEfficiency * 0.2)
-
-regressionPenalty =
+local regressionPenalty =
   if (current.regressions.severeCount > 0) 0.0 else 1.0
 
-invalidPredictionPenalty =
+local invalidPredictionPenalty =
   if (current.invalidPredictions.known && current.invalidPredictions.count > 0) 0.0 else 1.0
 
-final = base * regressionPenalty * invalidPredictionPenalty
+local finalScore = base * regressionPenalty * invalidPredictionPenalty
+
+values = new {
+  helpers.intermediate("currentLocalizationQuality", currentLocalizationQuality)
+  helpers.intermediate("parentLocalizationQuality", parentLocalizationQuality)
+  helpers.intermediate("improvementVsParent", improvementVsParent)
+  helpers.intermediate("tokenEfficiency", tokenEfficiency)
+  helpers.intermediate("base", base)
+  helpers.penalty("regressionPenalty", regressionPenalty)
+  helpers.penalty("invalidPredictionPenalty", invalidPredictionPenalty)
+  helpers.finalValue("final", finalScore)
+}
+
+final = "final"
+
+bounds = new ObjectiveBounds {
+  min = 0.0
+  max = 1.0
+}
