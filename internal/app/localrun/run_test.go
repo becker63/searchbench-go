@@ -18,6 +18,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+	appExperiment "github.com/becker63/searchbench-go/internal/app/experiment"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
@@ -58,42 +59,9 @@ func TestRunRejectsUnsupportedMode(t *testing.T) {
 		t.Fatalf("writeExperimentFixture() error = %v", err)
 	}
 
-	_, err := resolvePlan(context.Background(), sampleRequest(temp))
-	if err == nil || !strings.Contains(err.Error(), errUnsupportedMode.Error()) {
-		t.Fatalf("resolvePlan() error = %v, want unsupported mode", err)
-	}
-}
-
-func TestResolvePlanResolvesManifestRelativePaths(t *testing.T) {
-	t.Parallel()
-
-	temp := t.TempDir()
-	writeLocalFixtureFiles(t, temp)
-	if err := writeExperimentFixture(t, filepath.Join(temp, "experiment.pkl"), sampleExperiment(temp)); err != nil {
-		t.Fatalf("writeExperimentFixture() error = %v", err)
-	}
-
-	plan, err := resolvePlan(context.Background(), sampleRequest(temp))
-	if err != nil {
-		t.Fatalf("resolvePlan() error = %v", err)
-	}
-	if got, want := plan.objectivePath, filepath.Join(temp, "scoring", "localization-objective.pkl"); got != want {
-		t.Fatalf("objectivePath = %q, want %q", got, want)
-	}
-	if got, want := plan.resolvedInput.Output.ResolvedPolicyPath.Candidate, filepath.ToSlash(filepath.Join(temp, "policies", "candidate_policy.py")); got != want {
-		t.Fatalf("candidate policy path = %q, want %q", got, want)
-	}
-	if got, want := plan.resolvedInput.Output.BundleRoot, filepath.ToSlash(filepath.Join(temp, "artifacts", "runs")); got != want {
-		t.Fatalf("bundle root = %q, want %q", got, want)
-	}
-	if got, want := plan.comparePlan.Systems.Baseline.Runtime.MaxSteps, 8; got != want {
-		t.Fatalf("baseline MaxSteps = %d, want %d from evaluator bounds", got, want)
-	}
-	if got, want := plan.comparePlan.Systems.Candidate.Runtime.MaxSteps, 8; got != want {
-		t.Fatalf("candidate MaxSteps = %d, want %d from evaluator bounds", got, want)
-	}
-	if got, want := plan.comparePlan.Systems.Candidate.Runtime.MaxToolCalls, 24; got != want {
-		t.Fatalf("candidate MaxToolCalls = %d, want %d", got, want)
+	_, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
+	if err == nil || !strings.Contains(err.Error(), appExperiment.ErrUnsupportedMode.Error()) {
+		t.Fatalf("Resolve() error = %v, want unsupported mode", err)
 	}
 }
 
@@ -105,17 +73,17 @@ func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 	if err := writeExperimentFixture(t, filepath.Join(temp, "experiment.pkl"), sampleExperiment(temp)); err != nil {
 		t.Fatalf("writeExperimentFixture() error = %v", err)
 	}
-	plan, err := resolvePlan(context.Background(), sampleRequest(temp))
+	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
 	if err != nil {
-		t.Fatalf("resolvePlan() error = %v", err)
+		t.Fatalf("Resolve() error = %v", err)
 	}
 
 	out, err := runFakeComparison(context.Background(), plan)
 	if err != nil {
 		t.Fatalf("runFakeComparison() error = %v", err)
 	}
-	if out.ID != plan.reportID {
-		t.Fatalf("report ID = %q, want %q", out.ID, plan.reportID)
+	if out.ID != plan.ReportID {
+		t.Fatalf("report ID = %q, want %q", out.ID, plan.ReportID)
 	}
 	if len(out.Runs.Baseline) != 1 || len(out.Runs.Candidate) != 1 {
 		t.Fatalf("run counts = baseline:%d candidate:%d, want 1/1", len(out.Runs.Baseline), len(out.Runs.Candidate))
@@ -133,9 +101,9 @@ func TestFakeComparisonProjectsScoreEvidence(t *testing.T) {
 	if err := writeExperimentFixture(t, filepath.Join(temp, "experiment.pkl"), sampleExperiment(temp)); err != nil {
 		t.Fatalf("writeExperimentFixture() error = %v", err)
 	}
-	plan, err := resolvePlan(context.Background(), sampleRequest(temp))
+	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
 	if err != nil {
-		t.Fatalf("resolvePlan() error = %v", err)
+		t.Fatalf("Resolve() error = %v", err)
 	}
 	out, err := runFakeComparison(context.Background(), plan)
 	if err != nil {
@@ -243,9 +211,9 @@ func TestMaterializeScoreEvidenceCreatesCurrentTempModule(t *testing.T) {
 		t.Fatalf("writeExperimentFixture() error = %v", err)
 	}
 
-	plan, err := resolvePlan(context.Background(), sampleRequest(temp))
+	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
 	if err != nil {
-		t.Fatalf("resolvePlan() error = %v", err)
+		t.Fatalf("Resolve() error = %v", err)
 	}
 	current := sampleScoreEvidence(t, domain.ReportID("report-materialized-current"))
 
@@ -258,7 +226,7 @@ func TestMaterializeScoreEvidenceCreatesCurrentTempModule(t *testing.T) {
 	if got, want := materialized.CurrentRef.Name, "current"; got != want {
 		t.Fatalf("CurrentRef.Name = %q, want %q", got, want)
 	}
-	if got, want := materialized.CurrentRef.ScorePath, filepath.Join(string(plan.expectedBundlePath), "score.pkl"); got != want {
+	if got, want := materialized.CurrentRef.ScorePath, filepath.Join(string(plan.Output.ExpectedBundlePath), "score.pkl"); got != want {
 		t.Fatalf("CurrentRef.ScorePath = %q, want %q", got, want)
 	}
 	content := string(mustReadFile(t, materialized.CurrentScorePath))
@@ -285,9 +253,9 @@ func TestMaterializeScoreEvidenceAcceptsExplicitParent(t *testing.T) {
 		t.Fatalf("writeExperimentFixture() error = %v", err)
 	}
 
-	plan, err := resolvePlan(context.Background(), request)
+	plan, err := appExperiment.Resolve(context.Background(), request)
 	if err != nil {
-		t.Fatalf("resolvePlan() error = %v", err)
+		t.Fatalf("Resolve() error = %v", err)
 	}
 	current := sampleScoreEvidence(t, domain.ReportID("report-current"))
 

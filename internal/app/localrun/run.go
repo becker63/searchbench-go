@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	artifact "github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	scoring "github.com/becker63/searchbench-go/internal/adapters/scoring/pkl"
+	appExperiment "github.com/becker63/searchbench-go/internal/app/experiment"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/surface/console"
 )
@@ -15,10 +17,10 @@ import (
 // Run executes the smallest manifest-driven local fake SearchBench-Go path and
 // writes one immutable bundle.
 func Run(ctx context.Context, request Request) (Result, error) {
-	plan, err := resolvePlan(ctx, request)
+	plan, err := appExperiment.Resolve(ctx, request)
 	if err != nil {
 		phase := PhaseResolvePlanFailed
-		if errors.Is(err, errUnsupportedMode) {
+		if errors.Is(err, appExperiment.ErrUnsupportedMode) {
 			phase = PhaseUnsupportedMode
 		} else if errors.Is(err, config.ErrValidationFailed) {
 			phase = PhaseValidateManifestFailed
@@ -34,8 +36,9 @@ func Run(ctx context.Context, request Request) (Result, error) {
 
 	runCtx := ctx
 	cancel := func() {}
-	if plan.timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, plan.timeout)
+	timeout := timeoutFromSeconds(plan.Evaluator.Bounds.TimeoutSeconds)
+	if timeout > 0 {
+		runCtx, cancel = context.WithTimeout(ctx, timeout)
 	}
 	defer cancel()
 
@@ -59,7 +62,7 @@ func Run(ctx context.Context, request Request) (Result, error) {
 	defer evidenceInput.Cleanup()
 
 	objectiveResult, err := scoring.Evaluate(ctx, scoring.Request{
-		ScoringPath:      plan.objectivePath,
+		ScoringPath:      plan.Scoring.ObjectivePath,
 		CurrentRef:       evidenceInput.CurrentRef,
 		CurrentScorePath: evidenceInput.CurrentScorePath,
 		ParentRef:        evidenceInput.ParentRef,
@@ -76,21 +79,21 @@ func Run(ctx context.Context, request Request) (Result, error) {
 	}
 
 	bundleRef, err := artifact.WriteBundle(ctx, artifact.BundleRequest{
-		RootPath:        plan.artifactRoot,
-		BundleID:        plan.bundleID,
-		ResolvedInput:   plan.resolvedInput,
+		RootPath:        plan.Output.BundleWriterRoot,
+		BundleID:        plan.Bundle.ID,
+		ResolvedInput:   bundleResolvedInput(plan),
 		CandidateReport: candidateReport,
 		ScoreEvidence:   scoreEvidence,
 		ObjectiveResult: &objectiveResult,
 		RenderedReport:  renderedReport,
-		CreatedAt:       plan.createdAt,
+		CreatedAt:       plan.CreatedAt,
 	})
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseBundleWriteFailed, Err: err}
 	}
 
 	return Result{
-		ManifestPath:    plan.manifestPath,
+		ManifestPath:    plan.ManifestPath,
 		Bundle:          bundleRef,
 		ReportID:        candidateReport.ID,
 		CandidateReport: candidateReport,
@@ -99,8 +102,8 @@ func Run(ctx context.Context, request Request) (Result, error) {
 	}, nil
 }
 
-func renderReport(plan resolvedPlan, candidateReport report.CandidateReport) (*artifact.RenderedReport, error) {
-	if !plan.renderReport {
+func renderReport(plan appExperiment.ResolvedExperiment, candidateReport report.CandidateReport) (*artifact.RenderedReport, error) {
+	if !plan.Output.RenderHumanReport {
 		return nil, nil
 	}
 	content := console.RenderCandidateReport(candidateReport, console.Options{
@@ -121,4 +124,11 @@ func normalizeManifestPathError(manifestPath string, err error) error {
 		return statErr
 	}
 	return nil
+}
+
+func timeoutFromSeconds(seconds int) time.Duration {
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
 }

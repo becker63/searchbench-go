@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	artifact "github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
+	appExperiment "github.com/becker63/searchbench-go/internal/app/experiment"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -19,7 +20,7 @@ type materializedEvidence struct {
 	cleanup          func()
 }
 
-func materializeScoreEvidence(plan resolvedPlan, current score.ScoreEvidenceDocument) (materializedEvidence, error) {
+func materializeScoreEvidence(plan appExperiment.ResolvedExperiment, current score.ScoreEvidenceDocument) (materializedEvidence, error) {
 	data, err := artifact.MarshalScoreEvidencePKL(current)
 	if err != nil {
 		return materializedEvidence{}, err
@@ -38,10 +39,10 @@ func materializeScoreEvidence(plan resolvedPlan, current score.ScoreEvidenceDocu
 	}
 
 	out := materializedEvidence{
-		CurrentRef:       plan.resolvedInput.Scoring.Evidence.Current,
+		CurrentRef:       plan.Scoring.CurrentEvidence,
 		CurrentScorePath: currentScorePath,
-		ParentRef:        cloneEvidenceRef(plan.parentRef),
-		ParentScorePath:  strings.TrimSpace(plan.parentScorePath),
+		ParentRef:        cloneEvidenceRef(plan.Scoring.ParentEvidence),
+		ParentScorePath:  strings.TrimSpace(plan.Scoring.ParentScorePath),
 		cleanup:          cleanup,
 	}
 	if out.ParentRef != nil {
@@ -76,4 +77,12 @@ func resolveParentScorePath(ref *score.ObjectiveEvidenceRef, override string) (s
 		return "", fmt.Errorf("parent score path: %w", err)
 	}
 	return path, nil
+}
+
+func cloneEvidenceRef(ref *score.ObjectiveEvidenceRef) *score.ObjectiveEvidenceRef {
+	if ref == nil {
+		return nil
+	}
+	copyRef := *ref
+	return &copyRef
 }

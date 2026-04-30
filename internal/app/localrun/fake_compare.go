@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/app/compare"
+	appExperiment "github.com/becker63/searchbench-go/internal/app/experiment"
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
@@ -13,9 +14,9 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func runFakeComparison(ctx context.Context, plan resolvedPlan) (report.CandidateReport, error) {
+func runFakeComparison(ctx context.Context, plan appExperiment.ResolvedExperiment) (report.CandidateReport, error) {
 	runner := compare.Runner{
-		Executor:      fakeExecutor{now: plan.createdAt},
+		Executor:      fakeExecutor{now: plan.CreatedAt},
 		GraphProvider: fakeGraphProvider{},
 		Scorer:        fakeScorer{},
 		Decider:       fakeDecider{},
@@ -23,18 +24,18 @@ func runFakeComparison(ctx context.Context, plan resolvedPlan) (report.Candidate
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},
 		NewReportID: func() domain.ReportID {
-			return plan.reportID
+			return plan.ReportID
 		},
 		Now: func() time.Time {
-			return plan.createdAt
+			return plan.CreatedAt
 		},
-		Parallelism: compare.DefaultParallelism(),
+		Parallelism: plan.Parallelism,
 	}
-	out, err := runner.Run(ctx, plan.comparePlan)
+	out, err := runner.Run(ctx, plan.ComparePlan())
 	if err != nil {
 		return report.CandidateReport{}, err
 	}
-	out.CreatedAt = plan.createdAt
+	out.CreatedAt = plan.CreatedAt
 	return out, nil
 }
 

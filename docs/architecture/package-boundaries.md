@@ -92,7 +92,8 @@ Use-case orchestration and composition.
 
 Belongs here:
 - comparison orchestration
-- manifest resolution, explicit evidence threading, and local fake end-to-end composition
+- canonical resolved experiment semantics
+- manifest resolution, explicit evidence threading, and execution composition
 - cross-cutting app logging used by orchestrators and surfaces
 
 Does not belong here:
@@ -100,6 +101,7 @@ Does not belong here:
 - concrete provider or filesystem adapters
 
 Current packages:
+- `internal/app/experiment`
 - `internal/app/compare`
 - `internal/app/localrun`
 - `internal/app/logging`

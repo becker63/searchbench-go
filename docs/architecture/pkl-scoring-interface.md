@@ -76,6 +76,10 @@ comparison report is projected into score evidence and before bundle
 finalization. Invalid objective output or a missing objective file fails the run
 before a completed bundle is produced.
 
+The canonical resolved experiment semantics that supply objective path,
+current-parent evidence refs, and output settings now live in
+`internal/app/experiment`. The scorer still remains a narrow adapter-edge seam.
+
 The scoring runner is intentionally narrow. It evaluates formulas over evidence. It does not own execution orchestration, bundle mutation, or system configuration.
 
 The current implementation imports explicit `score.pkl` evidence modules directly, converts them to `Dynamic`, and evaluates the objective file against that Pkl-native shape.

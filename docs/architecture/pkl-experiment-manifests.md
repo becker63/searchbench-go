@@ -9,13 +9,17 @@ The intended flow is:
 1. a human writes `experiment.pkl`
 2. `pkl-go` resolves the manifest into typed Go config structs via `internal/adapters/config/pkl`
 3. Go validates SearchBench-specific cross-field rules
-4. `internal/app/localrun` resolves the validated manifest into an execution plan with stable absolute paths
-5. the current local/fake compare path executes from that resolved plan
+4. `internal/app/experiment` resolves the validated manifest into the canonical app-level experiment plan
+5. an execution strategy such as `internal/app/localrun` executes that resolved plan
 6. a durable bundle is written with resolved inputs, report artifacts, score evidence, and objective output
 
 This now makes the current local/fake SearchBench path executable from a Pkl
 manifest. It still does not make Pkl drive full SearchBench execution semantics
 or future backend integrations.
+
+Pkl is the canonical public run interface. Generated Pkl structs remain
+adapter-edge data and are projected into an app-owned resolved experiment model
+before execution starts.
 
 ## Boundary
 
@@ -126,8 +130,9 @@ searchbench run --manifest configs/experiments/local-ic-vs-jcodemunch/experiment
 ```
 
 That command currently uses the safe local/fake comparison seam in
-`internal/app/localrun`. It does not call real IC MCP, jCodeMunch MCP, or
-provider APIs in tests.
+`internal/app/localrun`, but `localrun` is only one execution strategy. The
+canonical experiment semantics now live in `internal/app/experiment`. It does
+not call real IC MCP, jCodeMunch MCP, or provider APIs in tests.
 
 ## Lineage Direction
 
