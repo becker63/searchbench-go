@@ -116,6 +116,18 @@ func TestEvaluateRejectsMissingScoringFile(t *testing.T) {
 	}
 }
 
+func TestEvaluateRejectsMissingCurrentScoreFile(t *testing.T) {
+	t.Parallel()
+
+	request := sampleRequest(t)
+	request.CurrentRef.ScorePath = filepath.Join(t.TempDir(), "missing-current.pkl")
+
+	_, err := Evaluate(context.Background(), request)
+	if err == nil || !strings.Contains(err.Error(), ErrInvalidRequest.Error()) {
+		t.Fatalf("Evaluate() error = %v, want invalid request error", err)
+	}
+}
+
 func TestVisibleObjectiveFileUsesSharedValueHelpers(t *testing.T) {
 	t.Parallel()
 

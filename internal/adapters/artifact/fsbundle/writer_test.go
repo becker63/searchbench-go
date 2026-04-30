@@ -515,13 +515,54 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 		RootPath: domain.HostPath(filepath.Join(t.TempDir(), "artifacts")),
 		BundleID: "bundle-2026-04-26-fixed",
 		ResolvedInput: ResolvedComparisonInput{
+			ManifestPath:   "configs/experiments/example/experiment.pkl",
+			ExperimentName: "bundle-writer-test",
+			Mode:           "evaluator_only",
+			Dataset: DatasetConfig{
+				Kind:   "lca",
+				Name:   "repo/example",
+				Config: "py",
+				Split:  "dev",
+			},
 			Systems: domain.NewPair(baseline.Ref(), candidate.Ref()),
 			Tasks:   tasks,
 			Parallelism: ParallelismConfig{
 				Mode:       "sequential",
 				MaxWorkers: 1,
 			},
-			ScoringProfile: "default",
+			Evaluator: EvaluatorConfig{
+				Model: EvaluatorModelConfig{
+					Provider:        "openai",
+					Name:            "gpt-candidate",
+					MaxOutputTokens: 2048,
+				},
+				Bounds: EvaluatorBoundsConfig{
+					MaxModelTurns:  8,
+					MaxToolCalls:   24,
+					TimeoutSeconds: 300,
+				},
+				Retry: RetryPolicyConfig{
+					MaxAttempts: 2,
+				},
+			},
+			Scoring: ScoringConfig{
+				ObjectivePath: "configs/experiments/example/scoring/objective.pkl",
+				Evidence: EvidenceConfig{
+					Current: score.ObjectiveEvidenceRef{
+						Name:      "current",
+						ScorePath: "artifacts/runs/example/score.pkl",
+					},
+				},
+			},
+			Output: OutputConfig{
+				BundleRoot:        "artifacts/runs",
+				BundleWriterRoot:  "artifacts",
+				ReportFormat:      "markdown",
+				RenderHumanReport: true,
+				ResolvedPolicyPath: ResolvedPolicyPath{
+					Candidate: "configs/experiments/example/policies/candidate.py",
+				},
+			},
 			ReportOptions: ReportOptions{
 				Format: "markdown",
 			},

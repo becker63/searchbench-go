@@ -3,45 +3,43 @@ package localrun
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
 
-	"github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
-	"github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	"github.com/becker63/searchbench-go/internal/adapters/scoring/pkl"
+	artifact "github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
+	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+	scoring "github.com/becker63/searchbench-go/internal/adapters/scoring/pkl"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/score"
 	"github.com/becker63/searchbench-go/internal/surface/console"
 )
 
 // Run executes the smallest manifest-driven local fake SearchBench-Go path and
 // writes one immutable bundle.
 func Run(ctx context.Context, request Request) (Result, error) {
-	request = normalizeRequest(request)
-	manifestPath, err := filepath.Abs(request.ManifestPath)
+	plan, err := resolvePlan(ctx, request)
 	if err != nil {
-		return Result{}, &Error{Phase: PhaseLoadManifestFailed, Err: fmt.Errorf("resolve manifest path: %w", err)}
-	}
-
-	experiment, err := config.ResolveFromPath(ctx, manifestPath)
-	if err != nil {
-		return Result{}, &Error{Phase: PhaseLoadManifestFailed, Err: err}
-	}
-	if err := config.Validate(experiment); err != nil {
-		return Result{}, &Error{Phase: PhaseValidateManifestFailed, Err: err}
-	}
-
-	projected, err := projectFakeRun(manifestPath, experiment, request)
-	if err != nil {
-		phase := PhaseProjectFakePlanFailed
+		phase := PhaseResolvePlanFailed
 		if errors.Is(err, errUnsupportedMode) {
 			phase = PhaseUnsupportedMode
+		} else if errors.Is(err, config.ErrValidationFailed) {
+			phase = PhaseValidateManifestFailed
+		} else if errors.Is(err, os.ErrNotExist) {
+			phase = PhaseResolvePlanFailed
+		} else if request.ManifestPath != "" {
+			if absErr := normalizeManifestPathError(request.ManifestPath, err); absErr != nil {
+				return Result{}, &Error{Phase: PhaseLoadManifestFailed, Err: absErr}
+			}
 		}
 		return Result{}, &Error{Phase: phase, Err: err}
 	}
 
-	candidateReport, err := runFakeComparison(ctx, projected)
+	runCtx := ctx
+	cancel := func() {}
+	if plan.timeout > 0 {
+		runCtx, cancel = context.WithTimeout(ctx, plan.timeout)
+	}
+	defer cancel()
+
+	candidateReport, err := runFakeComparison(runCtx, plan)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseFakeComparisonFailed, Err: err}
 	}
@@ -54,43 +52,45 @@ func Run(ctx context.Context, request Request) (Result, error) {
 		return Result{}, &Error{Phase: PhaseScoreEvidenceFailed, Err: err}
 	}
 
-	scoreInputPath, currentRef, cleanup, err := prepareScorePKL(projected, scoreEvidence)
+	evidenceInput, err := materializeScoreEvidence(plan, scoreEvidence)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseScorePKLFailed, Err: err}
 	}
-	defer cleanup()
+	defer evidenceInput.Cleanup()
 
 	objectiveResult, err := scoring.Evaluate(ctx, scoring.Request{
-		ScoringPath:      projected.objectivePath,
-		CurrentRef:       currentRef,
-		CurrentScorePath: scoreInputPath,
+		ScoringPath:      plan.objectivePath,
+		CurrentRef:       evidenceInput.CurrentRef,
+		CurrentScorePath: evidenceInput.CurrentScorePath,
+		ParentRef:        evidenceInput.ParentRef,
+		ParentScorePath:  evidenceInput.ParentScorePath,
 		PklCommand:       request.PklCommand,
 	})
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseObjectiveFailed, Err: err}
 	}
 
-	renderedReport, err := renderReport(projected, candidateReport)
+	renderedReport, err := renderReport(plan, candidateReport)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseRenderReportFailed, Err: err}
 	}
 
 	bundleRef, err := artifact.WriteBundle(ctx, artifact.BundleRequest{
-		RootPath:        projected.artifactRoot,
-		BundleID:        projected.bundleID,
-		ResolvedInput:   projected.resolvedInput,
+		RootPath:        plan.artifactRoot,
+		BundleID:        plan.bundleID,
+		ResolvedInput:   plan.resolvedInput,
 		CandidateReport: candidateReport,
 		ScoreEvidence:   scoreEvidence,
 		ObjectiveResult: &objectiveResult,
 		RenderedReport:  renderedReport,
-		CreatedAt:       projected.createdAt,
+		CreatedAt:       plan.createdAt,
 	})
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseBundleWriteFailed, Err: err}
 	}
 
 	return Result{
-		ManifestPath:    manifestPath,
+		ManifestPath:    plan.manifestPath,
 		Bundle:          bundleRef,
 		ReportID:        candidateReport.ID,
 		CandidateReport: candidateReport,
@@ -99,34 +99,8 @@ func Run(ctx context.Context, request Request) (Result, error) {
 	}, nil
 }
 
-func prepareScorePKL(projected projectedRun, scoreEvidence score.ScoreEvidenceDocument) (string, score.ObjectiveEvidenceRef, func(), error) {
-	data, err := artifact.MarshalScoreEvidencePKL(scoreEvidence)
-	if err != nil {
-		return "", score.ObjectiveEvidenceRef{}, func() {}, err
-	}
-
-	dir, err := os.MkdirTemp("", "searchbench-localrun-score-*")
-	if err != nil {
-		return "", score.ObjectiveEvidenceRef{}, func() {}, err
-	}
-	cleanup := func() { _ = os.RemoveAll(dir) }
-	path := filepath.Join(dir, "score.pkl")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		cleanup()
-		return "", score.ObjectiveEvidenceRef{}, func() {}, err
-	}
-
-	ref := score.ObjectiveEvidenceRef{
-		Name:       "current",
-		BundlePath: string(projected.expectedBundlePath),
-		ScorePath:  filepath.Join(string(projected.expectedBundlePath), "score.pkl"),
-		ReportPath: filepath.Join(string(projected.expectedBundlePath), "report.json"),
-	}
-	return path, ref, cleanup, nil
-}
-
-func renderReport(projected projectedRun, candidateReport report.CandidateReport) (*artifact.RenderedReport, error) {
-	if !projected.renderReport {
+func renderReport(plan resolvedPlan, candidateReport report.CandidateReport) (*artifact.RenderedReport, error) {
+	if !plan.renderReport {
 		return nil, nil
 	}
 	content := console.RenderCandidateReport(candidateReport, console.Options{
@@ -137,4 +111,14 @@ func renderReport(projected projectedRun, candidateReport report.CandidateReport
 		FileName: "report.txt",
 		Content:  content + "\n",
 	}, nil
+}
+
+func normalizeManifestPathError(manifestPath string, err error) error {
+	if manifestPath == "" {
+		return nil
+	}
+	if _, statErr := os.Stat(manifestPath); statErr != nil {
+		return statErr
+	}
+	return nil
 }

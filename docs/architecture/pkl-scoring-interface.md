@@ -71,6 +71,11 @@ The scoring lifecycle is:
 6. Go validates the result with `ObjectiveResult.Validate()`.
 7. Artifact writing persists `objective.json` when validation succeeds.
 
+In the current manifest-driven local run, this happens immediately after the
+comparison report is projected into score evidence and before bundle
+finalization. Invalid objective output or a missing objective file fails the run
+before a completed bundle is produced.
+
 The scoring runner is intentionally narrow. It evaluates formulas over evidence. It does not own execution orchestration, bundle mutation, or system configuration.
 
 The current implementation imports explicit `score.pkl` evidence modules directly, converts them to `Dynamic`, and evaluates the objective file against that Pkl-native shape.
@@ -115,7 +120,13 @@ Each ref should identify the durable source by path and, when available later, a
 - `report_path`
 - `sha256`
 
-This issue does not add ref resolution. It only fixes the contract that a future implementation must honor.
+The important design point is that previous evidence is threaded explicitly
+through these refs. It should become part of the Pkl value graph through
+`current`, `parent`, `currentRef`, and `parentRef`, not through hidden Go
+optimizer loop state.
+
+This issue does not add hash-based ref discovery. It only fixes the contract
+that a future implementation must honor.
 
 ## Pkl Output Contract
 
@@ -228,6 +239,14 @@ Immutable run bundles already persist:
 - `score.pkl` remains the raw evidence input
 - `objective.json` remains the validated scoring output
 
+In the executable local path, `score.pkl` and `objective.json` have distinct
+roles:
+
+- `score.pkl`
+  - the Pkl-readable evidence document projected from `report.json`
+- `objective.json`
+  - the evaluated and validated result of the configured `objective.pkl`
+
 The scoring source file should also be copied into the bundle as a reviewable artifact so the exact visible math used for that run is immutable. A reasonable future shape is:
 
 - `scoring/objective.pkl`
@@ -258,6 +277,41 @@ Two rules are important:
 
 1. Failed objective evaluation must not silently degrade into a default score.
 2. Objective persistence must only happen after validation succeeds.
+
+## Current Executable Scope
+
+The manifest-driven scoring path currently supports:
+
+- current-run evidence
+- optional parent evidence when explicitly provided to the scoring adapter or
+  manifest-driven run request seam
+- local/fake comparison execution feeding `score.pkl`
+
+The current score evidence may be materialized temporarily before final bundle
+writing so the Pkl objective can import an explicit `score.pkl` module. That
+materialization seam is intentionally small and reviewable:
+
+- materialize current `score.pkl`
+- produce the current `ObjectiveEvidenceRef`
+- accept an optional explicit parent `ObjectiveEvidenceRef`
+- pass both into Pkl evaluation
+- clean up temporary current score files afterward
+
+It intentionally does not yet implement:
+
+- automatic parent bundle discovery
+- lineage lookup
+- content-addressed bundle ids
+- typed Pkl evidence classes
+- real backend execution
+
+For future optimizer lineage, prefer:
+
+- explicit artifact references
+- Pkl `amends`
+- immutable per-round bundles
+
+before introducing any bespoke inheritance or content-addressed store.
 
 ## Dependency Direction
 

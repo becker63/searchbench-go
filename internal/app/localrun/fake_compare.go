@@ -13,9 +13,9 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func runFakeComparison(ctx context.Context, projected projectedRun) (report.CandidateReport, error) {
+func runFakeComparison(ctx context.Context, plan resolvedPlan) (report.CandidateReport, error) {
 	runner := compare.Runner{
-		Executor:      fakeExecutor{now: projected.createdAt},
+		Executor:      fakeExecutor{now: plan.createdAt},
 		GraphProvider: fakeGraphProvider{},
 		Scorer:        fakeScorer{},
 		Decider:       fakeDecider{},
@@ -23,18 +23,18 @@ func runFakeComparison(ctx context.Context, projected projectedRun) (report.Cand
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},
 		NewReportID: func() domain.ReportID {
-			return projected.reportID
+			return plan.reportID
 		},
 		Now: func() time.Time {
-			return projected.createdAt
+			return plan.createdAt
 		},
 		Parallelism: compare.DefaultParallelism(),
 	}
-	out, err := runner.Run(ctx, projected.plan)
+	out, err := runner.Run(ctx, plan.comparePlan)
 	if err != nil {
 		return report.CandidateReport{}, err
 	}
-	out.CreatedAt = projected.createdAt
+	out.CreatedAt = plan.createdAt
 	return out, nil
 }
 

@@ -13,6 +13,7 @@ import (
 // CLI is the root Searchbench command tree.
 type CLI struct {
 	DemoReport DemoReportCmd `cmd:"demo-report" help:"Run a complete fake comparison and render the candidate report."`
+	Run        RunCmd        `cmd:"run" help:"Run one Pkl experiment manifest through the local fake execution path."`
 
 	LogFormat string `enum:"dev,json,none" default:"dev" help:"Log format."`
 	NoColor   bool   `help:"Disable color in rendered reports."`

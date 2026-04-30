@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -89,4 +92,57 @@ func TestDemoReportCommandRejectsInvalidInputs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunCommandExecutesManifest(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	temp := t.TempDir()
+	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
+
+	var out bytes.Buffer
+	err := RunWithWriters(
+		context.Background(),
+		[]string{"--quiet", "run", "--manifest", manifestPath, "--bundle-root", temp, "--bundle-id", "cli-localrun"},
+		&out,
+		io.Discard,
+	)
+	if err != nil {
+		t.Fatalf("RunWithWriters() error = %v", err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		"bundle=",
+		"report_id=",
+		"objective=localization-v1",
+		"final=final:",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output missing %q\n%s", want, got)
+		}
+	}
+	for _, name := range []string{"resolved.json", "report.json", "score.pkl", "objective.json", "metadata.json"} {
+		if _, err := os.Stat(filepath.Join(temp, "runs", "cli-localrun", name)); err != nil {
+			t.Fatalf("os.Stat(%q) error = %v", name, err)
+		}
+	}
+}
+
+func requirePkl(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("pkl"); err != nil {
+		t.Skip("pkl CLI not available on PATH")
+	}
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("filepath.Abs(repo root) error = %v", err)
+	}
+	return root
 }

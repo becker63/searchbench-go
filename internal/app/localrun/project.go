@@ -1,6 +1,7 @@
 package localrun
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
-	"github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+	artifact "github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
+	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	"github.com/becker63/searchbench-go/internal/app/compare"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
@@ -24,6 +25,8 @@ type Request struct {
 	BundleRootOverride  string
 	BundleID            string
 	ReportID            domain.ReportID
+	ParentRef           *score.ObjectiveEvidenceRef
+	ParentScorePath     string
 	Now                 func() time.Time
 	PklCommand          []string
 	DisableRenderReport bool
@@ -39,11 +42,11 @@ type Result struct {
 	ObjectiveResult *score.ObjectiveResult
 }
 
-type projectedRun struct {
+type resolvedPlan struct {
 	manifestPath       string
 	manifestDir        string
 	experiment         config.Experiment
-	plan               compare.Plan
+	comparePlan        compare.Plan
 	resolvedInput      artifact.ResolvedComparisonInput
 	objectivePath      string
 	artifactRoot       domain.HostPath
@@ -51,8 +54,16 @@ type projectedRun struct {
 	expectedBundlePath domain.HostPath
 	bundleID           string
 	reportID           domain.ReportID
+	parentRef          *score.ObjectiveEvidenceRef
+	parentScorePath    string
 	createdAt          time.Time
 	renderReport       bool
+	timeout            time.Duration
+}
+
+type resolvedSystem struct {
+	spec       domain.SystemSpec
+	policyPath string
 }
 
 func normalizeRequest(request Request) Request {
@@ -62,30 +73,48 @@ func normalizeRequest(request Request) Request {
 	return request
 }
 
-func projectFakeRun(manifestPath string, experiment config.Experiment, request Request) (projectedRun, error) {
+func resolvePlan(ctx context.Context, request Request) (resolvedPlan, error) {
+	request = normalizeRequest(request)
+
+	manifestPath, err := filepath.Abs(request.ManifestPath)
+	if err != nil {
+		return resolvedPlan{}, fmt.Errorf("resolve manifest path: %w", err)
+	}
+
+	experiment, err := config.ResolveFromPath(ctx, manifestPath)
+	if err != nil {
+		return resolvedPlan{}, err
+	}
+	if err := config.Validate(experiment); err != nil {
+		return resolvedPlan{}, err
+	}
 	if experiment.Mode != config.ModeEvaluatorOnly {
-		return projectedRun{}, fmt.Errorf("%w: %s", errUnsupportedMode, experiment.Mode)
+		return resolvedPlan{}, fmt.Errorf("%w: %s", errUnsupportedMode, experiment.Mode)
 	}
 
 	manifestDir := filepath.Dir(manifestPath)
-	objectivePath, err := resolvePath(manifestDir, experiment.Scoring.Objective)
+	objectivePath, err := resolveExistingManifestPath(manifestDir, experiment.Scoring.Objective)
 	if err != nil {
-		return projectedRun{}, fmt.Errorf("resolve objective path: %w", err)
+		return resolvedPlan{}, fmt.Errorf("resolve objective path: %w", err)
 	}
-
 	bundleCollection, artifactRoot, err := resolveBundlePaths(manifestDir, experiment.OutputConfig.BundleRoot, request.BundleRootOverride)
 	if err != nil {
-		return projectedRun{}, fmt.Errorf("resolve bundle root: %w", err)
+		return resolvedPlan{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
 
-	systems, err := projectSystems(manifestDir, experiment)
+	baseline, err := resolveSystem(manifestDir, experiment.Evaluator, experiment.Systems.Baseline)
 	if err != nil {
-		return projectedRun{}, err
+		return resolvedPlan{}, fmt.Errorf("resolve baseline system: %w", err)
 	}
+	candidate, err := resolveSystem(manifestDir, experiment.Evaluator, experiment.Systems.Candidate)
+	if err != nil {
+		return resolvedPlan{}, fmt.Errorf("resolve candidate system: %w", err)
+	}
+
 	tasks := fakeTasks(manifestDir, experiment)
-	plan := compare.NewPlan(systems, tasks)
-	if err := plan.Validate(); err != nil {
-		return projectedRun{}, fmt.Errorf("validate fake plan: %w", err)
+	comparePlan := compare.NewPlan(domain.NewPair(baseline.spec, candidate.spec), tasks)
+	if err := comparePlan.Validate(); err != nil {
+		return resolvedPlan{}, fmt.Errorf("validate local compare plan: %w", err)
 	}
 
 	now := request.Now().UTC()
@@ -99,28 +128,83 @@ func projectFakeRun(manifestPath string, experiment config.Experiment, request R
 	}
 
 	renderReport := !request.DisableRenderReport && experiment.OutputConfig.ReportFormat != config.ReportFormatJSON
+	expectedBundlePath := domain.HostPath(filepath.Join(string(bundleCollection), bundleID))
+	currentEvidenceRef := score.ObjectiveEvidenceRef{
+		Name:       "current",
+		BundlePath: string(expectedBundlePath),
+		ScorePath:  filepath.Join(string(expectedBundlePath), "score.pkl"),
+		ReportPath: filepath.Join(string(expectedBundlePath), "report.json"),
+	}
 
-	return projectedRun{
+	return resolvedPlan{
 		manifestPath:       manifestPath,
 		manifestDir:        manifestDir,
 		experiment:         experiment,
-		plan:               plan,
+		comparePlan:        comparePlan,
 		objectivePath:      objectivePath,
 		artifactRoot:       artifactRoot,
 		bundleCollection:   bundleCollection,
-		expectedBundlePath: domain.HostPath(filepath.Join(string(bundleCollection), bundleID)),
+		expectedBundlePath: expectedBundlePath,
 		bundleID:           bundleID,
 		reportID:           reportID,
+		parentRef:          cloneEvidenceRef(request.ParentRef),
+		parentScorePath:    request.ParentScorePath,
 		createdAt:          now,
 		renderReport:       renderReport,
+		timeout:            timeoutFromSeconds(experiment.Evaluator.Bounds.TimeoutSeconds),
 		resolvedInput: artifact.ResolvedComparisonInput{
-			Systems: plan.ReportSpec().Systems,
+			ManifestPath:   manifestPath,
+			ExperimentName: experiment.Name,
+			Mode:           experiment.Mode.String(),
+			Dataset: artifact.DatasetConfig{
+				Kind:     experiment.Dataset.Kind,
+				Name:     experiment.Dataset.Name,
+				Config:   experiment.Dataset.Config,
+				Split:    experiment.Dataset.Split,
+				MaxItems: experiment.Dataset.MaxItems,
+			},
+			Systems: comparePlan.ReportSpec().Systems,
 			Tasks:   tasks,
 			Parallelism: artifact.ParallelismConfig{
 				Mode:       string(compare.ExecutionSequential),
 				MaxWorkers: 1,
 			},
-			ScoringProfile: filepath.ToSlash(experiment.Scoring.Objective),
+			Evaluator: artifact.EvaluatorConfig{
+				Model: artifact.EvaluatorModelConfig{
+					Provider:        experiment.Evaluator.Model.Provider.String(),
+					Name:            experiment.Evaluator.Model.Name,
+					MaxOutputTokens: derefInt(experiment.Evaluator.Model.MaxOutputTokens),
+				},
+				Bounds: artifact.EvaluatorBoundsConfig{
+					MaxModelTurns:  experiment.Evaluator.Bounds.MaxModelTurns,
+					MaxToolCalls:   experiment.Evaluator.Bounds.MaxToolCalls,
+					TimeoutSeconds: experiment.Evaluator.Bounds.TimeoutSeconds,
+				},
+				Retry: artifact.RetryPolicyConfig{
+					MaxAttempts:                experiment.Evaluator.Retry.MaxAttempts,
+					RetryOnModelError:          experiment.Evaluator.Retry.RetryOnModelError,
+					RetryOnToolFailure:         experiment.Evaluator.Retry.RetryOnToolFailure,
+					RetryOnFinalizationFailure: experiment.Evaluator.Retry.RetryOnFinalizationFailure,
+					RetryOnInvalidPrediction:   experiment.Evaluator.Retry.RetryOnInvalidPrediction,
+				},
+			},
+			Scoring: artifact.ScoringConfig{
+				ObjectivePath: objectivePath,
+				Evidence: artifact.EvidenceConfig{
+					Current: currentEvidenceRef,
+					Parent:  cloneEvidenceRef(request.ParentRef),
+				},
+			},
+			Output: artifact.OutputConfig{
+				BundleRoot:        filepath.ToSlash(string(bundleCollection)),
+				BundleWriterRoot:  filepath.ToSlash(string(artifactRoot)),
+				ReportFormat:      experiment.OutputConfig.ReportFormat.String(),
+				RenderHumanReport: renderReport,
+				ResolvedPolicyPath: artifact.ResolvedPolicyPath{
+					Baseline:  filepath.ToSlash(baseline.policyPath),
+					Candidate: filepath.ToSlash(candidate.policyPath),
+				},
+			},
 			ReportOptions: artifact.ReportOptions{
 				Format: experiment.OutputConfig.ReportFormat.String(),
 			},
@@ -128,56 +212,48 @@ func projectFakeRun(manifestPath string, experiment config.Experiment, request R
 	}, nil
 }
 
-func projectSystems(manifestDir string, experiment config.Experiment) (domain.Pair[domain.SystemSpec], error) {
-	model := domain.ModelSpec{
-		Provider: experiment.Evaluator.Model.Provider.String(),
-		Name:     experiment.Evaluator.Model.Name,
-	}
-	outputTokens := 0
-	if experiment.Evaluator.Model.MaxOutputTokens != nil {
-		outputTokens = *experiment.Evaluator.Model.MaxOutputTokens
-	}
-
-	project := func(system config.System) (domain.SystemSpec, error) {
-		backendKind, err := mapBackend(system.Backend)
-		if err != nil {
-			return domain.SystemSpec{}, err
-		}
-
-		spec := domain.SystemSpec{
-			ID:      domain.SystemID(system.Id),
-			Name:    system.Name,
-			Backend: backendKind,
-			Model:   model,
-			PromptBundle: domain.PromptBundleRef{
-				Name:    system.PromptBundle.Name,
-				Version: derefString(system.PromptBundle.Version),
-			},
-			Runtime: domain.RuntimeConfig{
-				MaxSteps:        system.Runtime.MaxSteps,
-				MaxToolCalls:    experiment.Evaluator.Bounds.MaxToolCalls,
-				MaxOutputTokens: outputTokens,
-			},
-		}
-		if system.Policy != nil {
-			policy, err := loadPolicy(manifestDir, *system.Policy)
-			if err != nil {
-				return domain.SystemSpec{}, err
-			}
-			spec.Policy = &policy
-		}
-		return spec, nil
-	}
-
-	baseline, err := project(experiment.Systems.Baseline)
+func resolveSystem(manifestDir string, evaluator config.Evaluator, system config.System) (resolvedSystem, error) {
+	backendKind, err := mapBackend(system.Backend)
 	if err != nil {
-		return domain.Pair[domain.SystemSpec]{}, fmt.Errorf("project baseline system: %w", err)
+		return resolvedSystem{}, err
 	}
-	candidate, err := project(experiment.Systems.Candidate)
+
+	spec := domain.SystemSpec{
+		ID:      domain.SystemID(system.Id),
+		Name:    system.Name,
+		Backend: backendKind,
+		Model: domain.ModelSpec{
+			Provider: evaluator.Model.Provider.String(),
+			Name:     evaluator.Model.Name,
+		},
+		PromptBundle: domain.PromptBundleRef{
+			Name:    system.PromptBundle.Name,
+			Version: derefString(system.PromptBundle.Version),
+		},
+		Runtime: domain.RuntimeConfig{
+			MaxSteps:        resolvedMaxSteps(evaluator.Bounds.MaxModelTurns, system.Runtime.MaxSteps),
+			MaxToolCalls:    evaluator.Bounds.MaxToolCalls,
+			MaxOutputTokens: derefInt(evaluator.Model.MaxOutputTokens),
+		},
+	}
+
+	out := resolvedSystem{spec: spec}
+	if system.Policy == nil {
+		return out, nil
+	}
+
+	policyPath, err := resolveExistingManifestPath(manifestDir, system.Policy.Path)
 	if err != nil {
-		return domain.Pair[domain.SystemSpec]{}, fmt.Errorf("project candidate system: %w", err)
+		return resolvedSystem{}, fmt.Errorf("resolve policy path: %w", err)
 	}
-	return domain.NewPair(baseline, candidate), nil
+	data, err := os.ReadFile(policyPath)
+	if err != nil {
+		return resolvedSystem{}, fmt.Errorf("read policy source: %w", err)
+	}
+	policy := domain.NewPythonPolicy(domain.PolicyID(system.Policy.Id), string(data), system.Policy.Entrypoint)
+	out.spec.Policy = &policy
+	out.policyPath = policyPath
+	return out, nil
 }
 
 func fakeTasks(manifestDir string, experiment config.Experiment) domain.NonEmpty[domain.TaskSpec] {
@@ -201,20 +277,11 @@ func fakeTasks(manifestDir string, experiment config.Experiment) domain.NonEmpty
 	return domain.NewNonEmpty(task)
 }
 
-func loadPolicy(manifestDir string, policy config.Policy) (domain.PolicyArtifact, error) {
-	path, err := resolvePath(manifestDir, policy.Path)
-	if err != nil {
-		return domain.PolicyArtifact{}, fmt.Errorf("resolve policy path: %w", err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return domain.PolicyArtifact{}, fmt.Errorf("read policy source: %w", err)
-	}
-	return domain.NewPythonPolicy(domain.PolicyID(policy.Id), string(data), policy.Entrypoint), nil
-}
-
 func resolveBundlePaths(manifestDir string, bundleRoot string, override string) (domain.HostPath, domain.HostPath, error) {
-	collectionPath, err := resolvePath(manifestDir, firstNonEmptyString(override, bundleRoot))
+	collectionPath, err := resolveManifestPath(manifestDir, bundleRoot)
+	if strings.TrimSpace(override) != "" {
+		collectionPath, err = resolveOverridePath(override)
+	}
 	if err != nil {
 		return "", "", err
 	}
@@ -224,7 +291,18 @@ func resolveBundlePaths(manifestDir string, bundleRoot string, override string) 
 	return domain.HostPath(filepath.Join(collectionPath, "runs")), domain.HostPath(collectionPath), nil
 }
 
-func resolvePath(baseDir string, path string) (string, error) {
+func resolveExistingManifestPath(baseDir string, path string) (string, error) {
+	resolved, err := resolveManifestPath(baseDir, path)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(resolved); err != nil {
+		return "", err
+	}
+	return resolved, nil
+}
+
+func resolveManifestPath(baseDir string, path string) (string, error) {
 	if strings.TrimSpace(path) == "" {
 		return "", errors.New("path is required")
 	}
@@ -232,6 +310,16 @@ func resolvePath(baseDir string, path string) (string, error) {
 		return filepath.Clean(path), nil
 	}
 	return filepath.Abs(filepath.Join(baseDir, path))
+}
+
+func resolveOverridePath(path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("path is required")
+	}
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path), nil
+	}
+	return filepath.Abs(path)
 }
 
 func mapBackend(backend config.Backend) (domain.BackendKind, error) {
@@ -245,6 +333,20 @@ func mapBackend(backend config.Backend) (domain.BackendKind, error) {
 	default:
 		return "", fmt.Errorf("unsupported backend %q", backend)
 	}
+}
+
+func resolvedMaxSteps(maxModelTurns int, fallback int) int {
+	if maxModelTurns > 0 {
+		return maxModelTurns
+	}
+	return fallback
+}
+
+func timeoutFromSeconds(seconds int) time.Duration {
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func defaultBundleID(name string, now time.Time) string {
@@ -276,13 +378,11 @@ func sanitizeBundleID(value string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-func firstNonEmptyString(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
+func derefInt(value *int) int {
+	if value == nil {
+		return 0
 	}
-	return ""
+	return *value
 }
 
 func derefString(value *string) string {
@@ -290,4 +390,12 @@ func derefString(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func cloneEvidenceRef(ref *score.ObjectiveEvidenceRef) *score.ObjectiveEvidenceRef {
+	if ref == nil {
+		return nil
+	}
+	copyRef := *ref
+	return &copyRef
 }

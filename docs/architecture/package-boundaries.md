@@ -92,7 +92,7 @@ Use-case orchestration and composition.
 
 Belongs here:
 - comparison orchestration
-- local fake end-to-end composition
+- manifest resolution, explicit evidence threading, and local fake end-to-end composition
 - cross-cutting app logging used by orchestrators and surfaces
 
 Does not belong here:

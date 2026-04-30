@@ -8,7 +8,7 @@ const (
 	PhaseLoadManifestFailed     Phase = "load_manifest_failed"
 	PhaseValidateManifestFailed Phase = "validate_manifest_failed"
 	PhaseUnsupportedMode        Phase = "unsupported_mode"
-	PhaseProjectFakePlanFailed  Phase = "project_fake_plan_failed"
+	PhaseResolvePlanFailed      Phase = "resolve_plan_failed"
 	PhaseFakeComparisonFailed   Phase = "fake_comparison_failed"
 	PhaseScoreEvidenceFailed    Phase = "score_evidence_failed"
 	PhaseScorePKLFailed         Phase = "score_pkl_failed"
