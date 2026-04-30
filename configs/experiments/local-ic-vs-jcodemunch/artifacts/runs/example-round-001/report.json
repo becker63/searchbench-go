@@ -1,0 +1,203 @@
+{
+  "id": "report-example-round-001",
+  "created_at": "2026-04-30T14:00:00Z",
+  "spec": {
+    "systems": {
+      "baseline": {
+        "id": "jcodemunch-baseline",
+        "name": "jCodeMunch baseline",
+        "backend": "jcodemunch",
+        "model": {
+          "provider": "openrouter",
+          "name": "moonshotai/kimi-k2"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "53b404af239f90ba9d55015ba3123914e035afff379280f5b4140b452814331a"
+      },
+      "candidate": {
+        "id": "iterative-context-candidate",
+        "name": "Iterative Context candidate",
+        "backend": "iterative-context",
+        "model": {
+          "provider": "openrouter",
+          "name": "moonshotai/kimi-k2"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "policy": {
+          "id": "candidate-policy-dev",
+          "language": "python",
+          "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
+          "entrypoint": "score"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "8a29f03512867f9994fcd9a8cc8910409000775e1a95f4521f9fbdfdb4eae5e3"
+      }
+    },
+    "tasks": [
+      {
+        "id": "local-fake-task-1",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "searchbench/local-fake",
+          "sha": "0000000",
+          "path": "configs/experiments/local-ic-vs-jcodemunch/fake-repo"
+        },
+        "input": {
+          "title": "Fake py/dev task",
+          "body": "This deterministic local task exists only to prove manifest-driven composition."
+        },
+        "oracle": {
+          "gold_files": [
+            "src/search_target.go"
+          ]
+        }
+      }
+    ]
+  },
+  "runs": {
+    "baseline": [
+      {
+        "execution": {
+          "session_id": "local-session-baseline-local-fake-task-1-jcodemunch-baseline",
+          "prediction": {
+            "files": [
+              "src/baseline_guess.go"
+            ],
+            "reasoning": "deterministic local fake comparison"
+          },
+          "usage": {
+            "input_tokens": 150,
+            "output_tokens": 30,
+            "total_tokens": 180,
+            "cost_usd": 0.2
+          },
+          "trace_id": "local-trace-baseline-local-fake-task-1-jcodemunch-baseline",
+          "started_at": "2026-04-30T14:00:00Z",
+          "finished_at": "2026-04-30T14:00:02Z"
+        },
+        "scores": {
+          "gold_hop": {
+            "name": "gold_hop",
+            "value": 6
+          },
+          "issue_hop": {
+            "name": "issue_hop",
+            "value": 7
+          },
+          "token_efficiency": {
+            "name": "token_efficiency",
+            "value": 0.35
+          },
+          "cost": {
+            "name": "cost",
+            "value": 0.6
+          },
+          "composite": {
+            "name": "composite",
+            "value": 0.3
+          }
+        }
+      }
+    ],
+    "candidate": [
+      {
+        "execution": {
+          "session_id": "local-session-candidate-local-fake-task-1-iterative-context-candidate",
+          "prediction": {
+            "files": [
+              "src/search_target.go"
+            ],
+            "reasoning": "deterministic local fake comparison"
+          },
+          "usage": {
+            "input_tokens": 40,
+            "output_tokens": 12,
+            "total_tokens": 52,
+            "cost_usd": 0.03
+          },
+          "trace_id": "local-trace-candidate-local-fake-task-1-iterative-context-candidate",
+          "started_at": "2026-04-30T14:00:00Z",
+          "finished_at": "2026-04-30T14:00:02Z"
+        },
+        "scores": {
+          "gold_hop": {
+            "name": "gold_hop",
+            "value": 2
+          },
+          "issue_hop": {
+            "name": "issue_hop",
+            "value": 3
+          },
+          "token_efficiency": {
+            "name": "token_efficiency",
+            "value": 0.85
+          },
+          "cost": {
+            "name": "cost",
+            "value": 0.15
+          },
+          "composite": {
+            "name": "composite",
+            "value": 0.9
+          }
+        }
+      }
+    ]
+  },
+  "failures": {
+    "baseline": [],
+    "candidate": []
+  },
+  "comparisons": [
+    {
+      "metric": "gold_hop",
+      "baseline": 6,
+      "candidate": 2,
+      "delta": -4
+    },
+    {
+      "metric": "issue_hop",
+      "baseline": 7,
+      "candidate": 3,
+      "delta": -4
+    },
+    {
+      "metric": "token_efficiency",
+      "baseline": 0.35,
+      "candidate": 0.85,
+      "delta": 0.5
+    },
+    {
+      "metric": "cost",
+      "baseline": 0.6,
+      "candidate": 0.15,
+      "delta": -0.44999999999999996
+    },
+    {
+      "metric": "composite",
+      "baseline": 0.3,
+      "candidate": 0.9,
+      "delta": 0.6000000000000001
+    }
+  ],
+  "regressions": null,
+  "decision": {
+    "decision": "PROMOTE",
+    "reason": "candidate improves the composite score in local fake comparison"
+  }
+}

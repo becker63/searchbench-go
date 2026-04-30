@@ -1,0 +1,20 @@
+amends "../local-ic-vs-jcodemunch/experiment.pkl"
+
+name = "optimize-ic-lca-dev"
+
+systems {
+  candidate {
+    id = "iterative-context-candidate-round-002"
+    name = "Iterative Context candidate round 002"
+    backend = "iterative_context"
+
+    policy {
+      id = "candidate-policy-round-002"
+      path = "policies/candidate_policy.py"
+    }
+  }
+}
+
+scoring {
+  objective = "scoring/localization-objective.pkl"
+}

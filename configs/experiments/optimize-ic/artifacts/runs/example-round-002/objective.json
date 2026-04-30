@@ -1,0 +1,65 @@
+{
+  "schema_version": "searchbench.objective_result.v1",
+  "objective_id": "localization-v1",
+  "evidence_refs": [
+    {
+      "name": "current",
+      "bundle_path": "configs/experiments/optimize-ic/artifacts/runs/example-round-002",
+      "score_path": "configs/experiments/optimize-ic/artifacts/runs/example-round-002/score.pkl",
+      "report_path": "configs/experiments/optimize-ic/artifacts/runs/example-round-002/report.json"
+    },
+    {
+      "name": "parent",
+      "bundle_path": "configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001",
+      "score_path": "configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/score.pkl",
+      "report_path": "configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/report.json"
+    }
+  ],
+  "values": [
+    {
+      "name": "currentLocalizationQuality",
+      "value": 0.8333333333333334,
+      "kind": ""
+    },
+    {
+      "name": "parentLocalizationQuality",
+      "value": 0.8333333333333334,
+      "kind": ""
+    },
+    {
+      "name": "improvementVsParent",
+      "value": 0,
+      "kind": ""
+    },
+    {
+      "name": "tokenEfficiency",
+      "value": 0.9974,
+      "kind": ""
+    },
+    {
+      "name": "base",
+      "value": 0.8661466666666667,
+      "kind": ""
+    },
+    {
+      "name": "regressionPenalty",
+      "value": 1,
+      "kind": ""
+    },
+    {
+      "name": "invalidPredictionPenalty",
+      "value": 1,
+      "kind": ""
+    },
+    {
+      "name": "final",
+      "value": 0.8661466666666667,
+      "kind": ""
+    }
+  ],
+  "final": "final",
+  "bounds": {
+    "min": 0,
+    "max": 1
+  }
+}

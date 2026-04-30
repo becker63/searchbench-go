@@ -58,6 +58,35 @@ func TestResolveExampleManifest(t *testing.T) {
 	}
 }
 
+func TestResolveOptimizeICManifest(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl")
+	out, err := Resolve(context.Background(), Request{
+		ManifestPath:       manifestPath,
+		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
+		BundleID:           "optimize-ic-example",
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	if got, want := out.ExperimentName, "optimize-ic-lca-dev"; got != want {
+		t.Fatalf("ExperimentName = %q, want %q", got, want)
+	}
+	if got, want := out.Systems.Candidate.Backend, domain.BackendIterativeContext; got != want {
+		t.Fatalf("Candidate.Backend = %q, want %q", got, want)
+	}
+	if out.Systems.Candidate.Policy == nil || out.Output.ResolvedPolicyPaths.Candidate != filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "policies", "candidate_policy.py")) {
+		t.Fatalf("Candidate.Policy = %#v, want optimize-ic policy", out.Systems.Candidate.Policy)
+	}
+	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "scoring", "localization-objective.pkl"); got != want {
+		t.Fatalf("ObjectivePath = %q, want %q", got, want)
+	}
+}
+
 func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 	t.Parallel()
 

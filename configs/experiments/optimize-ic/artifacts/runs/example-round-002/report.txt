@@ -1,0 +1,30 @@
+Searchbench Candidate Report  report-example-round-002
+
+Decision                                                           
+╭─────────────────────────────────────────────────────────────────╮
+│ PROMOTE                                                         │
+│ candidate improves the composite score in local fake comparison │
+╰─────────────────────────────────────────────────────────────────╯
+
+Systems                                                                                                                      
+Baseline   jcodemunch         openrouter/moonshotai/kimi-k2  jcodemunch-baseline  53b404af239f  default:dev                  
+Candidate  iterative-context  openrouter/moonshotai/kimi-k2  iterative-context-candidate-round-002  e2ee871e1c3e  default:dev
+Policy      python:score  c2af4bffa26d                                                                                       
+
+Run Summary                      
+Baseline   1 succeeded   0 failed
+Candidate  1 succeeded   0 failed
+
+Metrics                                                           
+Metric              Baseline    Candidate   Delta       Result    
+gold_hop            6.00        2.00        -4.00       improved  
+issue_hop           7.00        3.00        -4.00       improved  
+token_efficiency    0.35        0.85        +0.50       improved  
+cost                0.60        0.15        -0.45       improved  
+composite           0.30        0.90        +0.60       improved  
+
+Regressions
+none       
+
+Failures
+none    

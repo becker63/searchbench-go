@@ -1,0 +1,48 @@
+{
+  "schema_version": "searchbench.bundle.v1",
+  "bundle_id": "example-round-002",
+  "created_at": "2026-04-30T15:00:00Z",
+  "files": [
+    {
+      "kind": "resolved",
+      "path": "resolved.json",
+      "media_type": "application/json",
+      "sha256": "8eeeb2aaf91f1a942a972fd54002733e8da41d33e56fafebfac2c278483fa160"
+    },
+    {
+      "kind": "report",
+      "path": "report.json",
+      "media_type": "application/json",
+      "sha256": "299f75673f0a31d66660c8d309146ea8d47418137aeb00b408a00a0942c03f93"
+    },
+    {
+      "kind": "rendered_report",
+      "path": "report.txt",
+      "media_type": "text/plain",
+      "sha256": "50d7d82a51eacdd8118dfb2a57bd7bc2d30c7a34d67fc8b3d763ae61752ccc45"
+    },
+    {
+      "kind": "score",
+      "path": "score.pkl",
+      "media_type": "text/plain",
+      "sha256": "e2318921b055f5d8b65512ebe2e63f758526bd5adbb092dc3238ab3cab30cae2"
+    },
+    {
+      "kind": "objective",
+      "path": "objective.json",
+      "media_type": "application/json",
+      "sha256": "2970630f6bd6f89366af839d7e76d8a02995854526945e3448ed373080ed2a26"
+    },
+    {
+      "kind": "metadata",
+      "path": "metadata.json",
+      "media_type": "application/json"
+    },
+    {
+      "kind": "complete",
+      "path": "COMPLETE",
+      "media_type": "text/plain",
+      "sha256": "37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1"
+    }
+  ]
+}

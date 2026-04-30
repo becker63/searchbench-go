@@ -1,0 +1,172 @@
+schemaVersion = "searchbench.score_evidence.v1"
+reportId = "report-example-round-001"
+
+systems {
+  baseline {
+    id = "jcodemunch-baseline"
+    name = "jCodeMunch baseline"
+    backend = "jcodemunch"
+    model {
+      provider = "openrouter"
+      name = "moonshotai/kimi-k2"
+    }
+    promptBundle {
+      name = "default"
+      version = "dev"
+    }
+    policy = null
+    runtime {
+      maxSteps = 8
+      maxToolCalls = 24
+      maxInputTokens = 0
+      maxOutputTokens = 2000
+      maxContextTokens = 0
+      toolResultMaxBytes = 0
+    }
+    fingerprint = "53b404af239f90ba9d55015ba3123914e035afff379280f5b4140b452814331a"
+  }
+  candidate {
+    id = "iterative-context-candidate"
+    name = "Iterative Context candidate"
+    backend = "iterative-context"
+    model {
+      provider = "openrouter"
+      name = "moonshotai/kimi-k2"
+    }
+    promptBundle {
+      name = "default"
+      version = "dev"
+    }
+    policy {
+      id = "candidate-policy-dev"
+      language = "python"
+      sha256 = "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054"
+      entrypoint = "score"
+    }
+    runtime {
+      maxSteps = 8
+      maxToolCalls = 24
+      maxInputTokens = 0
+      maxOutputTokens = 2000
+      maxContextTokens = 0
+      toolResultMaxBytes = 0
+    }
+    fingerprint = "8a29f03512867f9994fcd9a8cc8910409000775e1a95f4521f9fbdfdb4eae5e3"
+  }
+}
+
+runCounts {
+  baseline = 1
+  candidate = 1
+}
+
+failureCounts {
+  baseline = 0
+  candidate = 0
+}
+
+localizationDistance {
+  goldHop {
+    metric = "gold_hop"
+    direction = "lower_is_better"
+    baseline = 6
+    candidate = 2
+    delta = -4
+    improved = true
+    regressed = false
+  }
+  issueHop {
+    metric = "issue_hop"
+    direction = "lower_is_better"
+    baseline = 7
+    candidate = 3
+    delta = -4
+    improved = true
+    regressed = false
+  }
+}
+
+usage {
+  available = true
+  measuredRuns = 1
+  inputTokens = 40
+  outputTokens = 12
+  totalTokens = 52
+  costUsd = 0.03
+}
+
+baselineUsage {
+  available = true
+  measuredRuns = 1
+  inputTokens = 150
+  outputTokens = 30
+  totalTokens = 180
+  costUsd = 0.2
+}
+
+regressions {
+  count = 0
+  minorCount = 0
+  severeCount = 0
+}
+
+regressionDetails = new {
+}
+
+invalidPredictions {
+  known = false
+  count = 0
+}
+
+metrics = new {
+  new {
+    metric = "gold_hop"
+    direction = "lower_is_better"
+    baseline = 6
+    candidate = 2
+    delta = -4
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "issue_hop"
+    direction = "lower_is_better"
+    baseline = 7
+    candidate = 3
+    delta = -4
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "token_efficiency"
+    direction = "higher_is_better"
+    baseline = 0.35
+    candidate = 0.85
+    delta = 0.5
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "cost"
+    direction = "lower_is_better"
+    baseline = 0.6
+    candidate = 0.15
+    delta = -0.44999999999999996
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "composite"
+    direction = "higher_is_better"
+    baseline = 0.3
+    candidate = 0.9
+    delta = 0.6000000000000001
+    improved = true
+    regressed = false
+  }
+}
+
+promotionDecision {
+  decision = "PROMOTE"
+  reason = "candidate improves the composite score in local fake comparison"
+}

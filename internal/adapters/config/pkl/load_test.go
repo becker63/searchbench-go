@@ -41,6 +41,28 @@ func TestLoadLocalICVsJCodeMunchManifest(t *testing.T) {
 	}
 }
 
+func TestLoadOptimizeICManifest(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	path := filepath.Join("..", "..", "..", "..", "configs", "experiments", "optimize-ic", "experiment.pkl")
+	experiment, err := LoadFromPath(context.Background(), path)
+	if err != nil {
+		t.Fatalf("LoadFromPath() error = %v", err)
+	}
+
+	if experiment.Name != "optimize-ic-lca-dev" {
+		t.Fatalf("experiment.Name = %q", experiment.Name)
+	}
+	if experiment.Systems.Candidate.Backend != BackendIterativeContext {
+		t.Fatalf("experiment.Systems.Candidate.Backend = %q, want %q", experiment.Systems.Candidate.Backend, BackendIterativeContext)
+	}
+	if experiment.Systems.Candidate.Policy == nil || experiment.Systems.Candidate.Policy.Path != "policies/candidate_policy.py" {
+		t.Fatalf("experiment.Systems.Candidate.Policy = %#v, want optimize-ic policy", experiment.Systems.Candidate.Policy)
+	}
+}
+
 func requirePkl(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("pkl"); err != nil {
