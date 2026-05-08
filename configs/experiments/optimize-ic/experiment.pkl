@@ -31,11 +31,7 @@ artifacts {
   }
 }
 
-evaluation {
-  scoring {
-    objective = "scoring/localization-objective.pkl"
-  }
-}
+evaluation = null
 
 agents {
   optimizer {

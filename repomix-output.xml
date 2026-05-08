@@ -1,10 +1,10 @@
-This file is a merged representation of a subset of the codebase, containing files not matching ignore patterns, combined into a single document by Repomix.
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
 
 <file_summary>
 This section contains a summary of this file.
 
 <purpose>
-This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+This file contains a packed representation of the entire repository's contents.
 It is designed to be easily consumable by AI systems for analysis, code review,
 or other automated processes.
 </purpose>
@@ -32,7 +32,6 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching these patterns are excluded: "iterative-context/"￼
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -20855,6 +20854,20 @@ func TestValidOptimizationConfigValidates(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleOptimizationExperiment()
+	if experiment.Evaluation != nil {
+		t.Fatalf("sampleOptimizationExperiment().Evaluation = %#v, want nil", experiment.Evaluation)
+	}
+	if err := Validate(experiment); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestOptimizationModeDoesNotRequireEvaluationOrScoring(t *testing.T) {
+	t.Parallel()
+
+	experiment := sampleOptimizationExperiment()
+	experiment.Evaluation = nil
+
 	if err := Validate(experiment); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
@@ -21296,6 +21309,7 @@ func sampleOptimizationExperiment() Experiment {
 
 	experiment.Name = "optimize-ic-round-002"
 	experiment.Mode = ModeOptimization
+	experiment.Evaluation = nil
 	experiment.Artifacts.ParentEvaluationRound001 = &CompletedEvaluationBundleArtifact{
 		Id:   "local-ic-vs-jcodemunch-round-001",
 		Kind: "completed_evaluation_bundle",
@@ -22099,7 +22113,10 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-const selectionPolicyEntrypoint = "score"
+// selectionPolicyV1DefaultSymbol is the runtime callable used when adapting
+// the manifest-level iterative_context.selection_policy.v1 interface into the
+// existing domain.Policy shape. It is not the SearchBench objective score.
+const selectionPolicyV1DefaultSymbol = "score"
 
 var ErrUnsupportedMode = errors.New("experiment: only evaluation mode is supported")
 
@@ -22296,7 +22313,7 @@ func resolveSystem(
 	if err != nil {
 		return resolvedSystem{}, fmt.Errorf("read policy source: %w", err)
 	}
-	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), selectionPolicyEntrypoint)
+	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), selectionPolicyV1DefaultSymbol)
 	out.spec.Policy = &policy
 	out.policyPath = policyPath
 	return out, nil
@@ -24820,11 +24837,7 @@ artifacts {
   }
 }
 
-evaluation {
-  scoring {
-    objective = "scoring/localization-objective.pkl"
-  }
-}
+evaluation = null
 
 agents {
   optimizer {
@@ -27658,13 +27671,6 @@ func newLogger(format string, quiet bool, stderr io.Writer, color bool) (logging
 }
 </file>
 
-<file path=".gitignore">
-iterative-context
-.codex
-.tmp/
-#repomix-output.xml
-</file>
-
 <file path="agents.md">
 # AGENTS.md
 
@@ -28355,11 +28361,11 @@ func TestLoadOptimizeICManifest(t *testing.T) {
 	if experiment.Optimization == nil {
 		t.Fatal("experiment.Optimization is nil")
 	}
+	if experiment.Evaluation != nil {
+		t.Fatalf("experiment.Evaluation = %#v, want nil for optimization manifest", experiment.Evaluation)
+	}
 	if experiment.Artifacts.CandidatePolicyRound001 == nil || experiment.Artifacts.CandidatePolicyRound001.Path != "policies/candidate_policy.py" {
 		t.Fatalf("experiment.Artifacts.CandidatePolicyRound001 = %#v, want local optimize policy path", experiment.Artifacts.CandidatePolicyRound001)
-	}
-	if experiment.Evaluation == nil || experiment.Evaluation.Scoring.Objective != "scoring/localization-objective.pkl" {
-		t.Fatalf("experiment.Evaluation.Scoring.Objective = %#v, want optimize-local scoring path", experiment.Evaluation)
 	}
 	if experiment.Optimization.Target.Input.Id != "candidate-policy-round-001" {
 		t.Fatalf("experiment.Optimization.Target.Input.Id = %q", experiment.Optimization.Target.Input.Id)
@@ -29045,6 +29051,13 @@ func writeScoreModuleForTest(t *testing.T, root string, name string, evidence sc
 	}
 	return path
 }
+</file>
+
+<file path=".gitignore">
+iterative-context
+.codex
+.tmp/
+#repomix-output.xml
 </file>
 
 <file path="docs/architecture/pkl-experiment-manifests.md">

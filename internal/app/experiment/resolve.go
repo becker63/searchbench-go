@@ -15,7 +15,10 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-const selectionPolicyEntrypoint = "score"
+// selectionPolicyV1DefaultSymbol is the runtime callable used when adapting
+// the manifest-level iterative_context.selection_policy.v1 interface into the
+// existing domain.Policy shape. It is not the SearchBench objective score.
+const selectionPolicyV1DefaultSymbol = "score"
 
 var ErrUnsupportedMode = errors.New("experiment: only evaluation mode is supported")
 
@@ -212,7 +215,7 @@ func resolveSystem(
 	if err != nil {
 		return resolvedSystem{}, fmt.Errorf("read policy source: %w", err)
 	}
-	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), selectionPolicyEntrypoint)
+	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), selectionPolicyV1DefaultSymbol)
 	out.spec.Policy = &policy
 	out.policyPath = policyPath
 	return out, nil

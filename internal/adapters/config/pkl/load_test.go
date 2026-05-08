@@ -66,11 +66,11 @@ func TestLoadOptimizeICManifest(t *testing.T) {
 	if experiment.Optimization == nil {
 		t.Fatal("experiment.Optimization is nil")
 	}
+	if experiment.Evaluation != nil {
+		t.Fatalf("experiment.Evaluation = %#v, want nil for optimization manifest", experiment.Evaluation)
+	}
 	if experiment.Artifacts.CandidatePolicyRound001 == nil || experiment.Artifacts.CandidatePolicyRound001.Path != "policies/candidate_policy.py" {
 		t.Fatalf("experiment.Artifacts.CandidatePolicyRound001 = %#v, want local optimize policy path", experiment.Artifacts.CandidatePolicyRound001)
-	}
-	if experiment.Evaluation == nil || experiment.Evaluation.Scoring.Objective != "scoring/localization-objective.pkl" {
-		t.Fatalf("experiment.Evaluation.Scoring.Objective = %#v, want optimize-local scoring path", experiment.Evaluation)
 	}
 	if experiment.Optimization.Target.Input.Id != "candidate-policy-round-001" {
 		t.Fatalf("experiment.Optimization.Target.Input.Id = %q", experiment.Optimization.Target.Input.Id)

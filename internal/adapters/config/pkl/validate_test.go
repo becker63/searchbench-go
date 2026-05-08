@@ -24,6 +24,20 @@ func TestValidOptimizationConfigValidates(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleOptimizationExperiment()
+	if experiment.Evaluation != nil {
+		t.Fatalf("sampleOptimizationExperiment().Evaluation = %#v, want nil", experiment.Evaluation)
+	}
+	if err := Validate(experiment); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestOptimizationModeDoesNotRequireEvaluationOrScoring(t *testing.T) {
+	t.Parallel()
+
+	experiment := sampleOptimizationExperiment()
+	experiment.Evaluation = nil
+
 	if err := Validate(experiment); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
@@ -465,6 +479,7 @@ func sampleOptimizationExperiment() Experiment {
 
 	experiment.Name = "optimize-ic-round-002"
 	experiment.Mode = ModeOptimization
+	experiment.Evaluation = nil
 	experiment.Artifacts.ParentEvaluationRound001 = &CompletedEvaluationBundleArtifact{
 		Id:   "local-ic-vs-jcodemunch-round-001",
 		Kind: "completed_evaluation_bundle",
