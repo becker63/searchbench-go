@@ -1,6 +1,6 @@
 {
   "id": "report-example-round-001",
-  "created_at": "2026-05-08T18:50:18.310453094Z",
+  "created_at": "2026-05-08T19:33:19.719614706Z",
   "spec": {
     "systems": {
       "baseline": {
@@ -87,8 +87,8 @@
             "cost_usd": 0.2
           },
           "trace_id": "local-trace-baseline-local-fake-task-1-jcodemunch",
-          "started_at": "2026-05-08T18:50:18.310453094Z",
-          "finished_at": "2026-05-08T18:50:20.310453094Z"
+          "started_at": "2026-05-08T19:33:19.719614706Z",
+          "finished_at": "2026-05-08T19:33:21.719614706Z"
         },
         "scores": {
           "gold_hop": {
@@ -131,8 +131,8 @@
             "cost_usd": 0.03
           },
           "trace_id": "local-trace-candidate-local-fake-task-1-iterative-context",
-          "started_at": "2026-05-08T18:50:18.310453094Z",
-          "finished_at": "2026-05-08T18:50:20.310453094Z"
+          "started_at": "2026-05-08T19:33:19.719614706Z",
+          "finished_at": "2026-05-08T19:33:21.719614706Z"
         },
         "scores": {
           "gold_hop": {

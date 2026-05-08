@@ -10,6 +10,13 @@ interfaces {
 }
 
 artifacts {
+  candidatePolicyRound001 {
+    id = "candidate-policy-round-001"
+    kind = "policy"
+    path = "policies/candidate_policy.py"
+    implements = interfaces.iterativeContextSelectionPolicyV1
+  }
+
   parentEvaluationRound001 {
     id = "local-ic-vs-jcodemunch-round-001"
     kind = "completed_evaluation_bundle"
@@ -21,6 +28,12 @@ artifacts {
     kind = "policy_proposal"
     artifactName = "candidate_policy.round-002.py"
     implements = interfaces.iterativeContextSelectionPolicyV1
+  }
+}
+
+evaluation {
+  scoring {
+    objective = "scoring/localization-objective.pkl"
   }
 }
 

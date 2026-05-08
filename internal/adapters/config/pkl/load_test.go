@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -64,11 +66,51 @@ func TestLoadOptimizeICManifest(t *testing.T) {
 	if experiment.Optimization == nil {
 		t.Fatal("experiment.Optimization is nil")
 	}
+	if experiment.Artifacts.CandidatePolicyRound001 == nil || experiment.Artifacts.CandidatePolicyRound001.Path != "policies/candidate_policy.py" {
+		t.Fatalf("experiment.Artifacts.CandidatePolicyRound001 = %#v, want local optimize policy path", experiment.Artifacts.CandidatePolicyRound001)
+	}
+	if experiment.Evaluation == nil || experiment.Evaluation.Scoring.Objective != "scoring/localization-objective.pkl" {
+		t.Fatalf("experiment.Evaluation.Scoring.Objective = %#v, want optimize-local scoring path", experiment.Evaluation)
+	}
 	if experiment.Optimization.Target.Input.Id != "candidate-policy-round-001" {
 		t.Fatalf("experiment.Optimization.Target.Input.Id = %q", experiment.Optimization.Target.Input.Id)
 	}
 	if experiment.Optimization.Target.Output.ArtifactName != "candidate_policy.round-002.py" {
 		t.Fatalf("experiment.Optimization.Target.Output.ArtifactName = %q", experiment.Optimization.Target.Output.ArtifactName)
+	}
+}
+
+func TestOptimizeICExampleSupportFilesMatchEvaluationExample(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join("..", "..", "..", "..")
+	localPolicyPath := filepath.Join(repoRoot, "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py")
+	optimizePolicyPath := filepath.Join(repoRoot, "configs", "experiments", "optimize-ic", "policies", "candidate_policy.py")
+	localObjectivePath := filepath.Join(repoRoot, "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl")
+	optimizeObjectivePath := filepath.Join(repoRoot, "configs", "experiments", "optimize-ic", "scoring", "localization-objective.pkl")
+
+	localPolicy, err := os.ReadFile(localPolicyPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile(local policy) error = %v", err)
+	}
+	optimizePolicy, err := os.ReadFile(optimizePolicyPath)
+	if err != nil {
+		t.Fatalf("os.ReadFile(optimize policy) error = %v", err)
+	}
+	if !bytes.Equal(localPolicy, optimizePolicy) {
+		t.Fatalf("optimize policy fixture drifted from local evaluation policy")
+	}
+
+	localObjective, err := os.ReadFile(localObjectivePath)
+	if err != nil {
+		t.Fatalf("os.ReadFile(local objective) error = %v", err)
+	}
+	optimizeObjective, err := os.ReadFile(optimizeObjectivePath)
+	if err != nil {
+		t.Fatalf("os.ReadFile(optimize objective) error = %v", err)
+	}
+	if !bytes.Equal(localObjective, optimizeObjective) {
+		t.Fatalf("optimize scoring fixture drifted from local evaluation scoring")
 	}
 }
 

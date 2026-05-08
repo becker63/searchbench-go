@@ -1,7 +1,7 @@
 {
   "schema_version": "searchbench.bundle.v1",
   "bundle_id": "example-round-001",
-  "created_at": "2026-05-08T18:50:18.310453094Z",
+  "created_at": "2026-05-08T19:33:19.719614706Z",
   "files": [
     {
       "kind": "resolved",
@@ -13,7 +13,7 @@
       "kind": "report",
       "path": "report.json",
       "media_type": "application/json",
-      "sha256": "e442ba27fac8c12b413d357c0e9e7c2281b1b143d48c0f3f7aa7f0702720eea9"
+      "sha256": "b3dc098bbfa3a67fdc66f0a5b35c431e9d4bc323f4d3e37b72576a92e6c9f329"
     },
     {
       "kind": "rendered_report",

@@ -1,0 +1,49 @@
+amends "../../../schema/SearchBenchObjective.pkl"
+import "../../../schema/SearchBenchObjectiveHelpers.pkl" as helpers
+
+local maxHop = 12.0
+local tokenBudget = 20000.0
+
+objectiveId = "localization-v1"
+
+local currentLocalizationQuality =
+  1.0 - (if (current.localizationDistance.goldHop.candidate < maxHop) current.localizationDistance.goldHop.candidate else maxHop) / maxHop
+
+local parentLocalizationQuality =
+  if (parent != null)
+    1.0 - (if (parent.localizationDistance.goldHop.candidate < maxHop) parent.localizationDistance.goldHop.candidate else maxHop) / maxHop
+  else
+    currentLocalizationQuality
+
+local improvementVsParent = currentLocalizationQuality - parentLocalizationQuality
+
+local tokenEfficiency =
+  1.0 - (if (current.usage.totalTokens < tokenBudget) current.usage.totalTokens else tokenBudget) / tokenBudget
+
+local base = (currentLocalizationQuality * 0.8) + (tokenEfficiency * 0.2)
+
+local regressionPenalty =
+  if (current.regressions.severeCount > 0) 0.0 else 1.0
+
+local invalidPredictionPenalty =
+  if (current.invalidPredictions.known && current.invalidPredictions.count > 0) 0.0 else 1.0
+
+local finalScore = base * regressionPenalty * invalidPredictionPenalty
+
+values = new {
+  helpers.intermediate("currentLocalizationQuality", currentLocalizationQuality)
+  helpers.intermediate("parentLocalizationQuality", parentLocalizationQuality)
+  helpers.intermediate("improvementVsParent", improvementVsParent)
+  helpers.intermediate("tokenEfficiency", tokenEfficiency)
+  helpers.intermediate("base", base)
+  helpers.penalty("regressionPenalty", regressionPenalty)
+  helpers.penalty("invalidPredictionPenalty", invalidPredictionPenalty)
+  helpers.finalValue("final", finalScore)
+}
+
+final = "final"
+
+bounds = new ObjectiveBounds {
+  min = 0.0
+  max = 1.0
+}
