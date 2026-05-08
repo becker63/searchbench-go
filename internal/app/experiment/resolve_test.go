@@ -35,11 +35,17 @@ func TestResolveExampleManifest(t *testing.T) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	if got, want := out.ExperimentName, "local-ic-vs-jcodemunch-lca-dev"; got != want {
+	if got, want := out.ExperimentName, "local-ic-vs-jcodemunch-round-001"; got != want {
 		t.Fatalf("ExperimentName = %q, want %q", got, want)
 	}
-	if got, want := out.Mode, "evaluator_only"; got != want {
+	if got, want := out.Mode, "evaluation"; got != want {
 		t.Fatalf("Mode = %q, want %q", got, want)
+	}
+	if got, want := out.Systems.Baseline.ID, domain.SystemID("jcodemunch"); got != want {
+		t.Fatalf("Baseline.ID = %q, want %q", got, want)
+	}
+	if got, want := out.Systems.Candidate.ID, domain.SystemID("iterative-context"); got != want {
+		t.Fatalf("Candidate.ID = %q, want %q", got, want)
 	}
 	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("ObjectivePath = %q, want %q", got, want)
@@ -47,43 +53,30 @@ func TestResolveExampleManifest(t *testing.T) {
 	if got, want := out.Output.ResolvedPolicyPaths.Candidate, filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py")); got != want {
 		t.Fatalf("candidate policy path = %q, want %q", got, want)
 	}
-	if got, want := out.Systems.Candidate.Runtime.MaxSteps, 8; got != want {
-		t.Fatalf("candidate MaxSteps = %d, want %d", got, want)
+	if got, want := out.Output.BundleWriterRoot, domain.HostPath(filepath.Join(filepath.Dir(manifestPath), "artifacts")); got == want {
+		t.Fatalf("BundleWriterRoot unexpectedly ignored override")
 	}
-	if got, want := out.Systems.Candidate.Runtime.MaxToolCalls, 24; got != want {
-		t.Fatalf("candidate MaxToolCalls = %d, want %d", got, want)
+	if got, want := out.Output.ReportFormats, []string{"json", "text"}; !reflectStringsEqual(got, want) {
+		t.Fatalf("ReportFormats = %v, want %v", got, want)
 	}
 	if got, want := out.ReportID, domain.ReportID("report-experiment-resolve"); got != want {
 		t.Fatalf("ReportID = %q, want %q", got, want)
 	}
 }
 
-func TestResolveOptimizeICManifest(t *testing.T) {
+func TestResolveOptimizeICManifestRejectsUnsupportedMode(t *testing.T) {
 	t.Parallel()
 
 	requirePkl(t)
 
 	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl")
-	out, err := Resolve(context.Background(), Request{
+	_, err := Resolve(context.Background(), Request{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
 		BundleID:           "optimize-ic-example",
 	})
-	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
-	}
-
-	if got, want := out.ExperimentName, "optimize-ic-lca-dev"; got != want {
-		t.Fatalf("ExperimentName = %q, want %q", got, want)
-	}
-	if got, want := out.Systems.Candidate.Backend, domain.BackendIterativeContext; got != want {
-		t.Fatalf("Candidate.Backend = %q, want %q", got, want)
-	}
-	if out.Systems.Candidate.Policy == nil || out.Output.ResolvedPolicyPaths.Candidate != filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "policies", "candidate_policy.py")) {
-		t.Fatalf("Candidate.Policy = %#v, want optimize-ic policy", out.Systems.Candidate.Policy)
-	}
-	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "scoring", "localization-objective.pkl"); got != want {
-		t.Fatalf("ObjectivePath = %q, want %q", got, want)
+	if err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
+		t.Fatalf("Resolve() error = %v, want unsupported mode", err)
 	}
 }
 
@@ -173,4 +166,16 @@ func repoRoot(t *testing.T) string {
 		t.Fatalf("filepath.Abs(repo root) error = %v", err)
 	}
 	return root
+}
+
+func reflectStringsEqual(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

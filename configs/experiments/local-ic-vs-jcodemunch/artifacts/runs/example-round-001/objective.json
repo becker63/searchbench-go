@@ -4,9 +4,9 @@
   "evidence_refs": [
     {
       "name": "current",
-      "bundle_path": "configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001",
-      "score_path": "configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/score.pkl",
-      "report_path": "configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/report.json"
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001",
+      "score_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/score.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/report.json"
     }
   ],
   "values": [

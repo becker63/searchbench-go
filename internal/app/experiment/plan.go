@@ -99,7 +99,7 @@ type OutputConfig struct {
 	BundleCollectionPath domain.HostPath
 	BundleWriterRoot     domain.HostPath
 	ExpectedBundlePath   domain.HostPath
-	ReportFormat         string
+	ReportFormats        []string
 	RenderHumanReport    bool
 	ResolvedPolicyPaths  ResolvedPolicyPaths
 }
@@ -112,7 +112,7 @@ type ResolvedPolicyPaths struct {
 
 // ReportConfig records durable report rendering preferences.
 type ReportConfig struct {
-	Format string
+	Formats []string
 }
 
 // BundleConfig records the resolved output bundle target.

@@ -9,9 +9,8 @@ import (
 type ReportFormat string
 
 const (
-	Pretty ReportFormat = "pretty"
-	Json   ReportFormat = "json"
-	Both   ReportFormat = "both"
+	Json ReportFormat = "json"
+	Text ReportFormat = "text"
 )
 
 // String returns the string representation of ReportFormat
@@ -24,12 +23,10 @@ var _ encoding.BinaryUnmarshaler = new(ReportFormat)
 // UnmarshalBinary implements encoding.BinaryUnmarshaler for ReportFormat.
 func (rcv *ReportFormat) UnmarshalBinary(data []byte) error {
 	switch str := string(data); str {
-	case "pretty":
-		*rcv = Pretty
 	case "json":
 		*rcv = Json
-	case "both":
-		*rcv = Both
+	case "text":
+		*rcv = Text
 	default:
 		return fmt.Errorf(`illegal: "%s" is not a valid ReportFormat`, str)
 	}

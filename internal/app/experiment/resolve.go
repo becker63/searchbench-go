@@ -15,7 +15,9 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-var ErrUnsupportedMode = errors.New("experiment: only evaluator_only mode is supported")
+const selectionPolicyEntrypoint = "score"
+
+var ErrUnsupportedMode = errors.New("experiment: only evaluation mode is supported")
 
 // Resolve loads one Pkl manifest through the config adapter and projects it
 // into the canonical resolved experiment plan.
@@ -34,25 +36,36 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 	if err := config.Validate(cfg); err != nil {
 		return ResolvedExperiment{}, err
 	}
-	if cfg.Mode != config.ModeEvaluatorOnly {
+	if cfg.Mode != config.ModeEvaluation {
 		return ResolvedExperiment{}, fmt.Errorf("%w: %s", ErrUnsupportedMode, cfg.Mode)
+	}
+	if cfg.Evaluation == nil || cfg.Agents.Evaluator == nil {
+		return ResolvedExperiment{}, fmt.Errorf("%w: incomplete evaluation manifest", ErrUnsupportedMode)
 	}
 
 	manifestDir := filepath.Dir(manifestPath)
-	objectivePath, err := resolveExistingManifestPath(manifestDir, cfg.Scoring.Objective)
+	evaluation := cfg.Evaluation
+	evaluator := cfg.Agents.Evaluator
+
+	objectivePath, err := resolveExistingManifestPath(manifestDir, evaluation.Scoring.Objective)
 	if err != nil {
 		return ResolvedExperiment{}, fmt.Errorf("resolve objective path: %w", err)
 	}
-	bundleCollection, bundleWriterRoot, err := resolveBundlePaths(manifestDir, cfg.OutputConfig.BundleRoot, request.BundleRootOverride)
+	bundleCollection, bundleWriterRoot, err := resolveBundlePaths(manifestDir, request.BundleRootOverride)
 	if err != nil {
 		return ResolvedExperiment{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
 
-	baseline, err := resolveSystem(manifestDir, cfg.Evaluator, cfg.Systems.Baseline)
+	baseline, err := resolveSystem(manifestDir, *evaluator, evaluation.Baseline.System, nil)
 	if err != nil {
 		return ResolvedExperiment{}, fmt.Errorf("resolve baseline system: %w", err)
 	}
-	candidate, err := resolveSystem(manifestDir, cfg.Evaluator, cfg.Systems.Candidate)
+	candidate, err := resolveSystem(
+		manifestDir,
+		*evaluator,
+		evaluation.Candidate.System,
+		&evaluation.Candidate.Uses.SelectionPolicy,
+	)
 	if err != nil {
 		return ResolvedExperiment{}, fmt.Errorf("resolve candidate system: %w", err)
 	}
@@ -75,7 +88,8 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 	}
 
 	expectedBundlePath := domain.HostPath(filepath.Join(string(bundleCollection), bundleID))
-	renderHumanReport := !request.DisableRenderReport && cfg.OutputConfig.ReportFormat != config.ReportFormatJSON
+	reportFormats := stringifyReportFormats(evaluation.Report.Formats)
+	renderHumanReport := !request.DisableRenderReport && containsReportFormat(reportFormats, config.ReportFormatText.String())
 
 	return ResolvedExperiment{
 		ManifestPath:   manifestPath,
@@ -93,21 +107,21 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 		Parallelism: compare.DefaultParallelism(),
 		Evaluator: EvaluatorConfig{
 			Model: EvaluatorModelConfig{
-				Provider:        cfg.Evaluator.Model.Provider.String(),
-				Name:            cfg.Evaluator.Model.Name,
-				MaxOutputTokens: derefInt(cfg.Evaluator.Model.MaxOutputTokens),
+				Provider:        evaluator.Model.Provider.String(),
+				Name:            evaluator.Model.Name,
+				MaxOutputTokens: derefInt(evaluator.Model.MaxOutputTokens),
 			},
 			Bounds: EvaluatorBoundsConfig{
-				MaxModelTurns:  cfg.Evaluator.Bounds.MaxModelTurns,
-				MaxToolCalls:   cfg.Evaluator.Bounds.MaxToolCalls,
-				TimeoutSeconds: cfg.Evaluator.Bounds.TimeoutSeconds,
+				MaxModelTurns:  evaluator.Bounds.MaxModelTurns,
+				MaxToolCalls:   evaluator.Bounds.MaxToolCalls,
+				TimeoutSeconds: evaluator.Bounds.TimeoutSeconds,
 			},
 			Retry: RetryPolicyConfig{
-				MaxAttempts:                cfg.Evaluator.Retry.MaxAttempts,
-				RetryOnModelError:          cfg.Evaluator.Retry.RetryOnModelError,
-				RetryOnToolFailure:         cfg.Evaluator.Retry.RetryOnToolFailure,
-				RetryOnFinalizationFailure: cfg.Evaluator.Retry.RetryOnFinalizationFailure,
-				RetryOnInvalidPrediction:   cfg.Evaluator.Retry.RetryOnInvalidPrediction,
+				MaxAttempts:                evaluator.Retry.MaxAttempts,
+				RetryOnModelError:          evaluator.Retry.RetryOnModelError,
+				RetryOnToolFailure:         evaluator.Retry.RetryOnToolFailure,
+				RetryOnFinalizationFailure: evaluator.Retry.RetryOnFinalizationFailure,
+				RetryOnInvalidPrediction:   evaluator.Retry.RetryOnInvalidPrediction,
 			},
 		},
 		Scoring: ScoringConfig{
@@ -125,7 +139,7 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 			BundleCollectionPath: bundleCollection,
 			BundleWriterRoot:     bundleWriterRoot,
 			ExpectedBundlePath:   expectedBundlePath,
-			ReportFormat:         cfg.OutputConfig.ReportFormat.String(),
+			ReportFormats:        reportFormats,
 			RenderHumanReport:    renderHumanReport,
 			ResolvedPolicyPaths: ResolvedPolicyPaths{
 				Baseline:  filepath.ToSlash(baseline.policyPath),
@@ -133,7 +147,7 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 			},
 		},
 		Report: ReportConfig{
-			Format: cfg.OutputConfig.ReportFormat.String(),
+			Formats: reportFormats,
 		},
 		Bundle: BundleConfig{
 			ID: bundleID,
@@ -155,7 +169,12 @@ func normalizeRequest(request Request) Request {
 	return request
 }
 
-func resolveSystem(manifestDir string, evaluator config.Evaluator, system config.System) (resolvedSystem, error) {
+func resolveSystem(
+	manifestDir string,
+	evaluator config.Evaluator,
+	system config.System,
+	policyArtifact *config.PolicyArtifact,
+) (resolvedSystem, error) {
 	backendKind, err := mapBackend(system.Backend)
 	if err != nil {
 		return resolvedSystem{}, err
@@ -181,11 +200,11 @@ func resolveSystem(manifestDir string, evaluator config.Evaluator, system config
 			},
 		},
 	}
-	if system.Policy == nil {
+	if policyArtifact == nil {
 		return out, nil
 	}
 
-	policyPath, err := resolveExistingManifestPath(manifestDir, system.Policy.Path)
+	policyPath, err := resolveExistingManifestPath(manifestDir, policyArtifact.Path)
 	if err != nil {
 		return resolvedSystem{}, fmt.Errorf("resolve policy path: %w", err)
 	}
@@ -193,7 +212,7 @@ func resolveSystem(manifestDir string, evaluator config.Evaluator, system config
 	if err != nil {
 		return resolvedSystem{}, fmt.Errorf("read policy source: %w", err)
 	}
-	policy := domain.NewPythonPolicy(domain.PolicyID(system.Policy.Id), string(data), system.Policy.Entrypoint)
+	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), selectionPolicyEntrypoint)
 	out.spec.Policy = &policy
 	out.policyPath = policyPath
 	return out, nil
@@ -220,18 +239,21 @@ func fakeTasks(manifestDir string, cfg config.Experiment) domain.NonEmpty[domain
 	return domain.NewNonEmpty(task)
 }
 
-func resolveBundlePaths(manifestDir string, bundleRoot string, override string) (domain.HostPath, domain.HostPath, error) {
-	collectionPath, err := resolveManifestPath(manifestDir, bundleRoot)
+func resolveBundlePaths(manifestDir string, override string) (domain.HostPath, domain.HostPath, error) {
 	if strings.TrimSpace(override) != "" {
-		collectionPath, err = resolveOverridePath(override)
+		collectionPath, err := resolveOverridePath(override)
+		if err != nil {
+			return "", "", err
+		}
+		if filepath.Base(collectionPath) == "runs" {
+			return domain.HostPath(collectionPath), domain.HostPath(filepath.Dir(collectionPath)), nil
+		}
+		return domain.HostPath(filepath.Join(collectionPath, "runs")), domain.HostPath(collectionPath), nil
 	}
-	if err != nil {
-		return "", "", err
-	}
-	if filepath.Base(collectionPath) == "runs" {
-		return domain.HostPath(collectionPath), domain.HostPath(filepath.Dir(collectionPath)), nil
-	}
-	return domain.HostPath(filepath.Join(collectionPath, "runs")), domain.HostPath(collectionPath), nil
+
+	writerRoot := filepath.Join(manifestDir, "artifacts")
+	collectionPath := filepath.Join(writerRoot, "runs")
+	return domain.HostPath(collectionPath), domain.HostPath(writerRoot), nil
 }
 
 func resolveExistingManifestPath(baseDir string, path string) (string, error) {
@@ -326,6 +348,23 @@ func derefString(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+func stringifyReportFormats(formats []config.ReportFormat) []string {
+	out := make([]string, 0, len(formats))
+	for _, format := range formats {
+		out = append(out, format.String())
+	}
+	return out
+}
+
+func containsReportFormat(formats []string, target string) bool {
+	for _, format := range formats {
+		if format == target {
+			return true
+		}
+	}
+	return false
 }
 
 func cloneEvidenceRef(ref *score.ObjectiveEvidenceRef) *score.ObjectiveEvidenceRef {

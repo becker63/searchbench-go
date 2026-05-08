@@ -1,20 +1,99 @@
 amends "../local-ic-vs-jcodemunch/experiment.pkl"
 
-name = "optimize-ic-lca-dev"
+name = "optimize-ic-round-002"
+mode = "optimization"
 
-systems {
-  candidate {
-    id = "iterative-context-candidate-round-002"
-    name = "Iterative Context candidate round 002"
-    backend = "iterative_context"
-
-    policy {
-      id = "candidate-policy-round-002"
-      path = "policies/candidate_policy.py"
-    }
+interfaces {
+  iterativeContextSelectionPolicyV1 {
+    id = "iterative_context.selection_policy.v1"
   }
 }
 
-scoring {
-  objective = "scoring/localization-objective.pkl"
+artifacts {
+  parentEvaluationRound001 {
+    id = "local-ic-vs-jcodemunch-round-001"
+    kind = "completed_evaluation_bundle"
+    path = "../local-ic-vs-jcodemunch/artifacts/runs/example-round-001"
+  }
+
+  candidatePolicyRound002 {
+    id = "candidate-policy-round-002"
+    kind = "policy_proposal"
+    artifactName = "candidate_policy.round-002.py"
+    implements = interfaces.iterativeContextSelectionPolicyV1
+  }
+}
+
+agents {
+  optimizer {
+    model {
+      provider = "fake"
+      name = "fake-optimizer"
+      maxOutputTokens = 4000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 16
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "read_parent_bundle"
+        "read_score_evidence"
+        "read_objective_result"
+        "read_report_summary"
+        "read_artifact"
+        "write_artifact_proposal"
+      }
+
+      deny {
+        "run_evaluator"
+        "shell"
+        "go_test"
+        "write_manifest"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Improve the Iterative Context selection policy using only the provided parent-run evidence.
+
+    Prefer small, inspectable changes.
+    Preserve the declared policy interface.
+    Do not overfit to hidden labels or oracle files.
+    Emit exactly one replacement policy proposal.
+    """
+  }
+}
+
+optimization {
+  agent = agents.optimizer
+
+  parentRun {
+    bundle = artifacts.parentEvaluationRound001
+  }
+
+  target {
+    input = artifacts.candidatePolicyRound001
+    output = artifacts.candidatePolicyRound002
+  }
+
+  evidence {
+    from = artifacts.parentEvaluationRound001
+
+    include {
+      "report_summary"
+      "score_evidence"
+      "objective_result"
+      "candidate_policy"
+    }
+
+    deny {
+      "gold_labels"
+      "oracle_files"
+      "raw_dataset_answers"
+    }
+  }
 }

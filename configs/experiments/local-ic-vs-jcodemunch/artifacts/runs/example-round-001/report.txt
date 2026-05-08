@@ -6,10 +6,10 @@ Decision
 │ candidate improves the composite score in local fake comparison │
 ╰─────────────────────────────────────────────────────────────────╯
 
-Systems                                                                                                            
-Baseline   jcodemunch         openrouter/moonshotai/kimi-k2  jcodemunch-baseline  53b404af239f  default:dev        
-Candidate  iterative-context  openrouter/moonshotai/kimi-k2  iterative-context-candidate  8a29f0351286  default:dev
-Policy      python:score  0043e149e3b7                                                                             
+Systems                                                                                        
+Baseline   jcodemunch         fake/fake-evaluator  jcodemunch  5d0fe88c46c3  default:dev       
+Candidate  iterative-context  fake/fake-evaluator  iterative-context  776c66db1074  default:dev
+Policy      python:score  0043e149e3b7                                                         
 
 Run Summary                      
 Baseline   1 succeeded   0 failed

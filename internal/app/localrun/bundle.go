@@ -55,7 +55,7 @@ func bundleResolvedInput(plan appExperiment.ResolvedExperiment) artifact.Resolve
 		Output: artifact.OutputConfig{
 			BundleRoot:        filepath.ToSlash(string(plan.Output.BundleCollectionPath)),
 			BundleWriterRoot:  filepath.ToSlash(string(plan.Output.BundleWriterRoot)),
-			ReportFormat:      plan.Output.ReportFormat,
+			ReportFormats:     append([]string(nil), plan.Output.ReportFormats...),
 			RenderHumanReport: plan.Output.RenderHumanReport,
 			ResolvedPolicyPath: artifact.ResolvedPolicyPath{
 				Baseline:  filepath.ToSlash(plan.Output.ResolvedPolicyPaths.Baseline),
@@ -63,7 +63,7 @@ func bundleResolvedInput(plan appExperiment.ResolvedExperiment) artifact.Resolve
 			},
 		},
 		ReportOptions: artifact.ReportOptions{
-			Format: plan.Report.Format,
+			Formats: append([]string(nil), plan.Report.Formats...),
 		},
 	}
 }

@@ -10,7 +10,5 @@ type Model struct {
 
 	Routing *string `pkl:"routing"`
 
-	SystemPrompt *string `pkl:"systemPrompt"`
-
 	MaxOutputTokens *int `pkl:"maxOutputTokens"`
 }

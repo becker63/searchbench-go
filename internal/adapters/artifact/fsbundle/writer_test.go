@@ -517,7 +517,7 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 		ResolvedInput: ResolvedComparisonInput{
 			ManifestPath:   "configs/experiments/example/experiment.pkl",
 			ExperimentName: "bundle-writer-test",
-			Mode:           "evaluator_only",
+			Mode:           "evaluation",
 			Dataset: DatasetConfig{
 				Kind:   "lca",
 				Name:   "repo/example",
@@ -557,14 +557,14 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 			Output: OutputConfig{
 				BundleRoot:        "artifacts/runs",
 				BundleWriterRoot:  "artifacts",
-				ReportFormat:      "markdown",
+				ReportFormats:     []string{"json", "text"},
 				RenderHumanReport: true,
 				ResolvedPolicyPath: ResolvedPolicyPath{
 					Candidate: "configs/experiments/example/policies/candidate.py",
 				},
 			},
 			ReportOptions: ReportOptions{
-				Format: "markdown",
+				Formats: []string{"json", "text"},
 			},
 		},
 		CandidateReport: candidateReport,

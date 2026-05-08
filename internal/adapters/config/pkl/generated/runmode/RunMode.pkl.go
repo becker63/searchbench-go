@@ -9,9 +9,8 @@ import (
 type RunMode string
 
 const (
-	EvaluatorOnly       RunMode = "evaluator_only"
-	WriterOptimization  RunMode = "writer_optimization"
-	OptimizationKickoff RunMode = "optimization_kickoff"
+	Evaluation   RunMode = "evaluation"
+	Optimization RunMode = "optimization"
 )
 
 // String returns the string representation of RunMode
@@ -24,12 +23,10 @@ var _ encoding.BinaryUnmarshaler = new(RunMode)
 // UnmarshalBinary implements encoding.BinaryUnmarshaler for RunMode.
 func (rcv *RunMode) UnmarshalBinary(data []byte) error {
 	switch str := string(data); str {
-	case "evaluator_only":
-		*rcv = EvaluatorOnly
-	case "writer_optimization":
-		*rcv = WriterOptimization
-	case "optimization_kickoff":
-		*rcv = OptimizationKickoff
+	case "evaluation":
+		*rcv = Evaluation
+	case "optimization":
+		*rcv = Optimization
 	default:
 		return fmt.Errorf(`illegal: "%s" is not a valid RunMode`, str)
 	}

@@ -42,7 +42,7 @@ type ParallelismConfig struct {
 // ReportOptions records durable report-output preferences without terminal
 // styling details.
 type ReportOptions struct {
-	Format string `json:"format,omitempty"`
+	Formats []string `json:"formats,omitempty"`
 }
 
 // DatasetConfig records the resolved dataset selection from the experiment
@@ -102,7 +102,7 @@ type EvidenceConfig struct {
 type OutputConfig struct {
 	BundleRoot         string             `json:"bundle_root,omitempty"`
 	BundleWriterRoot   string             `json:"bundle_writer_root,omitempty"`
-	ReportFormat       string             `json:"report_format,omitempty"`
+	ReportFormats      []string           `json:"report_formats,omitempty"`
 	RenderHumanReport  bool               `json:"render_human_report,omitempty"`
 	ResolvedPolicyPath ResolvedPolicyPath `json:"resolved_policy_path,omitempty"`
 }

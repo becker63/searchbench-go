@@ -15,15 +15,17 @@ type Experiment struct {
 
 	Dataset Dataset `pkl:"dataset"`
 
+	Interfaces Interfaces `pkl:"interfaces"`
+
 	Systems Systems `pkl:"systems"`
 
-	Evaluator Evaluator `pkl:"evaluator"`
+	Artifacts Artifacts `pkl:"artifacts"`
 
-	Writer *Writer `pkl:"writer"`
+	Agents Agents `pkl:"agents"`
 
-	Scoring Scoring `pkl:"scoring"`
+	Evaluation *Evaluation `pkl:"evaluation"`
 
-	OutputConfig Output `pkl:"outputConfig"`
+	Optimization *Optimization `pkl:"optimization"`
 }
 
 // LoadFromPath loads the pkl module at the given path and evaluates it into a Experiment

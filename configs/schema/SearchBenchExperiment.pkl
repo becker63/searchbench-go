@@ -5,31 +5,39 @@ import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/go.pkl"
 
 name: String
 
-mode: RunMode = "evaluator_only"
+mode: RunMode = "evaluation"
 
 dataset: Dataset
 
+interfaces: Interfaces = new {}
 systems: Systems
-
-evaluator: Evaluator
-
-writer: Writer?
-
-scoring: Scoring
-
-outputConfig: Output = new {}
+artifacts: Artifacts = new {}
+agents: Agents = new {}
+evaluation: Evaluation?
+optimization: Optimization?
 
 typealias RunMode =
-  "evaluator_only" |
-  "writer_optimization" |
-  "optimization_kickoff"
+  "evaluation" |
+  "optimization"
 
 typealias DatasetKind = "lca"
 typealias Backend = "iterative_context" | "jcodemunch" | "fake"
 typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
-typealias PolicyLanguage = "python"
-typealias ReportFormat = "pretty" | "json" | "both"
+typealias ReportFormat = "json" | "text"
 typealias TracingProvider = "langsmith"
+typealias ArtifactKind =
+  "policy" |
+  "policy_proposal" |
+  "completed_evaluation_bundle"
+typealias OptimizerEvidenceKind =
+  "report_summary" |
+  "score_evidence" |
+  "objective_result" |
+  "candidate_policy"
+typealias OptimizerDeniedEvidenceKind =
+  "gold_labels" |
+  "oracle_files" |
+  "raw_dataset_answers"
 
 class Dataset {
   kind: DatasetKind = "lca"
@@ -39,9 +47,19 @@ class Dataset {
   maxItems: Int(this > 0)?
 }
 
+class Interfaces {
+  iterativeContextSelectionPolicyV1: Interface = new {
+    id = "iterative_context.selection_policy.v1"
+  }
+}
+
+class Interface {
+  id: String
+}
+
 class Systems {
   baseline: System
-  candidate: System
+  iterativeContext: System
 }
 
 class System {
@@ -50,7 +68,6 @@ class System {
   backend: Backend
   promptBundle: PromptBundle = new {}
   runtime: Runtime = new {}
-  policy: Policy?
 }
 
 class PromptBundle {
@@ -63,18 +80,46 @@ class Runtime {
   timeoutSeconds: Int(this > 0) = 300
 }
 
-class Policy {
+class Artifacts {
+  candidatePolicyRound001: PolicyArtifact?
+  candidatePolicyRound002: PolicyProposalArtifact?
+  parentEvaluationRound001: CompletedEvaluationBundleArtifact?
+}
+
+class PolicyArtifact {
   id: String
-  language: PolicyLanguage = "python"
-  entrypoint: String = "score"
+  kind: "policy" = "policy"
   path: String
+  implements: Interface
+}
+
+class PolicyProposalArtifact {
+  id: String
+  kind: "policy_proposal" = "policy_proposal"
+  artifactName: String
+  implements: Interface
+}
+
+class CompletedEvaluationBundleArtifact {
+  id: String
+  kind: "completed_evaluation_bundle" = "completed_evaluation_bundle"
+  path: String
+}
+
+class Agents {
+  evaluator: Evaluator?
+  optimizer: Optimizer?
+}
+
+class AgentToolPolicy {
+  allow: Listing<String> = new {}
+  deny: Listing<String> = new {}
 }
 
 class Model {
   provider: Provider
   name: String
   routing: String?
-  systemPrompt: String?
   maxOutputTokens: Int(this > 0)? = 2000
 }
 
@@ -87,7 +132,17 @@ class AgentBounds {
 class Evaluator {
   model: Model
   bounds: AgentBounds = new {}
+  tools: AgentToolPolicy = new {}
+  systemPrompt: String?
   retry: RetryPolicy = new {}
+  tracing: Tracing?
+}
+
+class Optimizer {
+  model: Model
+  bounds: AgentBounds = new {}
+  tools: AgentToolPolicy = new {}
+  systemPrompt: String?
 }
 
 class RetryPolicy {
@@ -98,36 +153,73 @@ class RetryPolicy {
   retryOnInvalidPrediction: Boolean = true
 }
 
-class Writer {
-  enabled: Boolean = true
-  model: Model
-  maxAttempts: Int(this > 0) = 3
-  pipeline: PipelineProfile?
+class Tracing {
+  enabled: Boolean = false
+  provider: TracingProvider?
+  project: String?
 }
 
-class PipelineProfile {
-  name: String
-  steps: Listing<PipelineStep> = new {}
+class Evaluation {
+  agent: Evaluator
+  baseline: EvaluationSystemBinding
+  candidate: CandidateEvaluationBinding
+  scoring: Scoring
+  report: Report = new {}
 }
 
-class PipelineStep {
-  name: String
-  argv: Listing<String>
-  timeoutSeconds: Int(this > 0)? = 120
+class EvaluationSystemBinding {
+  system: System
+}
+
+class CandidateEvaluationBinding {
+  system: System
+  uses: CandidateUses = new {}
+}
+
+class CandidateUses {
+  selectionPolicy: PolicyArtifact
 }
 
 class Scoring {
   objective: String
 }
 
-class Output {
-  reportFormat: ReportFormat = "pretty"
-  bundleRoot: String = "artifacts/runs"
-  traces: Tracing = new {}
+class Report {
+  formats: Listing<ReportFormat> = new {
+    "json"
+    "text"
+  }
 }
 
-class Tracing {
-  enabled: Boolean = false
-  provider: TracingProvider?
-  project: String?
+class Optimization {
+  agent: Optimizer
+  parentRun: ParentRun
+  target: OptimizationTarget
+  evidence: OptimizationEvidence = new {}
+}
+
+class ParentRun {
+  bundle: CompletedEvaluationBundleArtifact
+}
+
+class OptimizationTarget {
+  input: PolicyArtifact
+  output: PolicyProposalArtifact
+}
+
+class OptimizationEvidence {
+  from: CompletedEvaluationBundleArtifact
+
+  include: Listing<OptimizerEvidenceKind> = new {
+    "report_summary"
+    "score_evidence"
+    "objective_result"
+    "candidate_policy"
+  }
+
+  deny: Listing<OptimizerDeniedEvidenceKind> = new {
+    "gold_labels"
+    "oracle_files"
+    "raw_dataset_answers"
+  }
 }

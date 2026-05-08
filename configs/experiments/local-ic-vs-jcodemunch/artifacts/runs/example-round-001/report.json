@@ -1,15 +1,15 @@
 {
   "id": "report-example-round-001",
-  "created_at": "2026-04-30T14:00:00Z",
+  "created_at": "2026-05-08T18:50:18.310453094Z",
   "spec": {
     "systems": {
       "baseline": {
-        "id": "jcodemunch-baseline",
-        "name": "jCodeMunch baseline",
+        "id": "jcodemunch",
+        "name": "jCodeMunch",
         "backend": "jcodemunch",
         "model": {
-          "provider": "openrouter",
-          "name": "moonshotai/kimi-k2"
+          "provider": "fake",
+          "name": "fake-evaluator"
         },
         "prompt_bundle": {
           "name": "default",
@@ -20,22 +20,22 @@
           "max_tool_calls": 24,
           "max_output_tokens": 2000
         },
-        "fingerprint": "53b404af239f90ba9d55015ba3123914e035afff379280f5b4140b452814331a"
+        "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
       },
       "candidate": {
-        "id": "iterative-context-candidate",
-        "name": "Iterative Context candidate",
+        "id": "iterative-context",
+        "name": "Iterative Context",
         "backend": "iterative-context",
         "model": {
-          "provider": "openrouter",
-          "name": "moonshotai/kimi-k2"
+          "provider": "fake",
+          "name": "fake-evaluator"
         },
         "prompt_bundle": {
           "name": "default",
           "version": "dev"
         },
         "policy": {
-          "id": "candidate-policy-dev",
+          "id": "candidate-policy-round-001",
           "language": "python",
           "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
           "entrypoint": "score"
@@ -45,7 +45,7 @@
           "max_tool_calls": 24,
           "max_output_tokens": 2000
         },
-        "fingerprint": "8a29f03512867f9994fcd9a8cc8910409000775e1a95f4521f9fbdfdb4eae5e3"
+        "fingerprint": "776c66db10742b615184c87872991d1225a3c6bac40c61ab2aa90d442c8ad29f"
       }
     },
     "tasks": [
@@ -55,7 +55,7 @@
         "repo": {
           "name": "searchbench/local-fake",
           "sha": "0000000",
-          "path": "configs/experiments/local-ic-vs-jcodemunch/fake-repo"
+          "path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/fake-repo"
         },
         "input": {
           "title": "Fake py/dev task",
@@ -73,7 +73,7 @@
     "baseline": [
       {
         "execution": {
-          "session_id": "local-session-baseline-local-fake-task-1-jcodemunch-baseline",
+          "session_id": "local-session-baseline-local-fake-task-1-jcodemunch",
           "prediction": {
             "files": [
               "src/baseline_guess.go"
@@ -86,9 +86,9 @@
             "total_tokens": 180,
             "cost_usd": 0.2
           },
-          "trace_id": "local-trace-baseline-local-fake-task-1-jcodemunch-baseline",
-          "started_at": "2026-04-30T14:00:00Z",
-          "finished_at": "2026-04-30T14:00:02Z"
+          "trace_id": "local-trace-baseline-local-fake-task-1-jcodemunch",
+          "started_at": "2026-05-08T18:50:18.310453094Z",
+          "finished_at": "2026-05-08T18:50:20.310453094Z"
         },
         "scores": {
           "gold_hop": {
@@ -117,7 +117,7 @@
     "candidate": [
       {
         "execution": {
-          "session_id": "local-session-candidate-local-fake-task-1-iterative-context-candidate",
+          "session_id": "local-session-candidate-local-fake-task-1-iterative-context",
           "prediction": {
             "files": [
               "src/search_target.go"
@@ -130,9 +130,9 @@
             "total_tokens": 52,
             "cost_usd": 0.03
           },
-          "trace_id": "local-trace-candidate-local-fake-task-1-iterative-context-candidate",
-          "started_at": "2026-04-30T14:00:00Z",
-          "finished_at": "2026-04-30T14:00:02Z"
+          "trace_id": "local-trace-candidate-local-fake-task-1-iterative-context",
+          "started_at": "2026-05-08T18:50:18.310453094Z",
+          "finished_at": "2026-05-08T18:50:20.310453094Z"
         },
         "scores": {
           "gold_hop": {

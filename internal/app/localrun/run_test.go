@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"go/parser"
 	"go/token"
 	"os"
@@ -42,24 +41,11 @@ func TestLocalManifestCanBeLoadedAndValidated(t *testing.T) {
 func TestRunRejectsUnsupportedMode(t *testing.T) {
 	t.Parallel()
 
-	temp := t.TempDir()
-	writeLocalFixtureFiles(t, temp)
-	experiment := sampleExperiment(temp)
-	experiment.Mode = config.ModeWriterOptimization
-	experiment.Writer = &config.Writer{
-		Enabled: true,
-		Model: config.Model{
-			Provider: config.ProviderFake,
-			Name:     "fake-writer-model",
-		},
-	}
-
-	path := filepath.Join(temp, "experiment.pkl")
-	if err := writeExperimentFixture(t, path, experiment); err != nil {
-		t.Fatalf("writeExperimentFixture() error = %v", err)
-	}
-
-	_, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
+	_, err := appExperiment.Resolve(context.Background(), Request{
+		ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
+		BundleID:           "localrun-unsupported-mode",
+	})
 	if err == nil || !strings.Contains(err.Error(), appExperiment.ErrUnsupportedMode.Error()) {
 		t.Fatalf("Resolve() error = %v, want unsupported mode", err)
 	}
@@ -68,12 +54,8 @@ func TestRunRejectsUnsupportedMode(t *testing.T) {
 func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 	t.Parallel()
 
-	temp := t.TempDir()
-	writeLocalFixtureFiles(t, temp)
-	if err := writeExperimentFixture(t, filepath.Join(temp, "experiment.pkl"), sampleExperiment(temp)); err != nil {
-		t.Fatalf("writeExperimentFixture() error = %v", err)
-	}
-	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
+	fixtureDir := createExperimentFixture(t, "")
+	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(fixtureDir))
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -96,12 +78,8 @@ func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 func TestFakeComparisonProjectsScoreEvidence(t *testing.T) {
 	t.Parallel()
 
-	temp := t.TempDir()
-	writeLocalFixtureFiles(t, temp)
-	if err := writeExperimentFixture(t, filepath.Join(temp, "experiment.pkl"), sampleExperiment(temp)); err != nil {
-		t.Fatalf("writeExperimentFixture() error = %v", err)
-	}
-	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
+	fixtureDir := createExperimentFixture(t, "")
+	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(fixtureDir))
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -205,13 +183,8 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 func TestMaterializeScoreEvidenceCreatesCurrentTempModule(t *testing.T) {
 	t.Parallel()
 
-	temp := t.TempDir()
-	writeLocalFixtureFiles(t, temp)
-	if err := writeExperimentFixture(t, filepath.Join(temp, "experiment.pkl"), sampleExperiment(temp)); err != nil {
-		t.Fatalf("writeExperimentFixture() error = %v", err)
-	}
-
-	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(temp))
+	fixtureDir := createExperimentFixture(t, "")
+	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(fixtureDir))
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -238,20 +211,16 @@ func TestMaterializeScoreEvidenceCreatesCurrentTempModule(t *testing.T) {
 func TestMaterializeScoreEvidenceAcceptsExplicitParent(t *testing.T) {
 	t.Parallel()
 
-	temp := t.TempDir()
-	writeLocalFixtureFiles(t, temp)
-	parentScorePath := writeScoreModuleForTest(t, temp, "parent-score.pkl", sampleScoreEvidence(t, domain.ReportID("report-parent")))
-	request := sampleRequest(temp)
+	fixtureDir := createExperimentFixture(t, "")
+	parentScorePath := writeScoreModuleForTest(t, fixtureDir, "parent-score.pkl", sampleScoreEvidence(t, domain.ReportID("report-parent")))
+	request := sampleRequest(fixtureDir)
 	request.ParentRef = &score.ObjectiveEvidenceRef{
 		Name:       "parent",
-		BundlePath: filepath.Join(temp, "artifacts", "runs", "parent-run"),
-		ScorePath:  filepath.Join(temp, "artifacts", "runs", "parent-run", "score.pkl"),
-		ReportPath: filepath.Join(temp, "artifacts", "runs", "parent-run", "report.json"),
+		BundlePath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run"),
+		ScorePath:  filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"),
+		ReportPath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "report.json"),
 	}
 	request.ParentScorePath = parentScorePath
-	if err := writeExperimentFixture(t, filepath.Join(temp, "experiment.pkl"), sampleExperiment(temp)); err != nil {
-		t.Fatalf("writeExperimentFixture() error = %v", err)
-	}
 
 	plan, err := appExperiment.Resolve(context.Background(), request)
 	if err != nil {
@@ -274,7 +243,7 @@ func TestMaterializeScoreEvidenceAcceptsExplicitParent(t *testing.T) {
 	if got, want := materialized.ParentScorePath, parentScorePath; got != want {
 		t.Fatalf("ParentScorePath = %q, want %q", got, want)
 	}
-	if got, want := materialized.ParentRef.ScorePath, filepath.Join(temp, "artifacts", "runs", "parent-run", "score.pkl"); got != want {
+	if got, want := materialized.ParentRef.ScorePath, filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"); got != want {
 		t.Fatalf("ParentRef.ScorePath = %q, want %q", got, want)
 	}
 }
@@ -516,174 +485,6 @@ func sampleRequest(tempDir string) Request {
 			return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
 		},
 	}
-}
-
-func sampleExperiment(tempDir string) config.Experiment {
-	return config.Experiment{
-		Name: "local-fake-experiment",
-		Mode: config.ModeEvaluatorOnly,
-		Dataset: config.Dataset{
-			Kind:   "lca",
-			Name:   "JetBrains-Research/lca-bug-localization",
-			Config: "py",
-			Split:  "dev",
-		},
-		Systems: config.Systems{
-			Baseline: config.System{
-				Id:      "baseline-system",
-				Name:    "Baseline",
-				Backend: config.BackendJCodeMunch,
-				PromptBundle: config.PromptBundle{
-					Name: "default",
-				},
-				Runtime: config.Runtime{MaxSteps: 8, TimeoutSeconds: 300},
-			},
-			Candidate: config.System{
-				Id:      "candidate-system",
-				Name:    "Candidate",
-				Backend: config.BackendIterativeContext,
-				PromptBundle: config.PromptBundle{
-					Name: "default",
-				},
-				Runtime: config.Runtime{MaxSteps: 8, TimeoutSeconds: 300},
-				Policy: &config.Policy{
-					Id:         "candidate-policy",
-					Language:   "python",
-					Entrypoint: "score",
-					Path:       "policies/candidate_policy.py",
-				},
-			},
-		},
-		Evaluator: config.Evaluator{
-			Model: config.Model{
-				Provider: config.ProviderFake,
-				Name:     "fake-model",
-			},
-			Bounds: config.AgentBounds{MaxModelTurns: 8, MaxToolCalls: 24, TimeoutSeconds: 300},
-			Retry:  config.RetryPolicy{MaxAttempts: 2, RetryOnModelError: true, RetryOnFinalizationFailure: true, RetryOnInvalidPrediction: true},
-		},
-		Scoring: config.Scoring{
-			Objective: "scoring/localization-objective.pkl",
-		},
-		OutputConfig: config.Output{
-			ReportFormat: config.ReportFormatPretty,
-			BundleRoot:   filepath.Join(tempDir, "artifacts", "runs"),
-		},
-	}
-}
-
-func writeLocalFixtureFiles(t *testing.T, root string) {
-	t.Helper()
-
-	if err := os.MkdirAll(filepath.Join(root, "policies"), 0o755); err != nil {
-		t.Fatalf("MkdirAll(policies) error = %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(root, "scoring"), 0o755); err != nil {
-		t.Fatalf("MkdirAll(scoring) error = %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "policies", "candidate_policy.py"), []byte("def score(task):\n    return ['src/search_target.go']\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(policy) error = %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "scoring", "localization-objective.pkl"), []byte("objectiveId = \"placeholder\"\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(objective) error = %v", err)
-	}
-}
-
-func writeExperimentFixture(t *testing.T, path string, experiment config.Experiment) error {
-	t.Helper()
-	content := sampleExperimentManifest(t, path, experiment)
-	return os.WriteFile(path, []byte(content), 0o644)
-}
-
-func sampleExperimentManifest(t *testing.T, path string, experiment config.Experiment) string {
-	root := filepath.Dir(path)
-	bundleRoot := experiment.OutputConfig.BundleRoot
-	if rel, err := filepath.Rel(root, bundleRoot); err == nil && !filepath.IsAbs(bundleRoot) {
-		bundleRoot = filepath.ToSlash(rel)
-	}
-
-	lines := []string{
-		`amends "` + filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "schema", "SearchBenchExperiment.pkl")) + `"`,
-		"",
-		`name = "` + experiment.Name + `"`,
-		"",
-		`mode = "` + experiment.Mode.String() + `"`,
-		"",
-		"dataset {",
-		`  config = "` + experiment.Dataset.Config + `"`,
-		`  split = "` + experiment.Dataset.Split + `"`,
-		"}",
-		"",
-		"systems {",
-		"  baseline {",
-		`    id = "` + experiment.Systems.Baseline.Id + `"`,
-		`    name = "` + experiment.Systems.Baseline.Name + `"`,
-		`    backend = "` + experiment.Systems.Baseline.Backend.String() + `"`,
-		"  }",
-		"",
-		"  candidate {",
-		`    id = "` + experiment.Systems.Candidate.Id + `"`,
-		`    name = "` + experiment.Systems.Candidate.Name + `"`,
-		`    backend = "` + experiment.Systems.Candidate.Backend.String() + `"`,
-	}
-	if experiment.Systems.Candidate.Policy != nil {
-		lines = append(lines,
-			"    policy {",
-			`      id = "`+experiment.Systems.Candidate.Policy.Id+`"`,
-			`      path = "`+filepath.ToSlash(experiment.Systems.Candidate.Policy.Path)+`"`,
-			"    }",
-		)
-	}
-	lines = append(lines,
-		"  }",
-		"}",
-	)
-	if experiment.Writer != nil {
-		lines = append(lines,
-			"",
-			"writer {",
-			fmt.Sprintf("  enabled = %t", experiment.Writer.Enabled),
-			"  model {",
-			`    provider = "`+experiment.Writer.Model.Provider.String()+`"`,
-			`    name = "`+experiment.Writer.Model.Name+`"`,
-			"  }",
-			"}",
-		)
-	}
-	lines = append(lines,
-		"",
-		"evaluator {",
-		"  model {",
-		`    provider = "`+experiment.Evaluator.Model.Provider.String()+`"`,
-		`    name = "`+experiment.Evaluator.Model.Name+`"`,
-		"  }",
-		"",
-		"  bounds {",
-		fmt.Sprintf("    maxModelTurns = %d", experiment.Evaluator.Bounds.MaxModelTurns),
-		fmt.Sprintf("    maxToolCalls = %d", experiment.Evaluator.Bounds.MaxToolCalls),
-		fmt.Sprintf("    timeoutSeconds = %d", experiment.Evaluator.Bounds.TimeoutSeconds),
-		"  }",
-		"",
-		"  retry {",
-		fmt.Sprintf("    maxAttempts = %d", experiment.Evaluator.Retry.MaxAttempts),
-		fmt.Sprintf("    retryOnModelError = %t", experiment.Evaluator.Retry.RetryOnModelError),
-		fmt.Sprintf("    retryOnToolFailure = %t", experiment.Evaluator.Retry.RetryOnToolFailure),
-		fmt.Sprintf("    retryOnFinalizationFailure = %t", experiment.Evaluator.Retry.RetryOnFinalizationFailure),
-		fmt.Sprintf("    retryOnInvalidPrediction = %t", experiment.Evaluator.Retry.RetryOnInvalidPrediction),
-		"  }",
-		"}",
-		"",
-		"scoring {",
-		`  objective = "`+filepath.ToSlash(experiment.Scoring.Objective)+`"`,
-		"}",
-		"",
-		"outputConfig {",
-		`  reportFormat = "`+experiment.OutputConfig.ReportFormat.String()+`"`,
-		`  bundleRoot = "`+filepath.ToSlash(bundleRoot)+`"`,
-		"}",
-		"",
-	)
-	return strings.Join(lines, "\n")
 }
 
 func createExperimentFixture(t *testing.T, objectiveMutation string) string {

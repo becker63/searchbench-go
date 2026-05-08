@@ -1,12 +1,10 @@
 // Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
 package generated
 
-type Policy struct {
+type CompletedEvaluationBundleArtifact struct {
 	Id string `pkl:"id"`
 
-	Language string `pkl:"language"`
-
-	Entrypoint string `pkl:"entrypoint"`
+	Kind string `pkl:"kind"`
 
 	Path string `pkl:"path"`
 }

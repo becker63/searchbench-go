@@ -1,10 +1,17 @@
 amends "../../schema/SearchBenchExperiment.pkl"
 
-name = "local-ic-vs-jcodemunch-lca-dev"
+name = "local-ic-vs-jcodemunch-round-001"
+mode = "evaluation"
 
-mode = "evaluator_only"
+interfaces {
+  iterativeContextSelectionPolicyV1 {
+    id = "iterative_context.selection_policy.v1"
+  }
+}
 
 dataset {
+  kind = "lca"
+  name = "JetBrains-Research/lca-bug-localization"
   config = "py"
   split = "dev"
   maxItems = 5
@@ -12,54 +19,80 @@ dataset {
 
 systems {
   baseline {
-    id = "jcodemunch-baseline"
-    name = "jCodeMunch baseline"
+    id = "jcodemunch"
+    name = "jCodeMunch"
     backend = "jcodemunch"
   }
 
-  candidate {
-    id = "iterative-context-candidate"
-    name = "Iterative Context candidate"
+  iterativeContext {
+    id = "iterative-context"
+    name = "Iterative Context"
     backend = "iterative_context"
+  }
+}
 
-    policy {
-      id = "candidate-policy-dev"
-      path = "policies/candidate_policy.py"
+artifacts {
+  candidatePolicyRound001 {
+    id = "candidate-policy-round-001"
+    kind = "policy"
+    path = "policies/candidate_policy.py"
+    implements = interfaces.iterativeContextSelectionPolicyV1
+  }
+}
+
+agents {
+  evaluator {
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+      maxOutputTokens = 2000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 24
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "resolve"
+        "expand"
+        "resolve_and_expand"
+      }
+
+      deny {
+        "shell"
+        "go_test"
+        "write_file"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Use structural code evidence before guessing.
+    Prefer the smallest plausible file set.
+    Do not invent files that were not returned by tools.
+    """
+  }
+}
+
+evaluation {
+  agent = agents.evaluator
+
+  baseline {
+    system = systems.baseline
+  }
+
+  candidate {
+    system = systems.iterativeContext
+
+    uses {
+      selectionPolicy = artifacts.candidatePolicyRound001
     }
   }
-}
 
-evaluator {
-  model {
-    provider = "openrouter"
-    name = "moonshotai/kimi-k2"
-    maxOutputTokens = 2000
-  }
-
-  bounds {
-    maxModelTurns = 8
-    maxToolCalls = 24
-    timeoutSeconds = 300
-  }
-
-  retry {
-    maxAttempts = 2
-    retryOnModelError = true
-    retryOnToolFailure = false
-    retryOnFinalizationFailure = true
-    retryOnInvalidPrediction = true
-  }
-}
-
-scoring {
-  objective = "scoring/localization-objective.pkl"
-}
-
-outputConfig {
-  reportFormat = "pretty"
-  bundleRoot = "artifacts/runs"
-
-  traces {
-    enabled = false
+  scoring {
+    objective = "scoring/localization-objective.pkl"
   }
 }

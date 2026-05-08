@@ -13,6 +13,4 @@ type System struct {
 	PromptBundle PromptBundle `pkl:"promptBundle"`
 
 	Runtime Runtime `pkl:"runtime"`
-
-	Policy *Policy `pkl:"policy"`
 }

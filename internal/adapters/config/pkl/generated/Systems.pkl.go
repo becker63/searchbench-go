@@ -4,5 +4,5 @@ package generated
 type Systems struct {
 	Baseline System `pkl:"baseline"`
 
-	Candidate System `pkl:"candidate"`
+	IterativeContext System `pkl:"iterativeContext"`
 }

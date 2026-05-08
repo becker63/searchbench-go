@@ -1,7 +1,7 @@
 // Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
 package generated
 
-type Evaluator struct {
+type Optimizer struct {
 	Model Model `pkl:"model"`
 
 	Bounds AgentBounds `pkl:"bounds"`
@@ -9,8 +9,4 @@ type Evaluator struct {
 	Tools AgentToolPolicy `pkl:"tools"`
 
 	SystemPrompt *string `pkl:"systemPrompt"`
-
-	Retry RetryPolicy `pkl:"retry"`
-
-	Tracing *Tracing `pkl:"tracing"`
 }

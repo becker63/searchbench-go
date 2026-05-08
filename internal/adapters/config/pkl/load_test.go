@@ -18,26 +18,26 @@ func TestLoadLocalICVsJCodeMunchManifest(t *testing.T) {
 		t.Fatalf("LoadFromPath() error = %v", err)
 	}
 
-	if experiment.Name != "local-ic-vs-jcodemunch-lca-dev" {
+	if experiment.Name != "local-ic-vs-jcodemunch-round-001" {
 		t.Fatalf("experiment.Name = %q", experiment.Name)
 	}
-	if experiment.Mode != ModeEvaluatorOnly {
-		t.Fatalf("experiment.Mode = %q, want %q", experiment.Mode, ModeEvaluatorOnly)
+	if experiment.Mode != ModeEvaluation {
+		t.Fatalf("experiment.Mode = %q, want %q", experiment.Mode, ModeEvaluation)
 	}
-	if experiment.Writer != nil {
-		t.Fatalf("experiment.Writer = %#v, want nil for evaluator_only example", experiment.Writer)
+	if experiment.Agents.Evaluator == nil {
+		t.Fatal("experiment.Agents.Evaluator is nil")
 	}
-	if experiment.Evaluator.Model.Provider != ProviderOpenRouter {
-		t.Fatalf("experiment.Evaluator.Model.Provider = %q, want %q", experiment.Evaluator.Model.Provider, ProviderOpenRouter)
+	if experiment.Agents.Evaluator.Model.Provider != ProviderFake {
+		t.Fatalf("experiment.Agents.Evaluator.Model.Provider = %q, want %q", experiment.Agents.Evaluator.Model.Provider, ProviderFake)
 	}
-	if experiment.Scoring.Objective != "scoring/localization-objective.pkl" {
-		t.Fatalf("experiment.Scoring.Objective = %q", experiment.Scoring.Objective)
+	if experiment.Evaluation == nil {
+		t.Fatal("experiment.Evaluation is nil")
 	}
-	if experiment.Systems.Candidate.Policy == nil || experiment.Systems.Candidate.Policy.Path != "policies/candidate_policy.py" {
-		t.Fatalf("candidate policy path = %#v, want local policy path", experiment.Systems.Candidate.Policy)
+	if experiment.Evaluation.Scoring.Objective != "scoring/localization-objective.pkl" {
+		t.Fatalf("experiment.Evaluation.Scoring.Objective = %q", experiment.Evaluation.Scoring.Objective)
 	}
-	if experiment.OutputConfig.BundleRoot != "artifacts/runs" {
-		t.Fatalf("experiment.OutputConfig.BundleRoot = %q, want local bundle root", experiment.OutputConfig.BundleRoot)
+	if experiment.Artifacts.CandidatePolicyRound001 == nil || experiment.Artifacts.CandidatePolicyRound001.Path != "policies/candidate_policy.py" {
+		t.Fatalf("candidate policy artifact = %#v, want local policy path", experiment.Artifacts.CandidatePolicyRound001)
 	}
 }
 
@@ -52,14 +52,23 @@ func TestLoadOptimizeICManifest(t *testing.T) {
 		t.Fatalf("LoadFromPath() error = %v", err)
 	}
 
-	if experiment.Name != "optimize-ic-lca-dev" {
+	if experiment.Name != "optimize-ic-round-002" {
 		t.Fatalf("experiment.Name = %q", experiment.Name)
 	}
-	if experiment.Systems.Candidate.Backend != BackendIterativeContext {
-		t.Fatalf("experiment.Systems.Candidate.Backend = %q, want %q", experiment.Systems.Candidate.Backend, BackendIterativeContext)
+	if experiment.Mode != ModeOptimization {
+		t.Fatalf("experiment.Mode = %q, want %q", experiment.Mode, ModeOptimization)
 	}
-	if experiment.Systems.Candidate.Policy == nil || experiment.Systems.Candidate.Policy.Path != "policies/candidate_policy.py" {
-		t.Fatalf("experiment.Systems.Candidate.Policy = %#v, want optimize-ic policy", experiment.Systems.Candidate.Policy)
+	if experiment.Agents.Optimizer == nil {
+		t.Fatal("experiment.Agents.Optimizer is nil")
+	}
+	if experiment.Optimization == nil {
+		t.Fatal("experiment.Optimization is nil")
+	}
+	if experiment.Optimization.Target.Input.Id != "candidate-policy-round-001" {
+		t.Fatalf("experiment.Optimization.Target.Input.Id = %q", experiment.Optimization.Target.Input.Id)
+	}
+	if experiment.Optimization.Target.Output.ArtifactName != "candidate_policy.round-002.py" {
+		t.Fatalf("experiment.Optimization.Target.Output.ArtifactName = %q", experiment.Optimization.Target.Output.ArtifactName)
 	}
 }
 
