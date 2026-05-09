@@ -224,7 +224,7 @@ func sampleOptimizerSpec() pureoptimizer.Spec {
 			SystemPrompt: "Improve the policy using bounded evidence.",
 		},
 		Evidence: pureoptimizer.Evidence{
-			ParentRun: pureoptimizer.ParentRunRef{
+			ParentRound: pureoptimizer.ParentRoundRef{
 				ArtifactID: domain.ArtifactID("parent-bundle"),
 				BundleID:   "example-round-001",
 			},

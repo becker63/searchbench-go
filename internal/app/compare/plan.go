@@ -9,17 +9,17 @@ import (
 
 type Plan struct {
 	Systems domain.Pair[domain.SystemSpec]
-	Tasks   domain.NonEmpty[domain.TaskSpec]
+	Matches domain.NonEmpty[domain.MatchSpec]
 }
 
 // NewPlan constructs an executable baseline/candidate comparison request.
 func NewPlan(
 	systems domain.Pair[domain.SystemSpec],
-	tasks domain.NonEmpty[domain.TaskSpec],
+	tasks domain.NonEmpty[domain.MatchSpec],
 ) Plan {
 	return Plan{
 		Systems: systems,
-		Tasks:   tasks,
+		Matches: tasks,
 	}
 }
 
@@ -28,13 +28,13 @@ func NewPlan(
 // It requires a non-empty task slice plus individually valid baseline and
 // candidate systems, wrapping system errors with their comparison role.
 func (p Plan) Validate() error {
-	if err := p.Tasks.Validate(); err != nil {
+	if err := p.Matches.Validate(); err != nil {
 		return err
 	}
-	if err := p.Systems.Baseline.Validate(); err != nil {
+	if err := p.Systems.Incumbent.Validate(); err != nil {
 		return fmt.Errorf("baseline system: %w", err)
 	}
-	if err := p.Systems.Candidate.Validate(); err != nil {
+	if err := p.Systems.Challenger.Validate(); err != nil {
 		return fmt.Errorf("candidate system: %w", err)
 	}
 	return nil
@@ -46,5 +46,5 @@ func (p Plan) Validate() error {
 // executable SystemSpec values so reports do not carry policy source by
 // default.
 func (p Plan) ReportSpec() report.ComparisonSpec {
-	return report.NewComparisonSpec(p.Systems, p.Tasks)
+	return report.NewComparisonSpec(p.Systems, p.Matches)
 }

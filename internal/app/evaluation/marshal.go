@@ -9,7 +9,7 @@ func (p Plan) MarshalJSON() ([]byte, error) {
 		Mode           string          `json:"mode,omitempty"`
 		Dataset        DatasetConfig   `json:"dataset,omitempty"`
 		Systems        any             `json:"systems"`
-		Tasks          any             `json:"tasks"`
+		Matches        any             `json:"matches"`
 		Parallelism    any             `json:"parallelism,omitempty"`
 		Evaluator      EvaluatorConfig `json:"evaluator,omitempty"`
 		Scoring        ScoringConfig   `json:"scoring,omitempty"`
@@ -26,7 +26,7 @@ func (p Plan) MarshalJSON() ([]byte, error) {
 		Mode:           p.Mode,
 		Dataset:        p.Dataset,
 		Systems:        p.BundleSystems(),
-		Tasks:          p.Tasks,
+		Matches:        p.Matches,
 		Parallelism:    p.Parallelism,
 		Evaluator:      p.Evaluator,
 		Scoring:        p.Scoring,

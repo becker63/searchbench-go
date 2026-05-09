@@ -1,8 +1,8 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package generated
 
 type Systems struct {
-	Baseline System `pkl:"baseline"`
+	Incumbent System `pkl:"incumbent"`
 
-	IterativeContext System `pkl:"iterativeContext"`
+	Challenger System `pkl:"challenger"`
 }

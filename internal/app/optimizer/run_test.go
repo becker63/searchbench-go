@@ -32,13 +32,13 @@ func TestResolveOptimizationManifest(t *testing.T) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	if got, want := plan.Target.OutputName, "candidate_policy.round-002.py"; got != want {
+	if got, want := plan.Target.OutputName, "challenger_policy.round-002.py"; got != want {
 		t.Fatalf("Target.OutputName = %q, want %q", got, want)
 	}
 	if got, want := plan.ParentBundle.BundleID, "example-round-001"; got != want {
 		t.Fatalf("ParentBundle.BundleID = %q, want %q", got, want)
 	}
-	if got, want := filepath.Base(plan.InputPolicy.Path), "candidate_policy.py"; got != want {
+	if got, want := filepath.Base(plan.InputPolicy.Path), "challenger_policy.py"; got != want {
 		t.Fatalf("InputPolicy.Path = %q, want %q", plan.InputPolicy.Path, want)
 	}
 	if !strings.Contains(strings.Join(plan.IncludedEvidence, ","), "objective_result") {
@@ -132,7 +132,7 @@ func TestRunSuccessfulOptimizerWritesBundle(t *testing.T) {
 	requirePkl(t)
 
 	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl")
-	inputPolicyPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "policies", "candidate_policy.py")
+	inputPolicyPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "policies", "challenger_policy.py")
 	manifestBefore := mustReadFile(t, manifestPath)
 	policyBefore := mustReadFile(t, inputPolicyPath)
 
@@ -146,7 +146,7 @@ func TestRunSuccessfulOptimizerWritesBundle(t *testing.T) {
 			},
 		},
 		Model: modeltest.NewScriptedModel(modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"candidate-policy-round-002","artifact_name":"candidate_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"candidate narrows the search frontier"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"challenger-policy-round-002","artifact_name":"challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"challenger narrows the search frontier"}`, nil),
 		}),
 	})
 	if err != nil {
@@ -160,7 +160,7 @@ func TestRunSuccessfulOptimizerWritesBundle(t *testing.T) {
 		"resolved.json",
 		"optimizer_prompt.txt",
 		"optimizer_result.json",
-		"candidate_policy.round-002.py",
+		"challenger_policy.round-002.py",
 		"metadata.json",
 		"COMPLETE",
 	} {
@@ -189,7 +189,7 @@ func TestRunFailureDoesNotWriteComplete(t *testing.T) {
 			BundleID:           "optimize-failure",
 		},
 		Model: modeltest.NewScriptedModel(modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage("{\"artifact_id\":\"candidate-policy-round-002\",\"artifact_name\":\"candidate_policy.round-002.py\",\"interface_id\":\"iterative_context.selection_policy.v1\",\"code\":\"```python\\ndef score(task):\\n    return []\\n```\"}", nil),
+			Message: schema.AssistantMessage("{\"artifact_id\":\"challenger-policy-round-002\",\"artifact_name\":\"challenger_policy.round-002.py\",\"interface_id\":\"iterative_context.selection_policy.v1\",\"code\":\"```python\\ndef score(task):\\n    return []\\n```\"}", nil),
 		}),
 		RetryPolicy: &pureoptimizer.RetryPolicy{
 			MaxAttempts:                  1,

@@ -90,12 +90,12 @@ func TestOptimizationModeRequiresOptimizer(t *testing.T) {
 func TestExperimentConfigNoLongerHasWriterOrOutputConfig(t *testing.T) {
 	t.Parallel()
 
-	typ := reflect.TypeOf(Experiment{})
+	typ := reflect.TypeOf(RoundSpec{})
 	if _, ok := typ.FieldByName("Writer"); ok {
-		t.Fatal("Experiment unexpectedly has Writer field")
+		t.Fatal("RoundSpec unexpectedly has Writer field")
 	}
 	if _, ok := typ.FieldByName("OutputConfig"); ok {
-		t.Fatal("Experiment unexpectedly has OutputConfig field")
+		t.Fatal("RoundSpec unexpectedly has OutputConfig field")
 	}
 }
 
@@ -125,9 +125,9 @@ func TestRejectsMissingBaselineSystemID(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleEvaluationExperiment()
-	experiment.Systems.Baseline.Id = ""
+	experiment.Systems.Incumbent.Id = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingBaselineSystemID.Error()) {
+	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingIncumbentSystemID.Error()) {
 		t.Fatalf("Validate() error = %v, want missing baseline id error", err)
 	}
 }
@@ -136,9 +136,9 @@ func TestRejectsMissingIterativeContextSystemID(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleEvaluationExperiment()
-	experiment.Systems.IterativeContext.Id = ""
+	experiment.Systems.Challenger.Id = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingIterativeContextSystemID.Error()) {
+	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingChallengerSystemID.Error()) {
 		t.Fatalf("Validate() error = %v, want missing iterative context id error", err)
 	}
 }
@@ -191,9 +191,9 @@ func TestRejectsEvaluationCandidateSystemMismatch(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleEvaluationExperiment()
-	experiment.Evaluation.Candidate.System.Id = "other"
+	experiment.Evaluation.Challenger.System.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrEvaluationCandidateSystemMismatch.Error()) {
+	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrEvaluationChallengerSystemMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want candidate system mismatch", err)
 	}
 }
@@ -202,9 +202,9 @@ func TestRejectsSelectionPolicyArtifactMismatch(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleEvaluationExperiment()
-	experiment.Evaluation.Candidate.Uses.SelectionPolicy.Id = "other"
+	experiment.Evaluation.Challenger.Uses.SelectionPolicy.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrSelectionPolicyArtifactMismatch.Error()) {
+	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrChallengerSelectionPolicyArtifactMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want selection policy mismatch", err)
 	}
 }
@@ -213,10 +213,10 @@ func TestRejectsSelectionPolicyInterfaceMismatch(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleEvaluationExperiment()
-	experiment.Artifacts.CandidatePolicyRound001.Implements.Id = "other"
-	experiment.Evaluation.Candidate.Uses.SelectionPolicy.Implements.Id = "other"
+	experiment.Artifacts.ChallengerPolicyRound001.Implements.Id = "other"
+	experiment.Evaluation.Challenger.Uses.SelectionPolicy.Implements.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrSelectionPolicyInterfaceMismatch.Error()) {
+	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrChallengerSelectionPolicyInterfaceMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want selection policy interface mismatch", err)
 	}
 }
@@ -225,7 +225,7 @@ func TestRejectsAbsolutePolicyArtifactPath(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleEvaluationExperiment()
-	experiment.Artifacts.CandidatePolicyRound001.Path = "/tmp/policy.py"
+	experiment.Artifacts.ChallengerPolicyRound001.Path = "/tmp/policy.py"
 
 	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrPolicyArtifactPathMustBeRelative.Error()) {
 		t.Fatalf("Validate() error = %v, want relative policy path error", err)
@@ -236,7 +236,7 @@ func TestRejectsProposalArtifactNameWithParentTraversal(t *testing.T) {
 	t.Parallel()
 
 	experiment := sampleOptimizationExperiment()
-	experiment.Artifacts.CandidatePolicyRound002.ArtifactName = "../candidate.py"
+	experiment.Artifacts.NextChallengerRound002.ArtifactName = "../candidate.py"
 
 	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrPolicyProposalArtifactNameInvalid.Error()) {
 		t.Fatalf("Validate() error = %v, want invalid artifact name error", err)
@@ -249,7 +249,7 @@ func TestRejectsOptimizationTargetOutputMismatch(t *testing.T) {
 	experiment := sampleOptimizationExperiment()
 	experiment.Optimization.Target.Output.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrOptimizationTargetOutputMismatch.Error()) {
+	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrOptimizationNextChallengerOutputMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want optimization target output mismatch", err)
 	}
 }
@@ -322,7 +322,7 @@ func TestPurePackagesDoNotImportPkl(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", ".."))
 	dirs := []string{
 		filepath.Join(repoRoot, "internal", "pure", "domain"),
-		filepath.Join(repoRoot, "internal", "pure", "run"),
+		filepath.Join(repoRoot, "internal", "pure", "execution"),
 		filepath.Join(repoRoot, "internal", "pure", "score"),
 		filepath.Join(repoRoot, "internal", "pure", "report"),
 		filepath.Join(repoRoot, "internal", "pure", "codegraph"),
@@ -352,7 +352,7 @@ func TestPurePackagesDoNotImportPkl(t *testing.T) {
 	}
 }
 
-func sampleEvaluationExperiment() Experiment {
+func sampleEvaluationExperiment() RoundSpec {
 	prompt := "Use structural code evidence before guessing."
 	evaluator := &Evaluator{
 		Model: sampleModel("fake-evaluator"),
@@ -375,7 +375,7 @@ func sampleEvaluationExperiment() Experiment {
 		},
 	}
 
-	experiment := Experiment{
+	experiment := RoundSpec{
 		Name: "local-ic-vs-jcodemunch-round-001",
 		Mode: ModeEvaluation,
 		Dataset: Dataset{
@@ -389,7 +389,7 @@ func sampleEvaluationExperiment() Experiment {
 			IterativeContextSelectionPolicyV1: Interface{Id: "iterative_context.selection_policy.v1"},
 		},
 		Systems: Systems{
-			Baseline: System{
+			Incumbent: System{
 				Id:      "jcodemunch",
 				Name:    "jCodeMunch",
 				Backend: BackendJCodeMunch,
@@ -402,7 +402,7 @@ func sampleEvaluationExperiment() Experiment {
 					TimeoutSeconds: 300,
 				},
 			},
-			IterativeContext: System{
+			Challenger: System{
 				Id:      "iterative-context",
 				Name:    "Iterative Context",
 				Backend: BackendIterativeContext,
@@ -417,10 +417,10 @@ func sampleEvaluationExperiment() Experiment {
 			},
 		},
 		Artifacts: Artifacts{
-			CandidatePolicyRound001: &PolicyArtifact{
-				Id:   "candidate-policy-round-001",
+			ChallengerPolicyRound001: &PolicyArtifact{
+				Id:   "challenger-policy-round-001",
 				Kind: "policy",
-				Path: "policies/candidate_policy.py",
+				Path: "policies/challenger_policy.py",
 				Implements: Interface{
 					Id: "iterative_context.selection_policy.v1",
 				},
@@ -433,13 +433,13 @@ func sampleEvaluationExperiment() Experiment {
 
 	experiment.Evaluation = &Evaluation{
 		Agent: *evaluator,
-		Baseline: EvaluationSystemBinding{
-			System: experiment.Systems.Baseline,
+		Incumbent: EvaluationSystemBinding{
+			System: experiment.Systems.Incumbent,
 		},
-		Candidate: CandidateEvaluationBinding{
-			System: experiment.Systems.IterativeContext,
-			Uses: CandidateUses{
-				SelectionPolicy: *experiment.Artifacts.CandidatePolicyRound001,
+		Challenger: ChallengerEvaluationBinding{
+			System: experiment.Systems.Challenger,
+			Uses: ChallengerUses{
+				SelectionPolicy: *experiment.Artifacts.ChallengerPolicyRound001,
 			},
 		},
 		Scoring: Scoring{
@@ -453,7 +453,7 @@ func sampleEvaluationExperiment() Experiment {
 	return experiment
 }
 
-func sampleOptimizationExperiment() Experiment {
+func sampleOptimizationExperiment() RoundSpec {
 	experiment := sampleEvaluationExperiment()
 	prompt := "Improve the Iterative Context selection policy using only the provided parent-run evidence."
 	optimizer := &Optimizer{
@@ -480,12 +480,12 @@ func sampleOptimizationExperiment() Experiment {
 	experiment.Name = "optimize-ic-round-002"
 	experiment.Mode = ModeOptimization
 	experiment.Evaluation = nil
-	experiment.Artifacts.ParentEvaluationRound001 = &CompletedEvaluationBundleArtifact{
+	experiment.Artifacts.ParentRound001Bundle = &CompletedRoundBundleArtifact{
 		Id:   "local-ic-vs-jcodemunch-round-001",
-		Kind: "completed_evaluation_bundle",
+		Kind: "completed_round_bundle",
 		Path: "../local-ic-vs-jcodemunch/artifacts/runs/example-round-001",
 	}
-	experiment.Artifacts.CandidatePolicyRound002 = &PolicyProposalArtifact{
+	experiment.Artifacts.NextChallengerRound002 = &PolicyProposalArtifact{
 		Id:           "candidate-policy-round-002",
 		Kind:         "policy_proposal",
 		ArtifactName: "candidate_policy.round-002.py",
@@ -496,20 +496,20 @@ func sampleOptimizationExperiment() Experiment {
 	experiment.Agents.Optimizer = optimizer
 	experiment.Optimization = &Optimization{
 		Agent: *optimizer,
-		ParentRun: ParentRun{
-			Bundle: *experiment.Artifacts.ParentEvaluationRound001,
+		ParentRound: ParentRound{
+			Bundle: *experiment.Artifacts.ParentRound001Bundle,
 		},
 		Target: OptimizationTarget{
-			Input:  *experiment.Artifacts.CandidatePolicyRound001,
-			Output: *experiment.Artifacts.CandidatePolicyRound002,
+			Input:  *experiment.Artifacts.ChallengerPolicyRound001,
+			Output: *experiment.Artifacts.NextChallengerRound002,
 		},
 		Evidence: OptimizationEvidence{
-			From: *experiment.Artifacts.ParentEvaluationRound001,
+			From: *experiment.Artifacts.ParentRound001Bundle,
 			Include: []OptimizerEvidenceKind{
 				OptimizerEvidenceReportSummary,
-				OptimizerEvidenceScoreEvidence,
+				OptimizerEvidenceRoundEvidence,
 				OptimizerEvidenceObjectiveResult,
-				OptimizerEvidenceCandidatePolicy,
+				OptimizerEvidenceChallengerPolicy,
 			},
 			Deny: []OptimizerDeniedEvidenceKind{
 				OptimizerDeniedGoldLabels,

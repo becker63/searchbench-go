@@ -14,16 +14,16 @@ func TestPairAll(t *testing.T) {
 	}{
 		{
 			name:      "yields both roles in order",
-			pair:      NewPair("baseline", "candidate"),
-			wantRoles: []Role{RoleBaseline, RoleCandidate},
-			wantVals:  []string{"baseline", "candidate"},
+			pair:      NewPair("incumbent", "challenger"),
+			wantRoles: []Role{RoleIncumbent, RoleChallenger},
+			wantVals:  []string{"incumbent", "challenger"},
 			stopAfter: 2,
 		},
 		{
 			name:      "respects early stop",
-			pair:      NewPair("baseline", "candidate"),
-			wantRoles: []Role{RoleBaseline},
-			wantVals:  []string{"baseline"},
+			pair:      NewPair("incumbent", "challenger"),
+			wantRoles: []Role{RoleIncumbent},
+			wantVals:  []string{"incumbent"},
 			stopAfter: 1,
 		},
 	}

@@ -266,7 +266,7 @@ type resolvedPlanDocument struct {
 	ManifestPath     string                     `json:"manifest_path"`
 	ExperimentName   string                     `json:"experiment_name"`
 	Mode             string                     `json:"mode"`
-	ParentRun        pureoptimizer.ParentRunRef `json:"parent_run"`
+	ParentRound      pureoptimizer.ParentRoundRef `json:"parent_round"`
 	Target           pureoptimizer.Target       `json:"target"`
 	Agent            pureoptimizer.AgentConfig  `json:"agent"`
 	IncludedEvidence []string                   `json:"included_evidence,omitempty"`
@@ -339,7 +339,7 @@ func resolvedDocument(plan Plan) resolvedPlanDocument {
 		ManifestPath:     plan.ManifestPath,
 		ExperimentName:   plan.ExperimentName,
 		Mode:             "optimization",
-		ParentRun:        plan.ParentBundle,
+		ParentRound:      plan.ParentBundle,
 		Target:           plan.Target,
 		Agent:            plan.Agent,
 		IncludedEvidence: append([]string(nil), plan.IncludedEvidence...),

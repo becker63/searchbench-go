@@ -3,7 +3,7 @@ package compare
 import (
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -44,17 +44,17 @@ func NewResults(capacity int) Results {
 // then feeds the accumulator on the main goroutine to preserve deterministic
 // ordering without locks.
 func (r *Results) AddTaskResult(result TaskComparisonResult) {
-	if result.Runs.Baseline != nil {
-		r.runs.Baseline = append(r.runs.Baseline, *result.Runs.Baseline)
+	if result.Runs.Incumbent != nil {
+		r.runs.Incumbent = append(r.runs.Incumbent, *result.Runs.Incumbent)
 	}
-	if result.Runs.Candidate != nil {
-		r.runs.Candidate = append(r.runs.Candidate, *result.Runs.Candidate)
+	if result.Runs.Challenger != nil {
+		r.runs.Challenger = append(r.runs.Challenger, *result.Runs.Challenger)
 	}
-	if result.Failures.Baseline != nil {
-		r.failures.Baseline = append(r.failures.Baseline, *result.Failures.Baseline)
+	if result.Failures.Incumbent != nil {
+		r.failures.Incumbent = append(r.failures.Incumbent, *result.Failures.Incumbent)
 	}
-	if result.Failures.Candidate != nil {
-		r.failures.Candidate = append(r.failures.Candidate, *result.Failures.Candidate)
+	if result.Failures.Challenger != nil {
+		r.failures.Challenger = append(r.failures.Challenger, *result.Failures.Challenger)
 	}
 	r.regressions = append(r.regressions, result.Regressions...)
 }
@@ -62,7 +62,7 @@ func (r *Results) AddTaskResult(result TaskComparisonResult) {
 // Summary reduces the accumulated runs and failures into report-facing
 // comparisons plus the collected regressions.
 func (r Results) Summary() Summary {
-	metricComparisons := score.CompareAverages(r.runs.Baseline, r.runs.Candidate)
+	metricComparisons := score.CompareAverages(r.runs.Incumbent, r.runs.Challenger)
 	comparisons := make([]report.ScoreComparison, 0, len(metricComparisons))
 	for _, comparison := range metricComparisons {
 		comparisons = append(comparisons, report.NewScoreComparisonFromMetric(comparison))

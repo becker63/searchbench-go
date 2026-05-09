@@ -6,7 +6,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -50,7 +50,7 @@ func (l Logger) ComparisonCompleted(report report.CandidateReport) {
 }
 
 // TaskStarted logs the start of one task comparison.
-func (l Logger) TaskStarted(task domain.TaskSpec) {
+func (l Logger) TaskStarted(task domain.MatchSpec) {
 	if l.mode == ModeDev {
 		l.devInfo(
 			"task.started",
@@ -64,7 +64,7 @@ func (l Logger) TaskStarted(task domain.TaskSpec) {
 }
 
 // TaskCompleted logs the high-level outcome of one task comparison.
-func (l Logger) TaskCompleted(task domain.TaskSpec, baselineSucceeded bool, candidateSucceeded bool, regressionCount int) {
+func (l Logger) TaskCompleted(task domain.MatchSpec, baselineSucceeded bool, candidateSucceeded bool, regressionCount int) {
 	if l.mode == ModeDev {
 		l.devInfo(
 			"task.completed",
@@ -162,7 +162,7 @@ func (l Logger) RunFailed(role domain.Role, failure run.RunFailure) {
 		l.devWarn(
 			"run.failed",
 			l.renderRole(role),
-			failure.TaskID.String(),
+			failure.MatchID.String(),
 			string(failure.Stage),
 			truncate(failure.Message, 120),
 		)

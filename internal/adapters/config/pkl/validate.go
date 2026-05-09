@@ -19,28 +19,28 @@ var (
 	ErrMissingOptimizer                    = errors.New("config: agents.optimizer is required")
 	ErrMissingDatasetConfig                = errors.New("config: dataset config is required")
 	ErrMissingDatasetSplit                 = errors.New("config: dataset split is required")
-	ErrMissingBaselineSystemID             = errors.New("config: baseline system id is required")
-	ErrMissingIterativeContextSystemID     = errors.New("config: iterative context system id is required")
+	ErrMissingIncumbentSystemID    = errors.New("config: incumbent system id is required")
+	ErrMissingChallengerSystemID   = errors.New("config: challenger system id is required")
 	ErrMissingInterfaceID                  = errors.New("config: interface id is required")
 	ErrMissingAgentModelProvider           = errors.New("config: agent model provider is required")
 	ErrMissingAgentModelName               = errors.New("config: agent model name is required")
 	ErrMissingScoringObjectivePath         = errors.New("config: scoring objective path is required")
 	ErrEvaluationAgentMismatch             = errors.New("config: evaluation.agent must reference agents.evaluator")
-	ErrEvaluationBaselineSystemMismatch    = errors.New("config: evaluation.baseline.system must reference systems.baseline")
-	ErrEvaluationCandidateSystemMismatch   = errors.New("config: evaluation.candidate.system must reference systems.iterativeContext")
-	ErrMissingSelectionPolicyArtifact      = errors.New("config: candidate selection policy artifact is required")
-	ErrSelectionPolicyArtifactMismatch     = errors.New("config: evaluation.candidate.uses.selectionPolicy must reference artifacts.candidatePolicyRound001")
-	ErrSelectionPolicyInterfaceMismatch    = errors.New("config: candidate selection policy must implement interfaces.iterativeContextSelectionPolicyV1")
+	ErrEvaluationIncumbentSystemMismatch  = errors.New("config: evaluation.incumbent.system must reference systems.incumbent")
+	ErrEvaluationChallengerSystemMismatch   = errors.New("config: evaluation.challenger.system must reference systems.challenger")
+	ErrMissingChallengerSelectionPolicyArtifact   = errors.New("config: challenger selection policy artifact is required")
+	ErrChallengerSelectionPolicyArtifactMismatch  = errors.New("config: evaluation.challenger.uses.selectionPolicy must reference artifacts.challengerPolicyRound001")
+	ErrChallengerSelectionPolicyInterfaceMismatch = errors.New("config: challenger selection policy must implement interfaces.iterativeContextSelectionPolicyV1")
 	ErrPolicyArtifactPathRequired          = errors.New("config: policy artifact path is required")
 	ErrPolicyArtifactPathMustBeRelative    = errors.New("config: policy artifact path must be relative")
 	ErrPolicyProposalArtifactNameRequired  = errors.New("config: policy proposal artifact name is required")
 	ErrPolicyProposalArtifactNameInvalid   = errors.New("config: policy proposal artifact name must be relative and must not contain '..'")
-	ErrCompletedBundleArtifactPathRequired = errors.New("config: completed evaluation bundle path is required")
+	ErrCompletedBundleArtifactPathRequired = errors.New("config: completed round bundle path is required")
 	ErrOptimizerAgentMismatch              = errors.New("config: optimization.agent must reference agents.optimizer")
-	ErrOptimizationParentBundleMismatch    = errors.New("config: optimization.parentRun.bundle must reference artifacts.parentEvaluationRound001")
-	ErrOptimizationTargetInputMismatch     = errors.New("config: optimization.target.input must reference artifacts.candidatePolicyRound001")
-	ErrOptimizationTargetOutputMismatch    = errors.New("config: optimization.target.output must reference artifacts.candidatePolicyRound002")
-	ErrOptimizationEvidenceSourceMismatch  = errors.New("config: optimization.evidence.from must reference artifacts.parentEvaluationRound001")
+	ErrOptimizationParentRoundBundleMismatch       = errors.New("config: optimization.parentRound.bundle must reference artifacts.parentRound001Bundle")
+	ErrOptimizationChallengerPolicyInputMismatch   = errors.New("config: optimization.target.input must reference artifacts.challengerPolicyRound001")
+	ErrOptimizationNextChallengerOutputMismatch    = errors.New("config: optimization.target.output must reference artifacts.nextChallengerRound002")
+	ErrOptimizationEvidenceSourceMismatch          = errors.New("config: optimization.evidence.from must reference artifacts.parentRound001Bundle")
 	ErrToolAllowEntryEmpty                 = errors.New("config: tool allow entries must be non-empty")
 	ErrToolDenyEntryEmpty                  = errors.New("config: tool deny entries must be non-empty")
 	ErrToolAllowDuplicate                  = errors.New("config: tool allow entries must not duplicate")
@@ -51,52 +51,52 @@ var (
 
 // Validate applies SearchBench-specific config checks after Pkl has resolved
 // defaults and basic type constraints.
-func Validate(experiment Experiment) error {
-	if err := validateMode(experiment); err != nil {
+func Validate(spec RoundSpec) error {
+	if err := validateMode(spec); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validateDataset(experiment.Dataset); err != nil {
+	if err := validateDataset(spec.Dataset); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validateInterfaces(experiment.Interfaces); err != nil {
+	if err := validateInterfaces(spec.Interfaces); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validateSystems(experiment.Systems); err != nil {
+	if err := validateSystems(spec.Systems); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validateArtifacts(experiment.Artifacts); err != nil {
+	if err := validateArtifacts(spec.Artifacts); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validateAgents(experiment.Agents); err != nil {
+	if err := validateAgents(spec.Agents); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validateEvaluation(experiment); err != nil {
+	if err := validateEvaluation(spec); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validateOptimization(experiment); err != nil {
+	if err := validateOptimization(spec); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
 	return nil
 }
 
-func validateMode(experiment Experiment) error {
-	switch experiment.Mode {
+func validateMode(spec RoundSpec) error {
+	switch spec.Mode {
 	case ModeEvaluation:
-		if experiment.Evaluation == nil {
+		if spec.Evaluation == nil {
 			return ErrMissingEvaluation
 		}
-		if experiment.Agents.Evaluator == nil {
+		if spec.Agents.Evaluator == nil {
 			return ErrMissingEvaluator
 		}
 	case ModeOptimization:
-		if experiment.Optimization == nil {
+		if spec.Optimization == nil {
 			return ErrMissingOptimization
 		}
-		if experiment.Agents.Optimizer == nil {
+		if spec.Agents.Optimizer == nil {
 			return ErrMissingOptimizer
 		}
 	default:
-		return fmt.Errorf("%w: %q", ErrUnsupportedMode, experiment.Mode)
+		return fmt.Errorf("%w: %q", ErrUnsupportedMode, spec.Mode)
 	}
 	return nil
 }
@@ -119,28 +119,28 @@ func validateInterfaces(interfaces Interfaces) error {
 }
 
 func validateSystems(systems Systems) error {
-	if strings.TrimSpace(systems.Baseline.Id) == "" {
-		return ErrMissingBaselineSystemID
+	if strings.TrimSpace(systems.Incumbent.Id) == "" {
+		return ErrMissingIncumbentSystemID
 	}
-	if strings.TrimSpace(systems.IterativeContext.Id) == "" {
-		return ErrMissingIterativeContextSystemID
+	if strings.TrimSpace(systems.Challenger.Id) == "" {
+		return ErrMissingChallengerSystemID
 	}
 	return nil
 }
 
 func validateArtifacts(artifacts Artifacts) error {
-	if artifacts.CandidatePolicyRound001 != nil {
-		if err := validatePolicyArtifact(*artifacts.CandidatePolicyRound001); err != nil {
+	if artifacts.ChallengerPolicyRound001 != nil {
+		if err := validatePolicyArtifact(*artifacts.ChallengerPolicyRound001); err != nil {
 			return err
 		}
 	}
-	if artifacts.CandidatePolicyRound002 != nil {
-		if err := validatePolicyProposalArtifact(*artifacts.CandidatePolicyRound002); err != nil {
+	if artifacts.NextChallengerRound002 != nil {
+		if err := validatePolicyProposalArtifact(*artifacts.NextChallengerRound002); err != nil {
 			return err
 		}
 	}
-	if artifacts.ParentEvaluationRound001 != nil {
-		if err := validateCompletedBundleArtifact(*artifacts.ParentEvaluationRound001); err != nil {
+	if artifacts.ParentRound001Bundle != nil {
+		if err := validateCompletedBundleArtifact(*artifacts.ParentRound001Bundle); err != nil {
 			return err
 		}
 	}
@@ -169,7 +169,7 @@ func validatePolicyProposalArtifact(artifact PolicyProposalArtifact) error {
 	return nil
 }
 
-func validateCompletedBundleArtifact(artifact CompletedEvaluationBundleArtifact) error {
+func validateCompletedBundleArtifact(artifact CompletedRoundBundleArtifact) error {
 	if strings.TrimSpace(artifact.Path) == "" {
 		return ErrCompletedBundleArtifactPathRequired
 	}
@@ -253,32 +253,32 @@ func validateSystemPrompt(prompt *string) error {
 	return nil
 }
 
-func validateEvaluation(experiment Experiment) error {
-	if experiment.Evaluation == nil {
+func validateEvaluation(spec RoundSpec) error {
+	if spec.Evaluation == nil {
 		return nil
 	}
-	evaluation := *experiment.Evaluation
+	evaluation := *spec.Evaluation
 
-	if experiment.Agents.Evaluator == nil {
+	if spec.Agents.Evaluator == nil {
 		return ErrMissingEvaluator
 	}
-	if !reflect.DeepEqual(*experiment.Agents.Evaluator, evaluation.Agent) {
+	if !reflect.DeepEqual(*spec.Agents.Evaluator, evaluation.Agent) {
 		return ErrEvaluationAgentMismatch
 	}
-	if !reflect.DeepEqual(experiment.Systems.Baseline, evaluation.Baseline.System) {
-		return ErrEvaluationBaselineSystemMismatch
+	if !reflect.DeepEqual(spec.Systems.Incumbent, evaluation.Incumbent.System) {
+		return ErrEvaluationIncumbentSystemMismatch
 	}
-	if !reflect.DeepEqual(experiment.Systems.IterativeContext, evaluation.Candidate.System) {
-		return ErrEvaluationCandidateSystemMismatch
+	if !reflect.DeepEqual(spec.Systems.Challenger, evaluation.Challenger.System) {
+		return ErrEvaluationChallengerSystemMismatch
 	}
-	if experiment.Artifacts.CandidatePolicyRound001 == nil {
-		return ErrMissingSelectionPolicyArtifact
+	if spec.Artifacts.ChallengerPolicyRound001 == nil {
+		return ErrMissingChallengerSelectionPolicyArtifact
 	}
-	if !reflect.DeepEqual(*experiment.Artifacts.CandidatePolicyRound001, evaluation.Candidate.Uses.SelectionPolicy) {
-		return ErrSelectionPolicyArtifactMismatch
+	if !reflect.DeepEqual(*spec.Artifacts.ChallengerPolicyRound001, evaluation.Challenger.Uses.SelectionPolicy) {
+		return ErrChallengerSelectionPolicyArtifactMismatch
 	}
-	if evaluation.Candidate.Uses.SelectionPolicy.Implements.Id != experiment.Interfaces.IterativeContextSelectionPolicyV1.Id {
-		return ErrSelectionPolicyInterfaceMismatch
+	if evaluation.Challenger.Uses.SelectionPolicy.Implements.Id != spec.Interfaces.IterativeContextSelectionPolicyV1.Id {
+		return ErrChallengerSelectionPolicyInterfaceMismatch
 	}
 	if strings.TrimSpace(evaluation.Scoring.Objective) == "" {
 		return ErrMissingScoringObjectivePath
@@ -286,28 +286,28 @@ func validateEvaluation(experiment Experiment) error {
 	return nil
 }
 
-func validateOptimization(experiment Experiment) error {
-	if experiment.Optimization == nil {
+func validateOptimization(spec RoundSpec) error {
+	if spec.Optimization == nil {
 		return nil
 	}
-	optimization := *experiment.Optimization
+	optimization := *spec.Optimization
 
-	if experiment.Agents.Optimizer == nil {
+	if spec.Agents.Optimizer == nil {
 		return ErrMissingOptimizer
 	}
-	if !reflect.DeepEqual(*experiment.Agents.Optimizer, optimization.Agent) {
+	if !reflect.DeepEqual(*spec.Agents.Optimizer, optimization.Agent) {
 		return ErrOptimizerAgentMismatch
 	}
-	if experiment.Artifacts.ParentEvaluationRound001 == nil || !reflect.DeepEqual(*experiment.Artifacts.ParentEvaluationRound001, optimization.ParentRun.Bundle) {
-		return ErrOptimizationParentBundleMismatch
+	if spec.Artifacts.ParentRound001Bundle == nil || !reflect.DeepEqual(*spec.Artifacts.ParentRound001Bundle, optimization.ParentRound.Bundle) {
+		return ErrOptimizationParentRoundBundleMismatch
 	}
-	if experiment.Artifacts.CandidatePolicyRound001 == nil || !reflect.DeepEqual(*experiment.Artifacts.CandidatePolicyRound001, optimization.Target.Input) {
-		return ErrOptimizationTargetInputMismatch
+	if spec.Artifacts.ChallengerPolicyRound001 == nil || !reflect.DeepEqual(*spec.Artifacts.ChallengerPolicyRound001, optimization.Target.Input) {
+		return ErrOptimizationChallengerPolicyInputMismatch
 	}
-	if experiment.Artifacts.CandidatePolicyRound002 == nil || !reflect.DeepEqual(*experiment.Artifacts.CandidatePolicyRound002, optimization.Target.Output) {
-		return ErrOptimizationTargetOutputMismatch
+	if spec.Artifacts.NextChallengerRound002 == nil || !reflect.DeepEqual(*spec.Artifacts.NextChallengerRound002, optimization.Target.Output) {
+		return ErrOptimizationNextChallengerOutputMismatch
 	}
-	if !reflect.DeepEqual(optimization.ParentRun.Bundle, optimization.Evidence.From) {
+	if !reflect.DeepEqual(optimization.ParentRound.Bundle, optimization.Evidence.From) {
 		return ErrOptimizationEvidenceSourceMismatch
 	}
 	return nil

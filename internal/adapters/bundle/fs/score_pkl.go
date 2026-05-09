@@ -20,8 +20,8 @@ func marshalScoreEvidencePkl(doc score.ScoreEvidenceDocument) ([]byte, error) {
 	w.blank()
 
 	w.object("systems", func() {
-		writeSystemRef(&w, "baseline", doc.Systems.Baseline)
-		writeSystemRef(&w, "candidate", doc.Systems.Candidate)
+		writeSystemRef(&w, "baseline", doc.Systems.Incumbent)
+		writeSystemRef(&w, "candidate", doc.Systems.Challenger)
 	})
 	w.blank()
 
@@ -51,7 +51,7 @@ func marshalScoreEvidencePkl(doc score.ScoreEvidenceDocument) ([]byte, error) {
 	w.list("regressionDetails", func() {
 		for _, detail := range doc.RegressionDetails {
 			w.listObject(func() {
-				w.linef("taskId = %s", pklString(detail.TaskID.String()))
+				w.linef("matchId = %s", pklString(detail.MatchID.String()))
 				w.linef("metric = %s", pklString(string(detail.Metric)))
 				w.linef("baseline = %s", pklFloat(detail.Baseline))
 				w.linef("candidate = %s", pklFloat(detail.Candidate))

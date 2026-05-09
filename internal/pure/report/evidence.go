@@ -39,7 +39,7 @@ func ProjectScoreEvidence(candidateReport CandidateReport) (score.ScoreEvidenceD
 	}
 	for _, regression := range candidateReport.Regressions {
 		regressionDetails = append(regressionDetails, score.RegressionEvidence{
-			TaskID:    regression.TaskID,
+			MatchID:   regression.MatchID,
 			Metric:    regression.Metric,
 			Baseline:  regression.Baseline,
 			Candidate: regression.Candidate,
@@ -60,16 +60,16 @@ func ProjectScoreEvidence(candidateReport CandidateReport) (score.ScoreEvidenceD
 		ReportID:      candidateReport.ID,
 		Systems:       candidateReport.Spec.Systems,
 		RunCounts: score.RoleCounts{
-			Baseline:  len(candidateReport.Runs.Baseline),
-			Candidate: len(candidateReport.Runs.Candidate),
+			Baseline:  len(candidateReport.Runs.Incumbent),
+			Candidate: len(candidateReport.Runs.Challenger),
 		},
 		FailureCounts: score.RoleCounts{
-			Baseline:  len(candidateReport.Failures.Baseline),
-			Candidate: len(candidateReport.Failures.Candidate),
+			Baseline:  len(candidateReport.Failures.Incumbent),
+			Candidate: len(candidateReport.Failures.Challenger),
 		},
 		LocalizationDistance: score.ExtractLocalizationDistance(metrics),
-		Usage:                score.AggregateUsage(candidateReport.Runs.Candidate),
-		BaselineUsage:        score.AggregateUsage(candidateReport.Runs.Baseline),
+		Usage:                score.AggregateUsage(candidateReport.Runs.Challenger),
+		BaselineUsage:        score.AggregateUsage(candidateReport.Runs.Incumbent),
 		Regressions:          regressionSummary,
 		RegressionDetails:    regressionDetails,
 		InvalidPredictions: score.InvalidPredictionEvidence{

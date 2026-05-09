@@ -1,6 +1,6 @@
 package score
 
-import "github.com/becker63/searchbench-go/internal/pure/run"
+import run "github.com/becker63/searchbench-go/internal/pure/execution"
 
 // ScoredRun is the minimum unit that can participate in a candidate report.
 //

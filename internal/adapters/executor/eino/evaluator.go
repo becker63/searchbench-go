@@ -16,7 +16,7 @@ import (
 	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/adapters/executor/eino/callbacks"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/pure/prompts/evaluator"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/usage"
 )
 
@@ -190,7 +190,7 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 		attempt := Attempt{Number: attemptNumber}
 
 		recordPhase(PhaseRenderPrompt)
-		input := evaluatorprompt.InputFromTask(spec.Task, allowedTools)
+		input := evaluatorprompt.InputFromMatch(spec.Match, allowedTools)
 		for _, previous := range result.Attempts {
 			if feedback := retryFeedbackForFailure(previous.Failure); feedback != "" {
 				input.RetryFeedback = append(input.RetryFeedback, feedback)

@@ -3,7 +3,6 @@ package locale2e
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +15,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/adapters/executor/eino"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
 )
 
@@ -28,7 +27,7 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 	root := repoRoot(t)
 	evaluationManifest := filepath.Join(root, "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
 	optimizationManifest := filepath.Join(root, "configs", "experiments", "optimize-ic", "experiment.pkl")
-	inputPolicyPath := filepath.Join(root, "configs", "experiments", "optimize-ic", "policies", "candidate_policy.py")
+	inputPolicyPath := filepath.Join(root, "configs", "experiments", "optimize-ic", "policies", "challenger_policy.py")
 	bundleRoot := filepath.Join(t.TempDir(), "artifacts")
 
 	evaluationManifestBefore := mustReadFile(t, evaluationManifest)
@@ -61,7 +60,7 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 
 	optimizerModel := modeltest.NewScriptedModel(
 		modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"candidate-policy-round-002","artifact_name":"candidate_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"candidate narrows the frontier using the parent evidence"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"challenger-policy-round-002","artifact_name":"challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"challenger narrows the frontier using the parent evidence"}`, nil),
 		},
 	)
 
@@ -92,7 +91,7 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 		filepath.Join(result.ParentEvaluationBundle, "score.pkl"),
 		filepath.Join(result.ParentEvaluationBundle, "objective.json"),
 		filepath.Join(result.OptimizerBundle, "COMPLETE"),
-		filepath.Join(result.OptimizerBundle, "candidate_policy.round-002.py"),
+		filepath.Join(result.OptimizerBundle, "challenger_policy.round-002.py"),
 		filepath.Join(result.OptimizerBundle, "optimizer_result.json"),
 	} {
 		if _, err := os.Stat(path); err != nil {
@@ -108,12 +107,12 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 	}
 
 	var optimizerResolved struct {
-		ParentRun struct {
+		ParentRound struct {
 			BundlePath string `json:"bundle_path"`
-		} `json:"parent_run"`
+		} `json:"parent_round"`
 	}
 	decodeJSONFile(t, filepath.Join(result.OptimizerBundle, "resolved.json"), &optimizerResolved)
-	if got, want := optimizerResolved.ParentRun.BundlePath, result.ParentEvaluationBundle; got != want {
+	if got, want := optimizerResolved.ParentRound.BundlePath, result.ParentEvaluationBundle; got != want {
 		t.Fatalf("optimizer parent bundle path = %q, want %q", got, want)
 	}
 
@@ -176,8 +175,7 @@ func TestFakeE2EParentEvaluationFailurePreventsOptimizer(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var pathErr *os.PathError
-	if !strings.Contains(err.Error(), "no such file or directory") && !errors.As(err, &pathErr) {
+	if !strings.Contains(err.Error(), "Cannot find module") && !strings.Contains(err.Error(), "no such file or directory") {
 		t.Fatalf("err = %v, want missing manifest failure", err)
 	}
 	if optimizerFactoryCalled {

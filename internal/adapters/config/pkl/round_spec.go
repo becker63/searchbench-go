@@ -11,7 +11,10 @@ import (
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/runmode"
 )
 
-type Experiment = generated.Experiment
+// RoundSpec is the typed root manifest resolved from SearchBenchRound.pkl.
+type RoundSpec = generated.SearchBenchRound
+
+type Game = generated.Game
 type Dataset = generated.Dataset
 type Interfaces = generated.Interfaces
 type Interface = generated.Interface
@@ -22,7 +25,7 @@ type Runtime = generated.Runtime
 type Artifacts = generated.Artifacts
 type PolicyArtifact = generated.PolicyArtifact
 type PolicyProposalArtifact = generated.PolicyProposalArtifact
-type CompletedEvaluationBundleArtifact = generated.CompletedEvaluationBundleArtifact
+type CompletedRoundBundleArtifact = generated.CompletedRoundBundleArtifact
 type Agents = generated.Agents
 type AgentToolPolicy = generated.AgentToolPolicy
 type Model = generated.Model
@@ -33,12 +36,12 @@ type RetryPolicy = generated.RetryPolicy
 type Tracing = generated.Tracing
 type Evaluation = generated.Evaluation
 type EvaluationSystemBinding = generated.EvaluationSystemBinding
-type CandidateEvaluationBinding = generated.CandidateEvaluationBinding
-type CandidateUses = generated.CandidateUses
+type ChallengerEvaluationBinding = generated.ChallengerEvaluationBinding
+type ChallengerUses = generated.ChallengerUses
 type Scoring = generated.Scoring
 type Report = generated.Report
 type Optimization = generated.Optimization
-type ParentRun = generated.ParentRun
+type ParentRound = generated.ParentRound
 type OptimizationTarget = generated.OptimizationTarget
 type OptimizationEvidence = generated.OptimizationEvidence
 
@@ -66,14 +69,14 @@ const (
 	ReportFormatJSON = reportformat.Json
 	ReportFormatText = reportformat.Text
 
-	ArtifactKindPolicy                    = artifactkind.Policy
-	ArtifactKindPolicyProposal            = artifactkind.PolicyProposal
-	ArtifactKindCompletedEvaluationBundle = artifactkind.CompletedEvaluationBundle
+	ArtifactKindPolicy               = artifactkind.Policy
+	ArtifactKindPolicyProposal       = artifactkind.PolicyProposal
+	ArtifactKindCompletedRoundBundle = artifactkind.CompletedRoundBundle
 
 	OptimizerEvidenceReportSummary   = optimizerevidencekind.ReportSummary
-	OptimizerEvidenceScoreEvidence   = optimizerevidencekind.ScoreEvidence
+	OptimizerEvidenceRoundEvidence   = optimizerevidencekind.RoundEvidence
 	OptimizerEvidenceObjectiveResult = optimizerevidencekind.ObjectiveResult
-	OptimizerEvidenceCandidatePolicy = optimizerevidencekind.CandidatePolicy
+	OptimizerEvidenceChallengerPolicy = optimizerevidencekind.ChallengerPolicy
 
 	OptimizerDeniedGoldLabels        = optimizerdeniedevidencekind.GoldLabels
 	OptimizerDeniedOracleFiles       = optimizerdeniedevidencekind.OracleFiles

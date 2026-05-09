@@ -9,7 +9,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -30,7 +30,7 @@ type Executor interface {
 // Implementations used with parallel execution must be safe for concurrent
 // calls, or the runner must be configured with sequential execution.
 type GraphProvider interface {
-	GraphForTask(ctx context.Context, task domain.TaskSpec) (codegraph.Graph, error)
+	GraphForTask(ctx context.Context, task domain.MatchSpec) (codegraph.Graph, error)
 }
 
 // Scorer is the orchestration seam for turning one executed run plus graph
@@ -50,7 +50,7 @@ type Decider interface {
 }
 
 // RunIDFunc derives a run identifier for one role/task/system combination.
-type RunIDFunc func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID
+type RunIDFunc func(role domain.Role, task domain.MatchSpec, system domain.SystemRef) domain.RunID
 
 // ReportIDFunc derives a report identifier for one completed comparison.
 type ReportIDFunc func() domain.ReportID
@@ -107,9 +107,9 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 	logger := r.logger()
 	logger.ComparisonStarted(
 		"",
-		plan.Systems.Baseline.Ref(),
-		plan.Systems.Candidate.Ref(),
-		plan.Tasks.Len(),
+		plan.Systems.Incumbent.Ref(),
+		plan.Systems.Challenger.Ref(),
+		plan.Matches.Len(),
 		string(parallelism.Mode),
 		parallelism.MaxWorkers,
 	)
@@ -119,7 +119,7 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 		return report.CandidateReport{}, err
 	}
 
-	results := NewResults(plan.Tasks.Len())
+	results := NewResults(plan.Matches.Len())
 	for _, taskResult := range taskResults {
 		results.AddTaskResult(taskResult.Result)
 	}
@@ -193,7 +193,7 @@ func (r Runner) logger() Logger {
 // task-level execution and scoring failures stay inside TaskComparisonResult as
 // run.RunFailure values.
 func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, error) {
-	tasks := plan.Tasks.All()
+	tasks := plan.Matches.All()
 	parallelism := r.normalizedParallelism()
 
 	if parallelism.Mode == ExecutionSequential {
@@ -222,7 +222,7 @@ func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, erro
 
 	type taskJob struct {
 		index int
-		task  domain.TaskSpec
+		task  domain.MatchSpec
 	}
 
 	type workerResult struct {
@@ -303,7 +303,7 @@ func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, erro
 func (r Runner) CompareTask(
 	ctx context.Context,
 	systems domain.Pair[domain.SystemSpec],
-	task domain.TaskSpec,
+	task domain.MatchSpec,
 ) TaskComparisonResult {
 	type outcome struct {
 		run     *score.ScoredRun
@@ -337,18 +337,18 @@ func (r Runner) CompareTask(
 
 	out := TaskComparisonResult{
 		Runs: domain.NewPair(
-			outcomes.Baseline.run,
-			outcomes.Candidate.run,
+			outcomes.Incumbent.run,
+			outcomes.Challenger.run,
 		),
 		Failures: domain.NewPair(
-			outcomes.Baseline.failure,
-			outcomes.Candidate.failure,
+			outcomes.Incumbent.failure,
+			outcomes.Challenger.failure,
 		),
 	}
-	if out.Runs.Baseline != nil && out.Runs.Candidate != nil {
-		out.Regressions = report.RegressionsForTask(task.ID, score.CompareSets(out.Runs.Baseline.Scores, out.Runs.Candidate.Scores))
+	if out.Runs.Incumbent != nil && out.Runs.Challenger != nil {
+		out.Regressions = report.RegressionsForMatch(task.ID, score.CompareSets(out.Runs.Incumbent.Scores, out.Runs.Challenger.Scores))
 	}
-	logger.TaskCompleted(task, out.Runs.Baseline != nil, out.Runs.Candidate != nil, len(out.Regressions))
+	logger.TaskCompleted(task, out.Runs.Incumbent != nil, out.Runs.Challenger != nil, len(out.Regressions))
 	return out
 }
 
@@ -360,7 +360,7 @@ func (r Runner) CompareTask(
 func (r Runner) ExecuteAndScore(
 	ctx context.Context,
 	role domain.Role,
-	task domain.TaskSpec,
+	task domain.MatchSpec,
 	system domain.SystemSpec,
 	graph codegraph.Graph,
 ) (*score.ScoredRun, *run.RunFailure) {

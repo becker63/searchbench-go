@@ -83,7 +83,7 @@ type RegressionEvidenceSummary struct {
 // RegressionEvidence preserves report-level regression detail in a score-owned
 // evidence shape.
 type RegressionEvidence struct {
-	TaskID    domain.TaskID `json:"task_id"`
+	MatchID   domain.MatchID `json:"match_id"`
 	Metric    MetricName    `json:"metric"`
 	Baseline  float64       `json:"baseline"`
 	Candidate float64       `json:"candidate"`

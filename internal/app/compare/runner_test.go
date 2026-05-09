@@ -10,7 +10,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -29,7 +29,7 @@ func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
 		GraphProvider: fakeGraphProvider{},
 		Scorer:        fakeScorer{},
 		Decider:       fakeDecider{},
-		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+		NewRunID: func(role domain.Role, task domain.MatchSpec, system domain.SystemRef) domain.RunID {
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},
 		NewReportID: func() domain.ReportID { return domain.ReportID("report-2") },
@@ -40,22 +40,22 @@ func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
 			exampleBaselineSystem(),
 			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
 		),
-		domain.NewNonEmpty(exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug.go"))),
+		domain.NewNonEmpty(exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug.go"))),
 	))
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if len(got.Runs.Baseline) != 1 {
-		t.Fatalf("len(got.Runs.Baseline) = %d, want 1", len(got.Runs.Baseline))
+	if len(got.Runs.Incumbent) != 1 {
+		t.Fatalf("len(got.Runs.Incumbent) = %d, want 1", len(got.Runs.Incumbent))
 	}
-	if len(got.Runs.Candidate) != 0 {
-		t.Fatalf("len(got.Runs.Candidate) = %d, want 0", len(got.Runs.Candidate))
+	if len(got.Runs.Challenger) != 0 {
+		t.Fatalf("len(got.Runs.Challenger) = %d, want 0", len(got.Runs.Challenger))
 	}
-	if len(got.Failures.Candidate) != 1 {
-		t.Fatalf("len(got.Failures.Candidate) = %d, want 1", len(got.Failures.Candidate))
+	if len(got.Failures.Challenger) != 1 {
+		t.Fatalf("len(got.Failures.Challenger) = %d, want 1", len(got.Failures.Challenger))
 	}
-	if got.Failures.Candidate[0].Stage != run.FailureExecute {
-		t.Fatalf("candidate failure stage = %q, want %q", got.Failures.Candidate[0].Stage, run.FailureExecute)
+	if got.Failures.Challenger[0].Stage != run.FailureExecute {
+		t.Fatalf("candidate failure stage = %q, want %q", got.Failures.Challenger[0].Stage, run.FailureExecute)
 	}
 }
 
@@ -65,10 +65,10 @@ func TestRunnerParallelTasksPreservesPlanOrder(t *testing.T) {
 	runner := exampleRunner(fixedTestTime())
 	runner.Executor = delayedExecutor{
 		now: fixedTestTime(),
-		delays: map[domain.TaskID]time.Duration{
-			domain.TaskID("task-1"): 30 * time.Millisecond,
-			domain.TaskID("task-2"): 10 * time.Millisecond,
-			domain.TaskID("task-3"): 1 * time.Millisecond,
+		delays: map[domain.MatchID]time.Duration{
+			domain.MatchID("task-1"): 30 * time.Millisecond,
+			domain.MatchID("task-2"): 10 * time.Millisecond,
+			domain.MatchID("task-3"): 1 * time.Millisecond,
 		},
 	}
 	runner.Parallelism = Parallelism{
@@ -82,9 +82,9 @@ func TestRunnerParallelTasksPreservesPlanOrder(t *testing.T) {
 			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
 		),
 		domain.NewNonEmpty(
-			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
-			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
-			exampleTask(domain.TaskID("task-3"), domain.RepoRelPath("pkg/bug3.go")),
+			exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.MatchID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+			exampleTask(domain.MatchID("task-3"), domain.RepoRelPath("pkg/bug3.go")),
 		),
 	)
 
@@ -93,13 +93,13 @@ func TestRunnerParallelTasksPreservesPlanOrder(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	wantOrder := []domain.TaskID{
-		domain.TaskID("task-1"),
-		domain.TaskID("task-2"),
-		domain.TaskID("task-3"),
+	wantOrder := []domain.MatchID{
+		domain.MatchID("task-1"),
+		domain.MatchID("task-2"),
+		domain.MatchID("task-3"),
 	}
-	assertRunOrder(t, got.Runs.Baseline, wantOrder)
-	assertRunOrder(t, got.Runs.Candidate, wantOrder)
+	assertRunOrder(t, got.Runs.Incumbent, wantOrder)
+	assertRunOrder(t, got.Runs.Challenger, wantOrder)
 }
 
 func TestRunnerParallelTasksRespectsContextCancellation(t *testing.T) {
@@ -120,8 +120,8 @@ func TestRunnerParallelTasksRespectsContextCancellation(t *testing.T) {
 			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
 		),
 		domain.NewNonEmpty(
-			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
-			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+			exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.MatchID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
 		),
 	))
 	if !errors.Is(err, context.Canceled) {
@@ -164,13 +164,13 @@ func (f fakeExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun
 
 type delayedExecutor struct {
 	now    time.Time
-	delays map[domain.TaskID]time.Duration
+	delays map[domain.MatchID]time.Duration
 }
 
 var _ Executor = delayedExecutor{}
 
 func (d delayedExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
-	if delay := d.delays[spec.Task.ID]; delay > 0 {
+	if delay := d.delays[spec.Match.ID]; delay > 0 {
 		timer := time.NewTimer(delay)
 		defer timer.Stop()
 
@@ -198,7 +198,7 @@ func (f failingExecutor) Execute(ctx context.Context, spec run.Spec) (run.Execut
 
 type fakeGraphProvider struct{}
 
-func (fakeGraphProvider) GraphForTask(_ context.Context, task domain.TaskSpec) (codegraph.Graph, error) {
+func (fakeGraphProvider) GraphForTask(_ context.Context, task domain.MatchSpec) (codegraph.Graph, error) {
 	store := codegraph.NewStore()
 	fileID := codegraph.NodeID("file-" + task.ID.String())
 	fnID := codegraph.NodeID("fn-" + task.ID.String())
@@ -256,14 +256,14 @@ func (fakeDecider) Decide(_ []report.ScoreComparison, regressions []report.Regre
 	}
 }
 
-func assertRunOrder(t *testing.T, runs []score.ScoredRun, want []domain.TaskID) {
+func assertRunOrder(t *testing.T, runs []score.ScoredRun, want []domain.MatchID) {
 	t.Helper()
 
 	if len(runs) != len(want) {
 		t.Fatalf("len(runs) = %d, want %d", len(runs), len(want))
 	}
 	for i, taskID := range want {
-		if got := runs[i].Execution.Spec().Task.ID; got != taskID {
+		if got := runs[i].Execution.Spec().Match.ID; got != taskID {
 			t.Fatalf("runs[%d].Task.ID = %q, want %q", i, got, taskID)
 		}
 	}

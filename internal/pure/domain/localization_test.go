@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestLCATaskIdentityTaskIDDeterministic(t *testing.T) {
+func TestLCATaskIdentityMatchIDDeterministic(t *testing.T) {
 	t.Parallel()
 
 	identity := LCATaskIdentity{
@@ -19,13 +19,13 @@ func TestLCATaskIdentityTaskIDDeterministic(t *testing.T) {
 		IssueURL:      "https://example.test/issues/1",
 	}
 
-	got := identity.TaskID()
-	want := TaskID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1")
+	got := identity.MatchID()
+	want := MatchID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1")
 	if got != want {
-		t.Fatalf("TaskID() = %q, want %q", got, want)
+		t.Fatalf("MatchID() = %q, want %q", got, want)
 	}
-	if identity.TaskID() != got {
-		t.Fatalf("TaskID() is not deterministic: got %q then %q", got, identity.TaskID())
+	if identity.MatchID() != got {
+		t.Fatalf("MatchID() is not deterministic: got %q then %q", got, identity.MatchID())
 	}
 }
 
@@ -35,7 +35,7 @@ func TestLCATaskIdentityIssueKeyFallbacks(t *testing.T) {
 	tests := []struct {
 		name     string
 		identity LCATaskIdentity
-		want     TaskID
+		want     MatchID
 	}{
 		{
 			name: "issue url preferred",
@@ -49,7 +49,7 @@ func TestLCATaskIdentityIssueKeyFallbacks(t *testing.T) {
 				IssueURL:      "https://example.test/issues/1",
 				PullURL:       "https://example.test/pulls/2",
 			},
-			want: TaskID("d:c:s:square/okhttp@abc123:https://example.test/issues/1"),
+			want: MatchID("d:c:s:square/okhttp@abc123:https://example.test/issues/1"),
 		},
 		{
 			name: "pull url fallback",
@@ -62,7 +62,7 @@ func TestLCATaskIdentityIssueKeyFallbacks(t *testing.T) {
 				BaseSHA:       "abc123",
 				PullURL:       "https://example.test/pulls/2",
 			},
-			want: TaskID("d:c:s:square/okhttp@abc123:https://example.test/pulls/2"),
+			want: MatchID("d:c:s:square/okhttp@abc123:https://example.test/pulls/2"),
 		},
 		{
 			name: "unknown issue fallback",
@@ -74,7 +74,7 @@ func TestLCATaskIdentityIssueKeyFallbacks(t *testing.T) {
 				RepoName:      "okhttp",
 				BaseSHA:       "abc123",
 			},
-			want: TaskID("d:c:s:square/okhttp@abc123:unknown-issue"),
+			want: MatchID("d:c:s:square/okhttp@abc123:unknown-issue"),
 		},
 	}
 
@@ -82,8 +82,8 @@ func TestLCATaskIdentityIssueKeyFallbacks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := tt.identity.TaskID(); got != tt.want {
-				t.Fatalf("TaskID() = %q, want %q", got, tt.want)
+			if got := tt.identity.MatchID(); got != tt.want {
+				t.Fatalf("MatchID() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -193,12 +193,12 @@ func TestLCAHFRowToTask(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected conversion error: %v", err)
 			}
-			wantID := TaskID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1")
+			wantID := MatchID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1")
 			if row.IssueURL == "" {
-				wantID = TaskID("searchbench/lca:python:dev:square/okhttp@abc123:unknown-issue")
+				wantID = MatchID("searchbench/lca:python:dev:square/okhttp@abc123:unknown-issue")
 			}
-			if got := task.TaskID(); got != wantID {
-				t.Fatalf("task.TaskID() = %q, want %q", got, wantID)
+			if got := task.MatchID(); got != wantID {
+				t.Fatalf("task.MatchID() = %q, want %q", got, wantID)
 			}
 			if got := task.ChangedFiles(); len(got) != 1 || got[0] != "src/main.kt" {
 				t.Fatalf("ChangedFiles() = %#v, want [\"src/main.kt\"]", got)

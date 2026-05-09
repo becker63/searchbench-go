@@ -1,4 +1,4 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package generated
 
 import (
@@ -8,7 +8,9 @@ import (
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/runmode"
 )
 
-type Experiment struct {
+type SearchBenchRound struct {
+	Game Game `pkl:"game"`
+
 	Name string `pkl:"name"`
 
 	Mode runmode.RunMode `pkl:"mode"`
@@ -28,8 +30,8 @@ type Experiment struct {
 	Optimization *Optimization `pkl:"optimization"`
 }
 
-// LoadFromPath loads the pkl module at the given path and evaluates it into a Experiment
-func LoadFromPath(ctx context.Context, path string) (ret Experiment, err error) {
+// LoadFromPath loads the pkl module at the given path and evaluates it into a SearchBenchRound
+func LoadFromPath(ctx context.Context, path string) (ret SearchBenchRound, err error) {
 	evaluator, err := pkl.NewEvaluator(ctx, pkl.PreconfiguredOptions)
 	if err != nil {
 		return ret, err
@@ -44,9 +46,9 @@ func LoadFromPath(ctx context.Context, path string) (ret Experiment, err error) 
 	return ret, err
 }
 
-// Load loads the pkl module at the given source and evaluates it with the given evaluator into a Experiment
-func Load(ctx context.Context, evaluator pkl.Evaluator, source *pkl.ModuleSource) (Experiment, error) {
-	var ret Experiment
+// Load loads the pkl module at the given source and evaluates it with the given evaluator into a SearchBenchRound
+func Load(ctx context.Context, evaluator pkl.Evaluator, source *pkl.ModuleSource) (SearchBenchRound, error) {
+	var ret SearchBenchRound
 	err := evaluator.EvaluateModule(ctx, source, &ret)
 	return ret, err
 }

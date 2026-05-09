@@ -31,7 +31,7 @@ type Parallelism struct {
 // Runner uses the index to restore plan order after parallel work completes.
 type TaskWorkResult struct {
 	Index  int
-	TaskID domain.TaskID
+	TaskID domain.MatchID
 	Result TaskComparisonResult
 }
 

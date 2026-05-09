@@ -73,9 +73,9 @@ func (i LCATaskIdentity) IssueOrPullKey() string {
 	return "unknown-issue"
 }
 
-// TaskID returns the stable benchmark task identifier.
-func (i LCATaskIdentity) TaskID() TaskID {
-	return TaskID(fmt.Sprintf(
+// MatchID returns the stable benchmark match identifier.
+func (i LCATaskIdentity) MatchID() MatchID {
+	return MatchID(fmt.Sprintf(
 		"%s:%s:%s:%s@%s:%s",
 		strings.TrimSpace(i.DatasetName),
 		strings.TrimSpace(i.DatasetConfig),
@@ -159,9 +159,9 @@ func (t LCATask) Validate() error {
 	return nil
 }
 
-// TaskID delegates to the identity-based deterministic task ID.
-func (t LCATask) TaskID() TaskID {
-	return t.Identity.TaskID()
+// MatchID delegates to the identity-based deterministic match ID.
+func (t LCATask) MatchID() MatchID {
+	return t.Identity.MatchID()
 }
 
 // ChangedFiles returns the normalized canonical gold changed files.
@@ -180,9 +180,9 @@ func (t LCATask) WithRepo(path HostPath) LCATask {
 	return task
 }
 
-// TaskSpec projects the LCA task into the existing generic Searchbench task
-// shape used by compare/report code.
-func (t LCATask) TaskSpec() TaskSpec {
+// MatchSpec projects the LCA row into the generic Searchbench match shape
+// used by compare/report code.
+func (t LCATask) MatchSpec() MatchSpec {
 	repo := RepoSnapshot{
 		Name: RepoName(t.Identity.RepoFullName()),
 		SHA:  RepoSHA(normalizeIdentityToken(t.Identity.BaseSHA)),
@@ -191,15 +191,15 @@ func (t LCATask) TaskSpec() TaskSpec {
 		repo = *t.Repo
 	}
 
-	return TaskSpec{
-		ID:        t.TaskID(),
+	return MatchSpec{
+		ID:        t.MatchID(),
 		Benchmark: BenchmarkLCA,
 		Repo:      repo,
-		Input: TaskInput{
+		Input: MatchInput{
 			Title: strings.TrimSpace(t.Context.IssueTitle),
 			Body:  strings.TrimSpace(t.Context.IssueBody),
 		},
-		Oracle: TaskOracle{
+		Oracle: MatchOracle{
 			GoldFiles: t.ChangedFiles(),
 		},
 	}

@@ -7,25 +7,25 @@ import (
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated"
 )
 
-// ResolveFromPath resolves a Pkl experiment manifest into its typed Go config
+// ResolveFromPath resolves a Pkl round manifest into its typed Go config
 // without applying SearchBench-specific Go validation yet.
-func ResolveFromPath(ctx context.Context, path string) (Experiment, error) {
-	experiment, err := generated.LoadFromPath(ctx, path)
+func ResolveFromPath(ctx context.Context, path string) (RoundSpec, error) {
+	round, err := generated.LoadFromPath(ctx, path)
 	if err != nil {
-		return Experiment{}, fmt.Errorf("config: load experiment: %w", err)
+		return RoundSpec{}, fmt.Errorf("config: load round manifest: %w", err)
 	}
-	return experiment, nil
+	return round, nil
 }
 
-// LoadFromPath resolves a Pkl experiment manifest into its typed Go config and
+// LoadFromPath resolves a Pkl round manifest into its typed Go config and
 // then applies SearchBench-specific Go validation.
-func LoadFromPath(ctx context.Context, path string) (Experiment, error) {
-	experiment, err := ResolveFromPath(ctx, path)
+func LoadFromPath(ctx context.Context, path string) (RoundSpec, error) {
+	round, err := ResolveFromPath(ctx, path)
 	if err != nil {
-		return Experiment{}, err
+		return RoundSpec{}, err
 	}
-	if err := Validate(experiment); err != nil {
-		return Experiment{}, err
+	if err := Validate(round); err != nil {
+		return RoundSpec{}, err
 	}
-	return experiment, nil
+	return round, nil
 }

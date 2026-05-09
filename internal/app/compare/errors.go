@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 )
 
 type StageError struct {
 	Stage    run.FailureStage
 	RunID    domain.RunID
-	TaskID   domain.TaskID
+	MatchID  domain.MatchID
 	SystemID domain.SystemID
 	Err      error
 }
@@ -28,7 +28,7 @@ func NewStageError(spec run.Spec, stage run.FailureStage, err error) StageError 
 	return StageError{
 		Stage:    stage,
 		RunID:    spec.ID,
-		TaskID:   spec.Task.ID,
+		MatchID:  spec.Match.ID,
 		SystemID: spec.System.ID,
 		Err:      err,
 	}
@@ -37,10 +37,10 @@ func NewStageError(spec run.Spec, stage run.FailureStage, err error) StageError 
 // Error formats the stage classification together with the wrapped cause.
 func (e StageError) Error() string {
 	return fmt.Sprintf(
-		"stage=%s run_id=%s task_id=%s system_id=%s: %v",
+		"stage=%s run_id=%s match_id=%s system_id=%s: %v",
 		e.Stage,
 		e.RunID,
-		e.TaskID,
+		e.MatchID,
 		e.SystemID,
 		e.Err,
 	)
@@ -58,7 +58,7 @@ func failureFromError(spec run.Spec, stage run.FailureStage, err error) run.RunF
 	if errors.As(err, &stageErr) {
 		return run.RunFailure{
 			RunID:   stageErr.RunID,
-			TaskID:  stageErr.TaskID,
+			MatchID: stageErr.MatchID,
 			System:  stageErr.SystemID,
 			Stage:   stageErr.Stage,
 			Message: err.Error(),

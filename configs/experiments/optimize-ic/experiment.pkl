@@ -10,23 +10,23 @@ interfaces {
 }
 
 artifacts {
-  candidatePolicyRound001 {
-    id = "candidate-policy-round-001"
+  challengerPolicyRound001 {
+    id = "challenger-policy-round-001"
     kind = "policy"
-    path = "policies/candidate_policy.py"
+    path = "policies/challenger_policy.py"
     implements = interfaces.iterativeContextSelectionPolicyV1
   }
 
-  parentEvaluationRound001 {
+  parentRound001Bundle {
     id = "local-ic-vs-jcodemunch-round-001"
-    kind = "completed_evaluation_bundle"
+    kind = "completed_round_bundle"
     path = "../local-ic-vs-jcodemunch/artifacts/runs/example-round-001"
   }
 
-  candidatePolicyRound002 {
-    id = "candidate-policy-round-002"
+  nextChallengerRound002 {
+    id = "challenger-policy-round-002"
     kind = "policy_proposal"
-    artifactName = "candidate_policy.round-002.py"
+    artifactName = "challenger_policy.round-002.py"
     implements = interfaces.iterativeContextSelectionPolicyV1
   }
 }
@@ -80,23 +80,23 @@ agents {
 optimization {
   agent = agents.optimizer
 
-  parentRun {
-    bundle = artifacts.parentEvaluationRound001
+  parentRound {
+    bundle = artifacts.parentRound001Bundle
   }
 
   target {
-    input = artifacts.candidatePolicyRound001
-    output = artifacts.candidatePolicyRound002
+    input = artifacts.challengerPolicyRound001
+    output = artifacts.nextChallengerRound002
   }
 
   evidence {
-    from = artifacts.parentEvaluationRound001
+    from = artifacts.parentRound001Bundle
 
     include {
       "report_summary"
-      "score_evidence"
+      "round_evidence"
       "objective_result"
-      "candidate_policy"
+      "challenger_policy"
     }
 
     deny {

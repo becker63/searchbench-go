@@ -117,8 +117,8 @@ type Target struct {
 	InterfaceID      string            `json:"interface_id"`
 }
 
-// ParentRunRef identifies the completed evaluation bundle used as evidence.
-type ParentRunRef struct {
+// ParentRoundRef identifies the completed round bundle used as evidence.
+type ParentRoundRef struct {
 	ArtifactID domain.ArtifactID `json:"artifact_id"`
 	BundleID   string            `json:"bundle_id,omitempty"`
 	BundlePath domain.HostPath   `json:"bundle_path,omitempty"`
@@ -154,7 +154,7 @@ type PolicySource struct {
 
 // Evidence is the prompt-safe optimizer evidence payload.
 type Evidence struct {
-	ParentRun       ParentRunRef                 `json:"parent_run"`
+	ParentRound     ParentRoundRef               `json:"parent_round"`
 	IncludedKinds   []string                     `json:"included_kinds,omitempty"`
 	DeniedKinds     []string                     `json:"denied_kinds,omitempty"`
 	ReportSummary   *ReportSummary               `json:"report_summary,omitempty"`

@@ -10,14 +10,14 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
 const demoPolicySource = "def score(task):\n    return \"candidate\"\n"
 
 func demoPlan(taskCount int) compare.Plan {
-	tasks := make([]domain.TaskSpec, 0, taskCount)
+	tasks := make([]domain.MatchSpec, 0, taskCount)
 	for i := 1; i <= taskCount; i++ {
 		tasks = append(tasks, demoTask(i))
 	}
@@ -71,11 +71,11 @@ func demoCandidateSystem(policySource string) domain.SystemSpec {
 	}
 }
 
-func demoTask(index int) domain.TaskSpec {
-	taskID := domain.TaskID(fmt.Sprintf("task-%d", index))
+func demoTask(index int) domain.MatchSpec {
+	taskID := domain.MatchID(fmt.Sprintf("task-%d", index))
 	gold := domain.RepoRelPath(fmt.Sprintf("pkg/bug%d.go", index))
 
-	return domain.TaskSpec{
+	return domain.MatchSpec{
 		ID:        taskID,
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
@@ -83,11 +83,11 @@ func demoTask(index int) domain.TaskSpec {
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("/tmp/repo"),
 		},
-		Input: domain.TaskInput{
+		Input: domain.MatchInput{
 			Title: "Find issue " + taskID.String(),
 			Body:  "Locate bug for " + taskID.String(),
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{gold},
 		},
 	}
@@ -99,7 +99,7 @@ func demoRunner(now time.Time, logger logging.Logger, maxWorkers int) compare.Ru
 		GraphProvider: demoGraphProvider{},
 		Scorer:        demoScorer{},
 		Decider:       demoDecider{},
-		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+		NewRunID: func(role domain.Role, task domain.MatchSpec, system domain.SystemRef) domain.RunID {
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},
 		NewReportID: func() domain.ReportID {
@@ -151,7 +151,7 @@ func (d demoExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun
 
 type demoGraphProvider struct{}
 
-func (demoGraphProvider) GraphForTask(_ context.Context, task domain.TaskSpec) (codegraph.Graph, error) {
+func (demoGraphProvider) GraphForTask(_ context.Context, task domain.MatchSpec) (codegraph.Graph, error) {
 	store := codegraph.NewStore()
 	fileID := codegraph.NodeID("file-" + task.ID.String())
 	fnID := codegraph.NodeID("fn-" + task.ID.String())

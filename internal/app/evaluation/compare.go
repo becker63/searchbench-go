@@ -17,7 +17,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -39,7 +39,7 @@ func runComparison(ctx context.Context, plan Plan, request Request) (report.Cand
 		GraphProvider: fakeGraphProvider{},
 		Scorer:        fakeScorer{},
 		Decider:       fakeDecider{},
-		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+		NewRunID: func(role domain.Role, task domain.MatchSpec, system domain.SystemRef) domain.RunID {
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},
 		NewReportID: func() domain.ReportID {
@@ -89,7 +89,7 @@ func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.Exe
 	evaluator, err := executoreino.New(executoreino.Config{
 		Model:       model,
 		Tools:       tools,
-		WorkDir:     string(spec.Task.Repo.Path),
+		WorkDir:     string(spec.Match.Repo.Path),
 		RetryPolicy: &e.retryPolicy,
 	})
 	if err != nil {
@@ -110,7 +110,7 @@ func (e *evaluatorExecutor) recordExecution(spec run.Spec, result executoreino.R
 
 	e.records = append(e.records, EvaluatorExecution{
 		Role:   roleForSpec(spec),
-		TaskID: spec.Task.ID,
+		TaskID: spec.Match.ID,
 		RunID:  spec.ID,
 		Result: result,
 	})
@@ -126,11 +126,11 @@ func (e *evaluatorExecutor) executions() []EvaluatorExecution {
 }
 
 func roleForSpec(spec run.Spec) domain.Role {
-	if strings.HasPrefix(spec.ID.String(), string(domain.RoleBaseline)+"-") {
-		return domain.RoleBaseline
+	if strings.HasPrefix(spec.ID.String(), string(domain.RoleIncumbent)+"-") {
+		return domain.RoleIncumbent
 	}
-	if strings.HasPrefix(spec.ID.String(), string(domain.RoleCandidate)+"-") {
-		return domain.RoleCandidate
+	if strings.HasPrefix(spec.ID.String(), string(domain.RoleChallenger)+"-") {
+		return domain.RoleChallenger
 	}
 	return ""
 }
@@ -148,7 +148,7 @@ func defaultEvaluatorToolFactory(spec run.Spec) ([]tool.BaseTool, error) {
 			run: func(spec run.Spec, _ map[string]any) any {
 				return map[string]any{
 					"paths": []string{"src/search_target.go", "src/baseline_guess.go"},
-					"issue": spec.Task.Input.Title,
+					"issue": spec.Match.Input.Title,
 				}
 			},
 		},
@@ -184,7 +184,7 @@ func defaultEvaluatorToolFactory(spec run.Spec) ([]tool.BaseTool, error) {
 							"snippet": fakeSnippetForPath("src/baseline_guess.go"),
 						},
 					},
-					"repo": string(spec.Task.Repo.Name),
+					"repo": string(spec.Match.Repo.Name),
 				}
 			},
 		},
@@ -216,7 +216,7 @@ func (m *defaultFakeEvaluatorModel) Generate(ctx context.Context, input []*schem
 	}
 
 	args := map[string]string{
-		"query": m.spec.Task.Input.Title,
+		"query": m.spec.Match.Input.Title,
 	}
 	rawArgs, err := json.Marshal(args)
 	if err != nil {
@@ -299,7 +299,7 @@ func finalPredictionJSON(spec run.Spec) string {
 	path := "src/baseline_guess.go"
 	reasoning := "baseline stayed conservative after the fake structural lookup"
 	if spec.System.Backend == domain.BackendIterativeContext {
-		path = string(spec.Task.Oracle.GoldFiles[0])
+		path = string(spec.Match.Oracle.GoldFiles[0])
 		reasoning = "candidate used the fake structural lookup to narrow onto the search target"
 	}
 
@@ -346,7 +346,7 @@ func cloneToolInfos(tools []*schema.ToolInfo) []*schema.ToolInfo {
 
 type fakeGraphProvider struct{}
 
-func (fakeGraphProvider) GraphForTask(_ context.Context, task domain.TaskSpec) (codegraph.Graph, error) {
+func (fakeGraphProvider) GraphForTask(_ context.Context, task domain.MatchSpec) (codegraph.Graph, error) {
 	store := codegraph.NewStore()
 	fileID := codegraph.NodeID("file-" + task.ID.String())
 	fnID := codegraph.NodeID("fn-" + task.ID.String())

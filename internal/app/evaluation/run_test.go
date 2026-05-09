@@ -65,8 +65,8 @@ func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 	if out.ID != plan.ReportID {
 		t.Fatalf("report ID = %q, want %q", out.ID, plan.ReportID)
 	}
-	if len(out.Runs.Baseline) != 1 || len(out.Runs.Candidate) != 1 {
-		t.Fatalf("run counts = baseline:%d candidate:%d, want 1/1", len(out.Runs.Baseline), len(out.Runs.Candidate))
+	if len(out.Runs.Incumbent) != 1 || len(out.Runs.Challenger) != 1 {
+		t.Fatalf("run counts = baseline:%d candidate:%d, want 1/1", len(out.Runs.Incumbent), len(out.Runs.Challenger))
 	}
 	if out.Decision.Decision != report.DecisionPromote {
 		t.Fatalf("decision = %q, want %q", out.Decision.Decision, report.DecisionPromote)
@@ -168,7 +168,7 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 	if got, want := resolved.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("resolved objective path = %q, want %q", got, want)
 	}
-	if got := resolved.Output.ResolvedPolicyPaths.Candidate; got == "" {
+	if got := resolved.Output.ResolvedPolicyPaths.Challenger; got == "" {
 		t.Fatal("resolved candidate policy path is empty")
 	}
 	if resolved.Scoring.ParentEvidence != nil {
@@ -178,7 +178,7 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 		t.Fatalf("metadata files = %#v, want objective.json present", metadata.Files)
 	}
 
-	policySourceBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py"))
+	policySourceBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py"))
 	if err != nil {
 		t.Fatalf("ReadFile(policy) error = %v", err)
 	}
@@ -210,7 +210,7 @@ func TestMaterializeScoreEvidenceCreatesCurrentTempModule(t *testing.T) {
 	if got, want := materialized.CurrentRef.Name, "current"; got != want {
 		t.Fatalf("CurrentRef.Name = %q, want %q", got, want)
 	}
-	if got, want := materialized.CurrentRef.ScorePath, filepath.Join(string(plan.Output.ExpectedBundlePath), "score.pkl"); got != want {
+	if got, want := materialized.CurrentRef.ScorePath, filepath.Join(string(plan.Output.ExpectedBundlePath), "evidence.pkl"); got != want {
 		t.Fatalf("CurrentRef.ScorePath = %q, want %q", got, want)
 	}
 	content := string(mustReadFile(t, materialized.CurrentScorePath))
@@ -420,7 +420,7 @@ func TestPurePackagesStillAvoidPklImports(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
 	dirs := []string{
 		filepath.Join(repoRoot, "internal", "pure", "domain"),
-		filepath.Join(repoRoot, "internal", "pure", "run"),
+		filepath.Join(repoRoot, "internal", "pure", "execution"),
 		filepath.Join(repoRoot, "internal", "pure", "score"),
 		filepath.Join(repoRoot, "internal", "pure", "report"),
 		filepath.Join(repoRoot, "internal", "pure", "codegraph"),
@@ -523,16 +523,16 @@ func createExperimentFixture(t *testing.T, objectiveMutation string) string {
 	if err != nil {
 		t.Fatalf("ReadFile(experiment) error = %v", err)
 	}
-	manifestContent := strings.ReplaceAll(string(manifestBytes), `amends "../../schema/SearchBenchExperiment.pkl"`, `amends "schema/SearchBenchExperiment.pkl"`)
+	manifestContent := strings.ReplaceAll(string(manifestBytes), `amends "../../schema/SearchBenchRound.pkl"`, `amends "schema/SearchBenchRound.pkl"`)
 	if err := os.WriteFile(filepath.Join(root, "experiment.pkl"), []byte(manifestContent), 0o644); err != nil {
 		t.Fatalf("WriteFile(experiment) error = %v", err)
 	}
 
-	policyBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py"))
+	policyBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py"))
 	if err != nil {
 		t.Fatalf("ReadFile(policy) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "policies", "candidate_policy.py"), policyBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "policies", "challenger_policy.py"), policyBytes, 0o644); err != nil {
 		t.Fatalf("WriteFile(policy) error = %v", err)
 	}
 
@@ -550,7 +550,7 @@ func createExperimentFixture(t *testing.T, objectiveMutation string) string {
 		t.Fatalf("WriteFile(objective) error = %v", err)
 	}
 
-	for _, name := range []string{"SearchBenchExperiment.pkl", "SearchBenchObjective.pkl", "SearchBenchObjectiveHelpers.pkl"} {
+	for _, name := range []string{"SearchBenchRound.pkl", "SearchBenchObjective.pkl", "SearchBenchObjectiveHelpers.pkl"} {
 		schemaBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "schema", name))
 		if err != nil {
 			t.Fatalf("ReadFile(%s) error = %v", name, err)

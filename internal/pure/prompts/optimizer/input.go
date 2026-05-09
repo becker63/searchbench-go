@@ -49,7 +49,7 @@ func InputFromSpec(spec pureoptimizer.Spec) (Input, error) {
 		TargetArtifactID:   spec.Target.OutputArtifactID.String(),
 		TargetArtifactName: spec.Target.OutputName,
 		TargetInterfaceID:  spec.Target.InterfaceID,
-		ParentBundleID:     spec.Evidence.ParentRun.BundleID,
+		ParentBundleID:     spec.Evidence.ParentRound.BundleID,
 		IncludedEvidence:   include,
 		DeniedEvidence:     deny,
 		InputPolicyID:      spec.Evidence.InputPolicy.ArtifactID.String(),

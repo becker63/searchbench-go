@@ -41,17 +41,17 @@ func TestResolveExampleManifest(t *testing.T) {
 	if got, want := out.Mode, "evaluation"; got != want {
 		t.Fatalf("Mode = %q, want %q", got, want)
 	}
-	if got, want := out.Systems.Baseline.ID, domain.SystemID("jcodemunch"); got != want {
+	if got, want := out.Systems.Incumbent.ID, domain.SystemID("jcodemunch"); got != want {
 		t.Fatalf("Baseline.ID = %q, want %q", got, want)
 	}
-	if got, want := out.Systems.Candidate.ID, domain.SystemID("iterative-context"); got != want {
+	if got, want := out.Systems.Challenger.ID, domain.SystemID("iterative-context"); got != want {
 		t.Fatalf("Candidate.ID = %q, want %q", got, want)
 	}
 	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("ObjectivePath = %q, want %q", got, want)
 	}
-	if got, want := out.Output.ResolvedPolicyPaths.Candidate, filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py")); got != want {
-		t.Fatalf("candidate policy path = %q, want %q", got, want)
+	if got, want := out.Output.ResolvedPolicyPaths.Challenger, filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py")); got != want {
+		t.Fatalf("challenger policy path = %q, want %q", got, want)
 	}
 	if got, want := out.Output.BundleWriterRoot, domain.HostPath(filepath.Join(filepath.Dir(manifestPath), "artifacts")); got == want {
 		t.Fatalf("BundleWriterRoot unexpectedly ignored override")

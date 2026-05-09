@@ -38,8 +38,8 @@ func TestLoadLocalICVsJCodeMunchManifest(t *testing.T) {
 	if experiment.Evaluation.Scoring.Objective != "scoring/localization-objective.pkl" {
 		t.Fatalf("experiment.Evaluation.Scoring.Objective = %q", experiment.Evaluation.Scoring.Objective)
 	}
-	if experiment.Artifacts.CandidatePolicyRound001 == nil || experiment.Artifacts.CandidatePolicyRound001.Path != "policies/candidate_policy.py" {
-		t.Fatalf("candidate policy artifact = %#v, want local policy path", experiment.Artifacts.CandidatePolicyRound001)
+	if experiment.Artifacts.ChallengerPolicyRound001 == nil || experiment.Artifacts.ChallengerPolicyRound001.Path != "policies/challenger_policy.py" {
+		t.Fatalf("challenger policy artifact = %#v, want local policy path", experiment.Artifacts.ChallengerPolicyRound001)
 	}
 }
 
@@ -69,13 +69,13 @@ func TestLoadOptimizeICManifest(t *testing.T) {
 	if experiment.Evaluation != nil {
 		t.Fatalf("experiment.Evaluation = %#v, want nil for optimization manifest", experiment.Evaluation)
 	}
-	if experiment.Artifacts.CandidatePolicyRound001 == nil || experiment.Artifacts.CandidatePolicyRound001.Path != "policies/candidate_policy.py" {
-		t.Fatalf("experiment.Artifacts.CandidatePolicyRound001 = %#v, want local optimize policy path", experiment.Artifacts.CandidatePolicyRound001)
+	if experiment.Artifacts.ChallengerPolicyRound001 == nil || experiment.Artifacts.ChallengerPolicyRound001.Path != "policies/challenger_policy.py" {
+		t.Fatalf("experiment.Artifacts.ChallengerPolicyRound001 = %#v, want local optimize policy path", experiment.Artifacts.ChallengerPolicyRound001)
 	}
-	if experiment.Optimization.Target.Input.Id != "candidate-policy-round-001" {
+	if experiment.Optimization.Target.Input.Id != "challenger-policy-round-001" {
 		t.Fatalf("experiment.Optimization.Target.Input.Id = %q", experiment.Optimization.Target.Input.Id)
 	}
-	if experiment.Optimization.Target.Output.ArtifactName != "candidate_policy.round-002.py" {
+	if experiment.Optimization.Target.Output.ArtifactName != "challenger_policy.round-002.py" {
 		t.Fatalf("experiment.Optimization.Target.Output.ArtifactName = %q", experiment.Optimization.Target.Output.ArtifactName)
 	}
 }
@@ -84,8 +84,8 @@ func TestOptimizeICExampleSupportFilesMatchEvaluationExample(t *testing.T) {
 	t.Parallel()
 
 	repoRoot := filepath.Join("..", "..", "..", "..")
-	localPolicyPath := filepath.Join(repoRoot, "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py")
-	optimizePolicyPath := filepath.Join(repoRoot, "configs", "experiments", "optimize-ic", "policies", "candidate_policy.py")
+	localPolicyPath := filepath.Join(repoRoot, "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py")
+	optimizePolicyPath := filepath.Join(repoRoot, "configs", "experiments", "optimize-ic", "policies", "challenger_policy.py")
 	localObjectivePath := filepath.Join(repoRoot, "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl")
 	optimizeObjectivePath := filepath.Join(repoRoot, "configs", "experiments", "optimize-ic", "scoring", "localization-objective.pkl")
 

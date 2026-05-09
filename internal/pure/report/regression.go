@@ -13,9 +13,9 @@ const (
 	RegressionBlocking RegressionSeverity = "blocking"
 )
 
-// Regression records a metric/task-level reason the candidate got worse.
+// Regression records a metric/match-level reason the challenger regressed.
 type Regression struct {
-	TaskID domain.TaskID    `json:"task_id"`
+	MatchID domain.MatchID `json:"match_id"`
 	Metric score.MetricName `json:"metric"`
 
 	Baseline  float64 `json:"baseline"`
@@ -29,13 +29,13 @@ type Regression struct {
 // NewRegressionFromMetricComparison converts a score-level regression into a
 // report-facing regression record.
 func NewRegressionFromMetricComparison(
-	taskID domain.TaskID,
+	matchID domain.MatchID,
 	comparison score.MetricComparison,
 	severity RegressionSeverity,
 	reason string,
 ) Regression {
 	return Regression{
-		TaskID:    taskID,
+		MatchID:   matchID,
 		Metric:    comparison.Metric,
 		Baseline:  comparison.Baseline,
 		Candidate: comparison.Candidate,
@@ -45,16 +45,16 @@ func NewRegressionFromMetricComparison(
 	}
 }
 
-// RegressionsForTask converts metric comparisons into report-level regressions
-// for one task.
-func RegressionsForTask(taskID domain.TaskID, comparisons []score.MetricComparison) []Regression {
+// RegressionsForMatch converts metric comparisons into report-level regressions
+// for one match.
+func RegressionsForMatch(matchID domain.MatchID, comparisons []score.MetricComparison) []Regression {
 	out := make([]Regression, 0)
 	for _, comparison := range comparisons {
 		if !comparison.Regressed {
 			continue
 		}
 		out = append(out, NewRegressionFromMetricComparison(
-			taskID,
+			matchID,
 			comparison,
 			RegressionMinor,
 			"candidate score is worse than baseline",

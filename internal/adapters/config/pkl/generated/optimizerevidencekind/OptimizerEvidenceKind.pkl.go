@@ -1,4 +1,4 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package optimizerevidencekind
 
 import (
@@ -9,10 +9,10 @@ import (
 type OptimizerEvidenceKind string
 
 const (
-	ReportSummary   OptimizerEvidenceKind = "report_summary"
-	ScoreEvidence   OptimizerEvidenceKind = "score_evidence"
-	ObjectiveResult OptimizerEvidenceKind = "objective_result"
-	CandidatePolicy OptimizerEvidenceKind = "candidate_policy"
+	ReportSummary    OptimizerEvidenceKind = "report_summary"
+	RoundEvidence    OptimizerEvidenceKind = "round_evidence"
+	ObjectiveResult  OptimizerEvidenceKind = "objective_result"
+	ChallengerPolicy OptimizerEvidenceKind = "challenger_policy"
 )
 
 // String returns the string representation of OptimizerEvidenceKind
@@ -27,12 +27,12 @@ func (rcv *OptimizerEvidenceKind) UnmarshalBinary(data []byte) error {
 	switch str := string(data); str {
 	case "report_summary":
 		*rcv = ReportSummary
-	case "score_evidence":
-		*rcv = ScoreEvidence
+	case "round_evidence":
+		*rcv = RoundEvidence
 	case "objective_result":
 		*rcv = ObjectiveResult
-	case "candidate_policy":
-		*rcv = CandidatePolicy
+	case "challenger_policy":
+		*rcv = ChallengerPolicy
 	default:
 		return fmt.Errorf(`illegal: "%s" is not a valid OptimizerEvidenceKind`, str)
 	}

@@ -5,7 +5,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -33,15 +33,15 @@ func TestSystemSpecKVOmitsPolicySource(t *testing.T) {
 func TestTaskKVOmitsOracleFields(t *testing.T) {
 	t.Parallel()
 
-	task := domain.TaskSpec{
-		ID:        domain.TaskID("task-1"),
+	task := domain.MatchSpec{
+		ID:        domain.MatchID("task-1"),
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
 			Name: domain.RepoName("repo/example"),
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("/tmp/repo"),
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{"pkg/bug.go"},
 		},
 	}
@@ -50,7 +50,7 @@ func TestTaskKVOmitsOracleFields(t *testing.T) {
 	assertNoKey(t, kv, "oracle")
 	assertNoKey(t, kv, "gold_files")
 	assertNoValue(t, kv, domain.RepoRelPath("pkg/bug.go"))
-	assertHasKey(t, kv, "task_id")
+	assertHasKey(t, kv, "match_id")
 }
 
 func TestScoreSetKVIncludesRequiredMetrics(t *testing.T) {
@@ -94,8 +94,8 @@ func TestReportSummaryKVIsCompact(t *testing.T) {
 
 	kv := ReportSummaryKV(report)
 	assertHasKey(t, kv, "report_id")
-	assertHasKey(t, kv, "baseline_runs")
-	assertHasKey(t, kv, "candidate_runs")
+	assertHasKey(t, kv, "incumbent_runs")
+	assertHasKey(t, kv, "challenger_runs")
 	assertNoKey(t, kv, "runs")
 }
 

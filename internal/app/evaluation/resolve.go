@@ -59,18 +59,18 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 		return Plan{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
 
-	baseline, err := resolveSystem(manifestDir, *evaluator, evaluation.Baseline.System, nil)
+	baseline, err := resolveSystem(manifestDir, *evaluator, evaluation.Incumbent.System, nil)
 	if err != nil {
-		return Plan{}, fmt.Errorf("resolve baseline system: %w", err)
+		return Plan{}, fmt.Errorf("resolve incumbent system: %w", err)
 	}
 	candidate, err := resolveSystem(
 		manifestDir,
 		*evaluator,
-		evaluation.Candidate.System,
-		&evaluation.Candidate.Uses.SelectionPolicy,
+		evaluation.Challenger.System,
+		&evaluation.Challenger.Uses.SelectionPolicy,
 	)
 	if err != nil {
-		return Plan{}, fmt.Errorf("resolve candidate system: %w", err)
+		return Plan{}, fmt.Errorf("resolve challenger system: %w", err)
 	}
 
 	tasks := fakeTasks(manifestDir, cfg)
@@ -106,7 +106,7 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			MaxItems: cfg.Dataset.MaxItems,
 		},
 		Systems:     systems,
-		Tasks:       tasks,
+		Matches:     tasks,
 		Parallelism: compare.DefaultParallelism(),
 		Evaluator: EvaluatorConfig{
 			Model: EvaluatorModelConfig{
@@ -132,8 +132,8 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			CurrentEvidence: score.ObjectiveEvidenceRef{
 				Name:       "current",
 				BundlePath: string(expectedBundlePath),
-				ScorePath:  filepath.Join(string(expectedBundlePath), "score.pkl"),
-				ReportPath: filepath.Join(string(expectedBundlePath), "report.json"),
+				ScorePath:  filepath.Join(string(expectedBundlePath), "evidence.pkl"),
+				ReportPath: filepath.Join(string(expectedBundlePath), "round-report.json"),
 			},
 			ParentEvidence:  cloneEvidenceRef(request.ParentRef),
 			ParentScorePath: request.ParentScorePath,
@@ -145,8 +145,8 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			ReportFormats:        reportFormats,
 			RenderHumanReport:    renderHumanReport,
 			ResolvedPolicyPaths: ResolvedPolicyPaths{
-				Baseline:  filepath.ToSlash(baseline.policyPath),
-				Candidate: filepath.ToSlash(candidate.policyPath),
+				Incumbent:  filepath.ToSlash(baseline.policyPath),
+				Challenger: filepath.ToSlash(candidate.policyPath),
 			},
 		},
 		Report: ReportConfig{
@@ -221,21 +221,21 @@ func resolveSystem(
 	return out, nil
 }
 
-func fakeTasks(manifestDir string, cfg config.Experiment) domain.NonEmpty[domain.TaskSpec] {
+func fakeTasks(manifestDir string, cfg config.RoundSpec) domain.NonEmpty[domain.MatchSpec] {
 	repoPath := domain.HostPath(filepath.Join(manifestDir, "fake-repo"))
-	task := domain.TaskSpec{
-		ID:        domain.TaskID("local-fake-task-1"),
+	task := domain.MatchSpec{
+		ID:        domain.MatchID("local-fake-match-1"),
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
 			Name: domain.RepoName("searchbench/local-fake"),
 			SHA:  domain.RepoSHA("0000000"),
 			Path: repoPath,
 		},
-		Input: domain.TaskInput{
-			Title: fmt.Sprintf("Fake %s/%s task", cfg.Dataset.Config, cfg.Dataset.Split),
-			Body:  "This deterministic local task exists only to prove manifest-driven composition.",
+		Input: domain.MatchInput{
+			Title: fmt.Sprintf("Fake %s/%s match", cfg.Dataset.Config, cfg.Dataset.Split),
+			Body:  "This deterministic local match exists only to prove manifest-driven composition.",
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{"src/search_target.go"},
 		},
 	}

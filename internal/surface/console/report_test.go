@@ -7,7 +7,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -50,10 +50,10 @@ func TestRenderCandidateReportShowsFailures(t *testing.T) {
 	t.Parallel()
 
 	report := sampleCandidateReport(t)
-	report.Failures.Candidate = []run.RunFailure{
+	report.Failures.Challenger = []run.RunFailure{
 		{
 			RunID:   domain.RunID("candidate-run-1"),
-			TaskID:  domain.TaskID("task-1"),
+			MatchID: domain.MatchID("task-1"),
 			System:  domain.SystemID("candidate-system"),
 			Stage:   run.FailureExecute,
 			Message: "candidate execute failed",
@@ -79,12 +79,12 @@ func sampleCandidateReportWithPolicySource(t *testing.T, policySource string) re
 
 	spec := report.NewComparisonSpec(
 		domain.NewPair(sampleBaselineSystem(), sampleCandidateSystem(policySource)),
-		domain.NewNonEmpty(sampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go"))),
+		domain.NewNonEmpty(sampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go"))),
 	)
 
 	runs := domain.NewPair(
-		[]score.ScoredRun{sampleScoredRun(t, domain.RoleBaseline, sampleBaselineSystem(), domain.TaskID("task-1"))},
-		[]score.ScoredRun{sampleScoredRun(t, domain.RoleCandidate, sampleCandidateSystem(policySource), domain.TaskID("task-1"))},
+		[]score.ScoredRun{sampleScoredRun(t, domain.RoleIncumbent, sampleBaselineSystem(), domain.MatchID("task-1"))},
+		[]score.ScoredRun{sampleScoredRun(t, domain.RoleChallenger, sampleCandidateSystem(policySource), domain.MatchID("task-1"))},
 	)
 	comparisons := []report.ScoreComparison{
 		report.NewScoreComparison(score.MetricGoldHop, 4, 1),
@@ -144,8 +144,8 @@ func sampleCandidateSystem(policySource string) domain.SystemSpec {
 	}
 }
 
-func sampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
-	return domain.TaskSpec{
+func sampleTask(id domain.MatchID, gold domain.RepoRelPath) domain.MatchSpec {
+	return domain.MatchSpec{
 		ID:        id,
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
@@ -153,13 +153,13 @@ func sampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("/tmp/repo"),
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{gold},
 		},
 	}
 }
 
-func sampleScoredRun(t *testing.T, role domain.Role, system domain.SystemSpec, taskID domain.TaskID) score.ScoredRun {
+func sampleScoredRun(t *testing.T, role domain.Role, system domain.SystemSpec, taskID domain.MatchID) score.ScoredRun {
 	t.Helper()
 
 	task := sampleTask(taskID, domain.RepoRelPath("pkg/bug1.go"))

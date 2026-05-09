@@ -18,7 +18,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -452,23 +452,23 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 	policySource := "def score(task):\n    return 'candidate'\n"
 	baseline := sampleBaselineSystem()
 	candidate := sampleCandidateSystem(policySource)
-	taskOne := sampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go"))
-	taskTwo := sampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go"))
+	taskOne := sampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go"))
+	taskTwo := sampleTask(domain.MatchID("task-2"), domain.RepoRelPath("pkg/bug2.go"))
 	tasks := domain.NewNonEmpty(taskOne, taskTwo)
 	spec := report.NewComparisonSpec(domain.NewPair(baseline, candidate), tasks)
 
 	runs := domain.NewPair(
 		[]score.ScoredRun{
-			sampleScoredRun(t, domain.RoleBaseline, baseline, taskOne.ID, 4, 5, 0.40, 0.60, 0.30),
-			sampleScoredRun(t, domain.RoleBaseline, baseline, taskTwo.ID, 3, 4, 0.45, 0.55, 0.35),
+			sampleScoredRun(t, domain.RoleIncumbent, baseline, taskOne.ID, 4, 5, 0.40, 0.60, 0.30),
+			sampleScoredRun(t, domain.RoleIncumbent, baseline, taskTwo.ID, 3, 4, 0.45, 0.55, 0.35),
 		},
 		[]score.ScoredRun{
-			sampleScoredRun(t, domain.RoleCandidate, candidate, taskOne.ID, 1, 1, 0.90, 0.10, 0.95),
-			sampleScoredRun(t, domain.RoleCandidate, candidate, taskTwo.ID, 2, 2, 0.80, 0.20, 0.85),
+			sampleScoredRun(t, domain.RoleChallenger, candidate, taskOne.ID, 1, 1, 0.90, 0.10, 0.95),
+			sampleScoredRun(t, domain.RoleChallenger, candidate, taskTwo.ID, 2, 2, 0.80, 0.20, 0.85),
 		},
 	)
 	failures := domain.NewPair(
-		[]run.RunFailure{{RunID: domain.RunID("baseline-failure-1"), TaskID: taskTwo.ID, System: baseline.ID, Stage: run.FailureExecute, Message: "baseline retry exhausted"}},
+		[]run.RunFailure{{RunID: domain.RunID("baseline-failure-1"), MatchID: taskTwo.ID, System: baseline.ID, Stage: run.FailureExecute, Message: "baseline retry exhausted"}},
 		[]run.RunFailure{},
 	)
 
@@ -486,7 +486,7 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 		},
 		[]report.Regression{
 			{
-				TaskID:    taskTwo.ID,
+				MatchID:   taskTwo.ID,
 				Metric:    score.MetricCost,
 				Baseline:  0.10,
 				Candidate: 0.20,
@@ -630,8 +630,8 @@ func sampleCandidateSystem(policySource string) domain.SystemSpec {
 	}
 }
 
-func sampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
-	return domain.TaskSpec{
+func sampleTask(id domain.MatchID, gold domain.RepoRelPath) domain.MatchSpec {
+	return domain.MatchSpec{
 		ID:        id,
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
@@ -639,11 +639,11 @@ func sampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("repo/example"),
 		},
-		Input: domain.TaskInput{
+		Input: domain.MatchInput{
 			Title: "Fix regression",
 			Body:  "The candidate should identify the buggy file.",
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{gold},
 		},
 	}
@@ -653,7 +653,7 @@ func sampleScoredRun(
 	t *testing.T,
 	role domain.Role,
 	system domain.SystemSpec,
-	taskID domain.TaskID,
+	taskID domain.MatchID,
 	goldHop score.HopDistance,
 	issueHop score.HopDistance,
 	efficiency score.EfficiencyScore,

@@ -15,7 +15,7 @@ import (
 
 func loadEvidence(plan Plan) (pureoptimizer.Evidence, error) {
 	evidence := pureoptimizer.Evidence{
-		ParentRun:     plan.ParentBundle,
+		ParentRound:   plan.ParentBundle,
 		IncludedKinds: append([]string(nil), plan.IncludedEvidence...),
 		DeniedKinds:   append([]string(nil), plan.DeniedEvidence...),
 	}
@@ -31,10 +31,15 @@ func loadEvidence(plan Plan) (pureoptimizer.Evidence, error) {
 		Source:      string(source),
 	}
 
-	needsReport := includesEvidence(plan, "report_summary") || includesEvidence(plan, "score_evidence")
+	needsReport := includesEvidence(plan, "report_summary") || includesEvidence(plan, "round_evidence")
 	var candidateReport purereport.CandidateReport
 	if needsReport {
-		if err := decodeJSONFile(filepath.Join(string(plan.ParentBundle.BundlePath), "report.json"), &candidateReport); err != nil {
+		parentDir := string(plan.ParentBundle.BundlePath)
+		reportPath := filepath.Join(parentDir, "round-report.json")
+		if _, statErr := os.Stat(reportPath); statErr != nil {
+			reportPath = filepath.Join(parentDir, "report.json")
+		}
+		if err := decodeJSONFile(reportPath, &candidateReport); err != nil {
 			return pureoptimizer.Evidence{}, fmt.Errorf("load parent report: %w", err)
 		}
 	}
@@ -43,7 +48,7 @@ func loadEvidence(plan Plan) (pureoptimizer.Evidence, error) {
 		summary := summarizeReport(candidateReport)
 		evidence.ReportSummary = &summary
 	}
-	if includesEvidence(plan, "score_evidence") {
+	if includesEvidence(plan, "round_evidence") {
 		scoreEvidence, err := purereport.ProjectScoreEvidence(candidateReport)
 		if err != nil {
 			return pureoptimizer.Evidence{}, fmt.Errorf("project parent score evidence: %w", err)
@@ -80,13 +85,13 @@ func summarizeReport(candidateReport purereport.CandidateReport) pureoptimizer.R
 		Comparisons:    make([]pureoptimizer.MetricSummary, 0, len(candidateReport.Comparisons)),
 	}
 
-	if candidateReport.Spec.Systems.Candidate.Policy != nil {
-		summary.CandidatePolicyID = candidateReport.Spec.Systems.Candidate.Policy.ID
+	if candidateReport.Spec.Systems.Challenger.Policy != nil {
+		summary.CandidatePolicyID = candidateReport.Spec.Systems.Challenger.Policy.ID
 	}
-	summary.CandidateSystemID = candidateReport.Spec.Systems.Candidate.ID
+	summary.CandidateSystemID = candidateReport.Spec.Systems.Challenger.ID
 
-	candidateUsage := score.AggregateUsage(candidateReport.Runs.Candidate)
-	baselineUsage := score.AggregateUsage(candidateReport.Runs.Baseline)
+	candidateUsage := score.AggregateUsage(candidateReport.Runs.Challenger)
+	baselineUsage := score.AggregateUsage(candidateReport.Runs.Incumbent)
 	summary.CandidateUsage = candidateUsage
 	summary.BaselineUsage = baselineUsage
 

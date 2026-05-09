@@ -71,9 +71,9 @@ func (l Logger) contextParts() []string {
 
 func (l Logger) renderRole(role domain.Role) string {
 	switch role {
-	case domain.RoleBaseline:
+	case domain.RoleIncumbent:
 		return l.styles.RoleBase.Render(roleLabel(role))
-	case domain.RoleCandidate:
+	case domain.RoleChallenger:
 		return l.styles.RoleCand.Render(roleLabel(role))
 	default:
 		return roleLabel(role)

@@ -1,4 +1,4 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package generated
 
 import (
@@ -7,7 +7,7 @@ import (
 )
 
 type OptimizationEvidence struct {
-	From CompletedEvaluationBundleArtifact `pkl:"from"`
+	From CompletedRoundBundleArtifact `pkl:"from"`
 
 	Include []optimizerevidencekind.OptimizerEvidenceKind `pkl:"include"`
 

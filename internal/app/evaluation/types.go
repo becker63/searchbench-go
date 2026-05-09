@@ -8,7 +8,7 @@ import (
 	executoreino "github.com/becker63/searchbench-go/internal/adapters/executor/eino"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -33,7 +33,7 @@ type Request struct {
 // comparison flow.
 type EvaluatorExecution struct {
 	Role   domain.Role
-	TaskID domain.TaskID
+	TaskID domain.MatchID
 	RunID  domain.RunID
 	Result executoreino.Result
 }

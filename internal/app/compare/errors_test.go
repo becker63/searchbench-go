@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 )
 
 func TestStageErrorUnwrap(t *testing.T) {
@@ -15,7 +15,7 @@ func TestStageErrorUnwrap(t *testing.T) {
 	cause := errors.New("boom")
 	spec := run.NewSpec(
 		domain.RunID("run-1"),
-		domain.TaskSpec{ID: domain.TaskID("task-1")},
+		domain.MatchSpec{ID: domain.MatchID("task-1")},
 		domain.SystemSpec{ID: domain.SystemID("system-1")},
 	)
 
@@ -33,7 +33,7 @@ func TestStageErrorAsThroughWrapping(t *testing.T) {
 
 	spec := run.NewSpec(
 		domain.RunID("run-1"),
-		domain.TaskSpec{ID: domain.TaskID("task-1")},
+		domain.MatchSpec{ID: domain.MatchID("task-1")},
 		domain.SystemSpec{ID: domain.SystemID("system-1")},
 	)
 	err := fmt.Errorf("outer: %w", NewStageError(spec, run.FailureScore, errors.New("bad score")))
@@ -52,12 +52,12 @@ func TestFailureFromErrorUsesStageErrorFields(t *testing.T) {
 
 	spec := run.NewSpec(
 		domain.RunID("run-spec"),
-		domain.TaskSpec{ID: domain.TaskID("task-spec")},
+		domain.MatchSpec{ID: domain.MatchID("task-spec")},
 		domain.SystemSpec{ID: domain.SystemID("system-spec")},
 	)
 	stageSpec := run.NewSpec(
 		domain.RunID("run-stage"),
-		domain.TaskSpec{ID: domain.TaskID("task-stage")},
+		domain.MatchSpec{ID: domain.MatchID("task-stage")},
 		domain.SystemSpec{ID: domain.SystemID("system-stage")},
 	)
 	err := fmt.Errorf("wrapped: %w", NewStageError(stageSpec, run.FailureExecute, errors.New("explode")))
@@ -66,8 +66,8 @@ func TestFailureFromErrorUsesStageErrorFields(t *testing.T) {
 	if failure.RunID != stageSpec.ID {
 		t.Fatalf("RunID = %q, want %q", failure.RunID, stageSpec.ID)
 	}
-	if failure.TaskID != stageSpec.Task.ID {
-		t.Fatalf("TaskID = %q, want %q", failure.TaskID, stageSpec.Task.ID)
+	if failure.MatchID != stageSpec.Match.ID {
+		t.Fatalf("MatchID = %q, want %q", failure.MatchID, stageSpec.Match.ID)
 	}
 	if failure.System != stageSpec.System.ID {
 		t.Fatalf("System = %q, want %q", failure.System, stageSpec.System.ID)

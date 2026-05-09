@@ -9,42 +9,42 @@ import (
 func TestNewTaskRunSetValidation(t *testing.T) {
 	t.Parallel()
 
-	task1 := domain.TaskID("task-1")
-	task2 := domain.TaskID("task-2")
+	task1 := domain.MatchID("task-1")
+	task2 := domain.MatchID("task-2")
 
 	tests := []struct {
 		name    string
-		items   map[domain.TaskID]string
-		order   []domain.TaskID
+		items   map[domain.MatchID]string
+		order   []domain.MatchID
 		wantErr bool
 	}{
 		{
 			name:    "empty order",
-			items:   map[domain.TaskID]string{task1: "a"},
+			items:   map[domain.MatchID]string{task1: "a"},
 			wantErr: true,
 		},
 		{
 			name:    "missing task",
-			items:   map[domain.TaskID]string{task1: "a"},
-			order:   []domain.TaskID{task1, task2},
+			items:   map[domain.MatchID]string{task1: "a"},
+			order:   []domain.MatchID{task1, task2},
 			wantErr: true,
 		},
 		{
 			name: "duplicate task id",
-			items: map[domain.TaskID]string{
+			items: map[domain.MatchID]string{
 				task1: "a",
 				task2: "b",
 			},
-			order:   []domain.TaskID{task1, task1},
+			order:   []domain.MatchID{task1, task1},
 			wantErr: true,
 		},
 		{
 			name: "valid",
-			items: map[domain.TaskID]string{
+			items: map[domain.MatchID]string{
 				task1: "a",
 				task2: "b",
 			},
-			order: []domain.TaskID{task2, task1},
+			order: []domain.MatchID{task2, task1},
 		},
 	}
 
@@ -75,27 +75,27 @@ func TestNewTaskRunSetValidation(t *testing.T) {
 func TestTaskRunSetItems(t *testing.T) {
 	t.Parallel()
 
-	task1 := domain.TaskID("task-1")
-	task2 := domain.TaskID("task-2")
+	task1 := domain.MatchID("task-1")
+	task2 := domain.MatchID("task-2")
 	set, err := NewTaskRunSet(
-		map[domain.TaskID]string{
+		map[domain.MatchID]string{
 			task1: "baseline",
 			task2: "candidate",
 		},
-		[]domain.TaskID{task2, task1},
+		[]domain.MatchID{task2, task1},
 	)
 	if err != nil {
 		t.Fatalf("NewTaskRunSet() error = %v", err)
 	}
 
-	gotIDs := make([]domain.TaskID, 0)
+	gotIDs := make([]domain.MatchID, 0)
 	gotVals := make([]string, 0)
 	for taskID, value := range set.Items() {
 		gotIDs = append(gotIDs, taskID)
 		gotVals = append(gotVals, value)
 	}
 
-	wantIDs := []domain.TaskID{task2, task1}
+	wantIDs := []domain.MatchID{task2, task1}
 	wantVals := []string{"candidate", "baseline"}
 	for i := range wantIDs {
 		if gotIDs[i] != wantIDs[i] {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -67,11 +67,11 @@ func stylesForDecision(decision report.Decision, styles Styles) lipgloss.Style {
 
 func renderSystems(r report.CandidateReport, styles Styles) string {
 	lines := []string{
-		renderSystemLine("Baseline", r.Spec.Systems.Baseline, styles),
-		renderSystemLine("Candidate", r.Spec.Systems.Candidate, styles),
+		renderSystemLine("Baseline", r.Spec.Systems.Incumbent, styles),
+		renderSystemLine("Candidate", r.Spec.Systems.Challenger, styles),
 	}
-	if r.Spec.Systems.Candidate.Policy != nil {
-		policy := r.Spec.Systems.Candidate.Policy
+	if r.Spec.Systems.Challenger.Policy != nil {
+		policy := r.Spec.Systems.Challenger.Policy
 		lines = append(lines, fmt.Sprintf(
 			"Policy      %s:%s  %s",
 			policy.Language,
@@ -84,8 +84,8 @@ func renderSystems(r report.CandidateReport, styles Styles) string {
 
 func renderRunSummary(r report.CandidateReport, styles Styles) string {
 	lines := []string{
-		fmt.Sprintf("Baseline   %d succeeded   %d failed", len(r.Runs.Baseline), len(r.Failures.Baseline)),
-		fmt.Sprintf("Candidate  %d succeeded   %d failed", len(r.Runs.Candidate), len(r.Failures.Candidate)),
+		fmt.Sprintf("Baseline   %d succeeded   %d failed", len(r.Runs.Incumbent), len(r.Failures.Incumbent)),
+		fmt.Sprintf("Candidate  %d succeeded   %d failed", len(r.Runs.Challenger), len(r.Failures.Challenger)),
 	}
 	return renderSection("Run Summary", styles, strings.Join(lines, "\n"))
 }
@@ -127,7 +127,7 @@ func renderRegressions(r report.CandidateReport, styles Styles) string {
 		lines = append(lines, renderTableRow(
 			styles.TableCell,
 			columnWidths([]string{"", "", "", "", "", "", ""}),
-			regression.TaskID.String(),
+			regression.MatchID.String(),
 			string(regression.Metric),
 			fmt.Sprintf("%.2f", regression.Baseline),
 			fmt.Sprintf("%.2f", regression.Candidate),
@@ -140,12 +140,12 @@ func renderRegressions(r report.CandidateReport, styles Styles) string {
 }
 
 func renderFailures(r report.CandidateReport, styles Styles) string {
-	failures := make([]failureRow, 0, len(r.Failures.Baseline)+len(r.Failures.Candidate))
-	for _, failure := range r.Failures.Baseline {
-		failures = append(failures, failureRow{Role: domain.RoleBaseline, Failure: failure})
+	failures := make([]failureRow, 0, len(r.Failures.Incumbent)+len(r.Failures.Challenger))
+	for _, failure := range r.Failures.Incumbent {
+		failures = append(failures, failureRow{Role: domain.RoleIncumbent, Failure: failure})
 	}
-	for _, failure := range r.Failures.Candidate {
-		failures = append(failures, failureRow{Role: domain.RoleCandidate, Failure: failure})
+	for _, failure := range r.Failures.Challenger {
+		failures = append(failures, failureRow{Role: domain.RoleChallenger, Failure: failure})
 	}
 	if len(failures) == 0 {
 		return renderSection("Failures", styles, styles.Muted.Render("none"))
@@ -163,7 +163,7 @@ func renderFailures(r report.CandidateReport, styles Styles) string {
 			columnWidths([]string{"", "", "", "", "", ""}),
 			string(item.Role),
 			item.Failure.RunID.String(),
-			item.Failure.TaskID.String(),
+			item.Failure.MatchID.String(),
 			item.Failure.System.String(),
 			string(item.Failure.Stage),
 			item.Failure.Message,

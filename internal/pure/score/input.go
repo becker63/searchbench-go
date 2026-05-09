@@ -2,7 +2,7 @@ package score
 
 import (
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 )
 
 // Input is the canonical input to the scoring engine.

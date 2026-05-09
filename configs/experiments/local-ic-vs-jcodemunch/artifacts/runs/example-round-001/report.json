@@ -3,7 +3,7 @@
   "created_at": "2026-05-08T19:33:19.719614706Z",
   "spec": {
     "systems": {
-      "baseline": {
+      "incumbent": {
         "id": "jcodemunch",
         "name": "jCodeMunch",
         "backend": "jcodemunch",
@@ -22,7 +22,7 @@
         },
         "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
       },
-      "candidate": {
+      "challenger": {
         "id": "iterative-context",
         "name": "Iterative Context",
         "backend": "iterative-context",
@@ -35,7 +35,7 @@
           "version": "dev"
         },
         "policy": {
-          "id": "candidate-policy-round-001",
+          "id": "challenger-policy-round-001",
           "language": "python",
           "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
           "entrypoint": "score"
@@ -48,7 +48,7 @@
         "fingerprint": "776c66db10742b615184c87872991d1225a3c6bac40c61ab2aa90d442c8ad29f"
       }
     },
-    "tasks": [
+    "matches": [
       {
         "id": "local-fake-task-1",
         "benchmark": "jetbrains-lca",
@@ -70,7 +70,7 @@
     ]
   },
   "runs": {
-    "baseline": [
+    "incumbent": [
       {
         "execution": {
           "session_id": "local-session-baseline-local-fake-task-1-jcodemunch",
@@ -114,7 +114,7 @@
         }
       }
     ],
-    "candidate": [
+    "challenger": [
       {
         "execution": {
           "session_id": "local-session-candidate-local-fake-task-1-iterative-context",
@@ -160,8 +160,8 @@
     ]
   },
   "failures": {
-    "baseline": [],
-    "candidate": []
+    "incumbent": [],
+    "challenger": []
   },
   "comparisons": [
     {

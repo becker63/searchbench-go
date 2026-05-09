@@ -1,7 +1,9 @@
 @go.Package { name = "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated" }
-module searchbench.config.Experiment
+module searchbench.config.SearchBenchRound
 
 import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/go.pkl"
+
+game: Game = new {}
 
 name: String
 
@@ -28,16 +30,21 @@ typealias TracingProvider = "langsmith"
 typealias ArtifactKind =
   "policy" |
   "policy_proposal" |
-  "completed_evaluation_bundle"
+  "completed_round_bundle"
 typealias OptimizerEvidenceKind =
   "report_summary" |
-  "score_evidence" |
+  "round_evidence" |
   "objective_result" |
-  "candidate_policy"
+  "challenger_policy"
 typealias OptimizerDeniedEvidenceKind =
   "gold_labels" |
   "oracle_files" |
   "raw_dataset_answers"
+
+class Game {
+  id: String = "code-localization"
+  kind: String = "code_localization"
+}
 
 class Dataset {
   kind: DatasetKind = "lca"
@@ -58,8 +65,8 @@ class Interface {
 }
 
 class Systems {
-  baseline: System
-  iterativeContext: System
+  incumbent: System
+  challenger: System
 }
 
 class System {
@@ -81,9 +88,9 @@ class Runtime {
 }
 
 class Artifacts {
-  candidatePolicyRound001: PolicyArtifact?
-  candidatePolicyRound002: PolicyProposalArtifact?
-  parentEvaluationRound001: CompletedEvaluationBundleArtifact?
+  challengerPolicyRound001: PolicyArtifact?
+  nextChallengerRound002: PolicyProposalArtifact?
+  parentRound001Bundle: CompletedRoundBundleArtifact?
 }
 
 class PolicyArtifact {
@@ -100,9 +107,9 @@ class PolicyProposalArtifact {
   implements: Interface
 }
 
-class CompletedEvaluationBundleArtifact {
+class CompletedRoundBundleArtifact {
   id: String
-  kind: "completed_evaluation_bundle" = "completed_evaluation_bundle"
+  kind: "completed_round_bundle" = "completed_round_bundle"
   path: String
 }
 
@@ -161,8 +168,8 @@ class Tracing {
 
 class Evaluation {
   agent: Evaluator
-  baseline: EvaluationSystemBinding
-  candidate: CandidateEvaluationBinding
+  incumbent: EvaluationSystemBinding
+  challenger: ChallengerEvaluationBinding
   scoring: Scoring
   report: Report = new {}
 }
@@ -171,12 +178,12 @@ class EvaluationSystemBinding {
   system: System
 }
 
-class CandidateEvaluationBinding {
+class ChallengerEvaluationBinding {
   system: System
-  uses: CandidateUses = new {}
+  uses: ChallengerUses = new {}
 }
 
-class CandidateUses {
+class ChallengerUses {
   selectionPolicy: PolicyArtifact
 }
 
@@ -193,13 +200,13 @@ class Report {
 
 class Optimization {
   agent: Optimizer
-  parentRun: ParentRun
+  parentRound: ParentRound
   target: OptimizationTarget
   evidence: OptimizationEvidence = new {}
 }
 
-class ParentRun {
-  bundle: CompletedEvaluationBundleArtifact
+class ParentRound {
+  bundle: CompletedRoundBundleArtifact
 }
 
 class OptimizationTarget {
@@ -208,13 +215,13 @@ class OptimizationTarget {
 }
 
 class OptimizationEvidence {
-  from: CompletedEvaluationBundleArtifact
+  from: CompletedRoundBundleArtifact
 
   include: Listing<OptimizerEvidenceKind> = new {
     "report_summary"
-    "score_evidence"
+    "round_evidence"
     "objective_result"
-    "candidate_policy"
+    "challenger_policy"
   }
 
   deny: Listing<OptimizerDeniedEvidenceKind> = new {

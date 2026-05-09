@@ -9,26 +9,26 @@ import (
 )
 
 type TaskRunSet[T any] struct {
-	order  []domain.TaskID
-	byTask map[domain.TaskID]T
+	order  []domain.MatchID
+	byTask map[domain.MatchID]T
 }
 
 // NewTaskRunSet constructs an ordered, task-aligned run set.
 //
 // It preserves the caller's task order while also enabling lookup by TaskID so
 // future report logic can compare baseline and candidate runs deterministically.
-func NewTaskRunSet[T any](items map[domain.TaskID]T, order []domain.TaskID) (TaskRunSet[T], error) {
+func NewTaskRunSet[T any](items map[domain.MatchID]T, order []domain.MatchID) (TaskRunSet[T], error) {
 	if len(order) == 0 {
 		return TaskRunSet[T]{}, errors.New("task order must be non-empty")
 	}
 
-	ordered := append([]domain.TaskID(nil), order...)
-	byTask := make(map[domain.TaskID]T, len(items))
+	ordered := append([]domain.MatchID(nil), order...)
+	byTask := make(map[domain.MatchID]T, len(items))
 	for id, item := range items {
 		byTask[id] = item
 	}
 
-	seen := make(map[domain.TaskID]struct{}, len(ordered))
+	seen := make(map[domain.MatchID]struct{}, len(ordered))
 	for _, id := range ordered {
 		if _, ok := seen[id]; ok {
 			return TaskRunSet[T]{}, fmt.Errorf("duplicate task id in order: %s", id)
@@ -46,14 +46,14 @@ func NewTaskRunSet[T any](items map[domain.TaskID]T, order []domain.TaskID) (Tas
 }
 
 // Get returns the item for one task ID.
-func (s TaskRunSet[T]) Get(id domain.TaskID) (T, bool) {
+func (s TaskRunSet[T]) Get(id domain.MatchID) (T, bool) {
 	value, ok := s.byTask[id]
 	return value, ok
 }
 
 // Order returns the preserved task ordering.
-func (s TaskRunSet[T]) Order() []domain.TaskID {
-	return append([]domain.TaskID(nil), s.order...)
+func (s TaskRunSet[T]) Order() []domain.MatchID {
+	return append([]domain.MatchID(nil), s.order...)
 }
 
 // Values returns the ordered values without their task IDs.
@@ -66,8 +66,8 @@ func (s TaskRunSet[T]) Values() []T {
 }
 
 // Items iterates task/value pairs in preserved task order.
-func (s TaskRunSet[T]) Items() iter.Seq2[domain.TaskID, T] {
-	return func(yield func(domain.TaskID, T) bool) {
+func (s TaskRunSet[T]) Items() iter.Seq2[domain.MatchID, T] {
+	return func(yield func(domain.MatchID, T) bool) {
 		for _, id := range s.order {
 			value := s.byTask[id]
 			if !yield(id, value) {

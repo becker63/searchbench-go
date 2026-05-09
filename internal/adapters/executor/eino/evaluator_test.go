@@ -15,7 +15,7 @@ import (
 	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/adapters/executor/eino/callbacks"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	evaluatorprompt "github.com/becker63/searchbench-go/internal/pure/prompts/evaluator"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/usage"
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
 )
@@ -689,18 +689,18 @@ func (f fakeTool) InvokableRun(_ context.Context, _ string, _ ...tool.Option) (s
 var _ tool.InvokableTool = fakeTool{}
 
 func sampleRunSpec() run.Spec {
-	task := domain.TaskSpec{
-		ID:        domain.TaskID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1"),
+	task := domain.MatchSpec{
+		ID:        domain.MatchID("searchbench/lca:python:dev:square/okhttp@abc123:https://example.test/issues/1"),
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
 			Name: domain.RepoName("square/okhttp"),
 			SHA:  domain.RepoSHA("abc123"),
 		},
-		Input: domain.TaskInput{
+		Input: domain.MatchInput{
 			Title: "Crash when retrying HTTP request",
 			Body:  "The client crashes when the retry interceptor replays a request.",
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{"internal/should/not/leak.go"},
 		},
 	}

@@ -46,7 +46,7 @@ type Plan struct {
 	ExpectedBundlePath string
 	Agent              pureoptimizer.AgentConfig
 	Target             pureoptimizer.Target
-	ParentBundle       pureoptimizer.ParentRunRef
+	ParentBundle       pureoptimizer.ParentRoundRef
 	InputPolicy        InputPolicyPlan
 	IncludedEvidence   []string
 	DeniedEvidence     []string

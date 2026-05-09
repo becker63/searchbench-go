@@ -9,7 +9,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -20,12 +20,12 @@ func TestEventHelpersDoNotPanicWithNop(t *testing.T) {
 	spec, executed, scores, failure, report := sampleLogArtifacts(t)
 
 	logger.ComparisonStarted("", spec.System.Ref(), spec.System.Ref(), 1, "sequential", 1)
-	logger.TaskStarted(spec.Task)
-	logger.RunStarted(domain.RoleCandidate, spec)
-	logger.RunExecuted(domain.RoleCandidate, executed)
-	logger.RunScored(domain.RoleCandidate, executed, scores)
-	logger.RunFailed(domain.RoleCandidate, failure)
-	logger.TaskCompleted(spec.Task, true, false, 1)
+	logger.TaskStarted(spec.Match)
+	logger.RunStarted(domain.RoleChallenger, spec)
+	logger.RunExecuted(domain.RoleChallenger, executed)
+	logger.RunScored(domain.RoleChallenger, executed, scores)
+	logger.RunFailed(domain.RoleChallenger, failure)
+	logger.TaskCompleted(spec.Match, true, false, 1)
 	logger.ReportCreated(report)
 	logger.ComparisonCompleted(report)
 }
@@ -46,7 +46,7 @@ func TestDevelopmentLoggerPrettyOutput(t *testing.T) {
 
 	logger = logger.Named("demo")
 	logger.ComparisonStarted("", spec.System.Ref(), spec.System.Ref(), 2, "sequential", 1)
-	logger.RunScored(domain.RoleCandidate, executed, scores)
+	logger.RunScored(domain.RoleChallenger, executed, scores)
 	logger.ReportCreated(report)
 
 	out := buf.String()
@@ -83,8 +83,8 @@ func TestProductionLoggerJSONOutput(t *testing.T) {
 		_ = cleanup()
 	}()
 
-	logger.RunScored(domain.RoleCandidate, executed, scores)
-	logger.RunStarted(domain.RoleCandidate, spec)
+	logger.RunScored(domain.RoleChallenger, executed, scores)
+	logger.RunStarted(domain.RoleChallenger, spec)
 
 	out := buf.String()
 	for _, want := range []string{
@@ -113,8 +113,8 @@ func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet
 	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'candidate'", "score")
 	spec := run.NewSpec(
 		domain.RunID("run-1"),
-		domain.TaskSpec{
-			ID:        domain.TaskID("task-1"),
+		domain.MatchSpec{
+			ID:        domain.MatchID("task-1"),
 			Benchmark: domain.BenchmarkLCA,
 			Repo: domain.RepoSnapshot{
 				Name: domain.RepoName("repo/example"),

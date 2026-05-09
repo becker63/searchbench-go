@@ -1,4 +1,4 @@
-amends "../../schema/SearchBenchExperiment.pkl"
+amends "../../schema/SearchBenchRound.pkl"
 
 name = "local-ic-vs-jcodemunch-round-001"
 mode = "evaluation"
@@ -18,13 +18,13 @@ dataset {
 }
 
 systems {
-  baseline {
+  incumbent {
     id = "jcodemunch"
     name = "jCodeMunch"
     backend = "jcodemunch"
   }
 
-  iterativeContext {
+  challenger {
     id = "iterative-context"
     name = "Iterative Context"
     backend = "iterative_context"
@@ -32,10 +32,10 @@ systems {
 }
 
 artifacts {
-  candidatePolicyRound001 {
-    id = "candidate-policy-round-001"
+  challengerPolicyRound001 {
+    id = "challenger-policy-round-001"
     kind = "policy"
-    path = "policies/candidate_policy.py"
+    path = "policies/challenger_policy.py"
     implements = interfaces.iterativeContextSelectionPolicyV1
   }
 }
@@ -80,15 +80,15 @@ agents {
 evaluation {
   agent = agents.evaluator
 
-  baseline {
-    system = systems.baseline
+  incumbent {
+    system = systems.incumbent
   }
 
-  candidate {
-    system = systems.iterativeContext
+  challenger {
+    system = systems.challenger
 
     uses {
-      selectionPolicy = artifacts.candidatePolicyRound001
+      selectionPolicy = artifacts.challengerPolicyRound001
     }
   }
 

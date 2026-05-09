@@ -16,7 +16,7 @@ func (id ID[T]) Empty() bool {
 	return id == ""
 }
 
-type taskTag struct{}
+type matchTag struct{}
 type runTag struct{}
 type systemTag struct{}
 type sessionTag struct{}
@@ -26,8 +26,8 @@ type artifactTag struct{}
 type reportTag struct{}
 type nodeTag struct{}
 
-// TaskID identifies one benchmark task.
-type TaskID = ID[taskTag]
+// MatchID identifies one dataset match within a round.
+type MatchID = ID[matchTag]
 
 // RunID identifies one planned/executed comparison run.
 type RunID = ID[runTag]

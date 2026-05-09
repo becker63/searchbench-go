@@ -26,7 +26,7 @@ type Plan struct {
 	Mode           string                           `json:"mode,omitempty"`
 	Dataset        DatasetConfig                    `json:"dataset,omitempty"`
 	Systems        domain.Pair[domain.SystemSpec]   `json:"-"`
-	Tasks          domain.NonEmpty[domain.TaskSpec] `json:"tasks"`
+	Matches        domain.NonEmpty[domain.MatchSpec] `json:"matches"`
 	Parallelism    compare.Parallelism              `json:"-"`
 	Evaluator      EvaluatorConfig                  `json:"evaluator,omitempty"`
 	Scoring        ScoringConfig                    `json:"scoring,omitempty"`
@@ -40,7 +40,7 @@ type Plan struct {
 // ComparePlan converts the canonical evaluation model into the executable
 // comparison plan used by current runners.
 func (p Plan) ComparePlan() compare.Plan {
-	return compare.NewPlan(p.Systems, p.Tasks)
+	return compare.NewPlan(p.Systems, p.Matches)
 }
 
 // BundleSystems returns the report-safe system identities used for serialization.
@@ -108,8 +108,8 @@ type OutputConfig struct {
 
 // ResolvedPolicyPaths records resolved manifest-relative policy paths.
 type ResolvedPolicyPaths struct {
-	Baseline  string `json:"baseline,omitempty"`
-	Candidate string `json:"candidate,omitempty"`
+	Incumbent  string `json:"incumbent,omitempty"`
+	Challenger string `json:"challenger,omitempty"`
 }
 
 // ReportConfig records durable report rendering preferences.
