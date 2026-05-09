@@ -1,4 +1,4 @@
-package localrun
+package evaluation
 
 import "fmt"
 
@@ -9,7 +9,7 @@ const (
 	PhaseValidateManifestFailed Phase = "validate_manifest_failed"
 	PhaseUnsupportedMode        Phase = "unsupported_mode"
 	PhaseResolvePlanFailed      Phase = "resolve_plan_failed"
-	PhaseFakeComparisonFailed   Phase = "fake_comparison_failed"
+	PhaseComparisonFailed       Phase = "comparison_failed"
 	PhaseScoreEvidenceFailed    Phase = "score_evidence_failed"
 	PhaseScorePKLFailed         Phase = "score_pkl_failed"
 	PhaseObjectiveFailed        Phase = "objective_failed"

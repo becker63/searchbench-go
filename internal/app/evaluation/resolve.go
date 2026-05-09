@@ -1,4 +1,4 @@
-package experiment
+package evaluation
 
 import (
 	"context"
@@ -20,30 +20,30 @@ import (
 // existing domain.Policy shape. It is not the SearchBench objective score.
 const selectionPolicyV1DefaultSymbol = "score"
 
-var ErrUnsupportedMode = errors.New("experiment: only evaluation mode is supported")
+var ErrUnsupportedMode = errors.New("evaluation: only evaluation mode is supported")
 
 // Resolve loads one Pkl manifest through the config adapter and projects it
 // into the canonical resolved experiment plan.
-func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
+func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 	request = normalizeRequest(request)
 
 	manifestPath, err := filepath.Abs(request.ManifestPath)
 	if err != nil {
-		return ResolvedExperiment{}, fmt.Errorf("resolve manifest path: %w", err)
+		return Plan{}, fmt.Errorf("resolve manifest path: %w", err)
 	}
 
 	cfg, err := config.ResolveFromPath(ctx, manifestPath)
 	if err != nil {
-		return ResolvedExperiment{}, err
+		return Plan{}, err
 	}
 	if err := config.Validate(cfg); err != nil {
-		return ResolvedExperiment{}, err
+		return Plan{}, err
 	}
 	if cfg.Mode != config.ModeEvaluation {
-		return ResolvedExperiment{}, fmt.Errorf("%w: %s", ErrUnsupportedMode, cfg.Mode)
+		return Plan{}, fmt.Errorf("%w: %s", ErrUnsupportedMode, cfg.Mode)
 	}
 	if cfg.Evaluation == nil || cfg.Agents.Evaluator == nil {
-		return ResolvedExperiment{}, fmt.Errorf("%w: incomplete evaluation manifest", ErrUnsupportedMode)
+		return Plan{}, fmt.Errorf("%w: incomplete evaluation manifest", ErrUnsupportedMode)
 	}
 
 	manifestDir := filepath.Dir(manifestPath)
@@ -52,16 +52,16 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 
 	objectivePath, err := resolveExistingManifestPath(manifestDir, evaluation.Scoring.Objective)
 	if err != nil {
-		return ResolvedExperiment{}, fmt.Errorf("resolve objective path: %w", err)
+		return Plan{}, fmt.Errorf("resolve objective path: %w", err)
 	}
 	bundleCollection, bundleWriterRoot, err := resolveBundlePaths(manifestDir, request.BundleRootOverride)
 	if err != nil {
-		return ResolvedExperiment{}, fmt.Errorf("resolve bundle root: %w", err)
+		return Plan{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
 
 	baseline, err := resolveSystem(manifestDir, *evaluator, evaluation.Baseline.System, nil)
 	if err != nil {
-		return ResolvedExperiment{}, fmt.Errorf("resolve baseline system: %w", err)
+		return Plan{}, fmt.Errorf("resolve baseline system: %w", err)
 	}
 	candidate, err := resolveSystem(
 		manifestDir,
@@ -70,14 +70,14 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 		&evaluation.Candidate.Uses.SelectionPolicy,
 	)
 	if err != nil {
-		return ResolvedExperiment{}, fmt.Errorf("resolve candidate system: %w", err)
+		return Plan{}, fmt.Errorf("resolve candidate system: %w", err)
 	}
 
 	tasks := fakeTasks(manifestDir, cfg)
 	systems := domain.NewPair(baseline.spec, candidate.spec)
 	comparePlan := compare.NewPlan(systems, tasks)
 	if err := comparePlan.Validate(); err != nil {
-		return ResolvedExperiment{}, fmt.Errorf("validate compare plan: %w", err)
+		return Plan{}, fmt.Errorf("validate compare plan: %w", err)
 	}
 
 	now := request.Now().UTC()
@@ -92,9 +92,9 @@ func Resolve(ctx context.Context, request Request) (ResolvedExperiment, error) {
 
 	expectedBundlePath := domain.HostPath(filepath.Join(string(bundleCollection), bundleID))
 	reportFormats := stringifyReportFormats(evaluation.Report.Formats)
-	renderHumanReport := !request.DisableRenderReport && containsReportFormat(reportFormats, config.ReportFormatText.String())
+	renderHumanReport := containsReportFormat(reportFormats, config.ReportFormatText.String())
 
-	return ResolvedExperiment{
+	return Plan{
 		ManifestPath:   manifestPath,
 		ExperimentName: cfg.Name,
 		Mode:           cfg.Mode.String(),
@@ -165,7 +165,7 @@ type resolvedSystem struct {
 	policyPath string
 }
 
-func normalizeRequest(request Request) Request {
+func normalizeRequest(request ResolveRequest) ResolveRequest {
 	if request.Now == nil {
 		request.Now = func() time.Time { return time.Now().UTC() }
 	}

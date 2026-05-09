@@ -9,16 +9,23 @@ import (
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
+// ResolveRequest configures one optimizer plan resolution.
+type ResolveRequest struct {
+	ManifestPath             string
+	BundleRootOverride       string
+	ParentBundlePathOverride string
+	BundleID                 string
+	Now                      func() time.Time
+}
+
 // Request configures one optimizer run.
 type Request struct {
-	ManifestPath       string
-	BundleRootOverride string
-	BundleID           string
-	Now                func() time.Time
-	Model              model.ToolCallingChatModel
-	ValidateProposal   executoreino.ValidateProposalFunc
-	RenderPrompt       executoreino.RenderOptimizerPromptFunc
-	RetryPolicy        *pureoptimizer.RetryPolicy
+	Resolve ResolveRequest
+
+	Model            model.ToolCallingChatModel
+	ValidateProposal executoreino.ValidateProposalFunc
+	RenderPrompt     executoreino.RenderOptimizerPromptFunc
+	RetryPolicy      *pureoptimizer.RetryPolicy
 }
 
 // Result is the app-level optimizer run outcome.

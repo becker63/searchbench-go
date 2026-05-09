@@ -16,7 +16,7 @@ import (
 var ErrUnsupportedMode = errors.New("optimizer: only optimization mode is supported")
 
 // Resolve loads one Pkl optimization manifest into the canonical optimizer plan.
-func Resolve(ctx context.Context, request Request) (Plan, error) {
+func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 	request = normalizeRequest(request)
 
 	manifestPath, err := filepath.Abs(request.ManifestPath)
@@ -42,6 +42,12 @@ func Resolve(ctx context.Context, request Request) (Plan, error) {
 	parentBundlePath, err := resolveExistingManifestPath(manifestDir, cfg.Optimization.ParentRun.Bundle.Path)
 	if err != nil {
 		return Plan{}, fmt.Errorf("resolve parent bundle path: %w", err)
+	}
+	if strings.TrimSpace(request.ParentBundlePathOverride) != "" {
+		parentBundlePath, err = filepath.Abs(request.ParentBundlePathOverride)
+		if err != nil {
+			return Plan{}, fmt.Errorf("resolve parent bundle override: %w", err)
+		}
 	}
 	inputPolicyPath, err := resolveExistingManifestPath(manifestDir, cfg.Optimization.Target.Input.Path)
 	if err != nil {
@@ -110,7 +116,7 @@ func Resolve(ctx context.Context, request Request) (Plan, error) {
 	}, nil
 }
 
-func normalizeRequest(request Request) Request {
+func normalizeRequest(request ResolveRequest) ResolveRequest {
 	if request.Now == nil {
 		request.Now = func() time.Time { return time.Now().UTC() }
 	}

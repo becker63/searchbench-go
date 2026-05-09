@@ -1,4 +1,4 @@
-package artifact
+package bundlefs
 
 import (
 	"encoding/hex"

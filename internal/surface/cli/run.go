@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/becker63/searchbench-go/internal/app/localrun"
+	"github.com/becker63/searchbench-go/internal/app/evaluation"
 )
 
 // RunCmd executes one manifest-driven local fake experiment run.
@@ -21,10 +21,12 @@ func (c *RunCmd) Run(ctx context.Context, app *App) error {
 		app = &App{}
 	}
 
-	result, err := localrun.Run(ctx, localrun.Request{
-		ManifestPath:        c.Manifest,
-		BundleRootOverride:  c.BundleRoot,
-		BundleID:            c.BundleID,
+	result, err := evaluation.Run(ctx, evaluation.Request{
+		Resolve: evaluation.ResolveRequest{
+			ManifestPath:       c.Manifest,
+			BundleRootOverride: c.BundleRoot,
+			BundleID:           c.BundleID,
+		},
 		DisableRenderReport: c.NoHumanReport,
 	})
 	if err != nil {
@@ -45,7 +47,7 @@ func (c *RunCmd) Run(ctx context.Context, app *App) error {
 	return nil
 }
 
-func mustFinalValue(result localrun.Result) float64 {
+func mustFinalValue(result evaluation.Result) float64 {
 	if result.ObjectiveResult == nil {
 		return 0
 	}

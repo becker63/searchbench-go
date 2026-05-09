@@ -1,4 +1,4 @@
-package artifact
+package bundlefs
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -222,8 +221,8 @@ func validateRequest(request BundleRequest) error {
 	if !safeBundleName(request.BundleID) {
 		return fmt.Errorf("bundle id %q is invalid", request.BundleID)
 	}
-	if err := request.ResolvedInput.Validate(); err != nil {
-		return fmt.Errorf("resolved input: %w", err)
+	if request.ResolvedInput == nil {
+		return errors.New("resolved input is required")
 	}
 	if err := request.CandidateReport.Spec.Validate(); err != nil {
 		return fmt.Errorf("candidate report spec: %w", err)
@@ -279,8 +278,4 @@ func safeBundleName(name string) bool {
 func hasCompleteMarker(dir string) bool {
 	info, err := os.Stat(filepath.Join(dir, completeMarkerName))
 	return err == nil && !info.IsDir()
-}
-
-func (r ResolvedComparisonInput) Validate() error {
-	return report.NewComparisonSpecFromRefs(r.Systems, r.Tasks).Validate()
 }

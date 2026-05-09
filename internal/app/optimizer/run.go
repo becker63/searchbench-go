@@ -2,8 +2,6 @@ package optimizer
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 
 	executoreino "github.com/becker63/searchbench-go/internal/adapters/executor/eino"
@@ -12,12 +10,18 @@ import (
 
 // Run executes one optimization manifest through the first optimizer loop.
 func Run(ctx context.Context, request Request) (Result, error) {
-	result := Result{ManifestPath: request.ManifestPath}
+	result := Result{ManifestPath: request.Resolve.ManifestPath}
 
-	plan, err := Resolve(ctx, request)
+	plan, err := Resolve(ctx, request.Resolve)
 	if err != nil {
 		return result, err
 	}
+	return RunResolved(ctx, plan, request)
+}
+
+// RunResolved executes one already-resolved optimization plan.
+func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error) {
+	result := Result{ManifestPath: plan.ManifestPath}
 
 	evidence, evidenceErr := loadEvidence(plan)
 	if evidenceErr != nil {
@@ -108,16 +112,4 @@ func normalizeManifestPathError(manifestPath string, err error) error {
 		return statErr
 	}
 	return nil
-}
-
-func wrapRunError(request Request, err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		if absErr := normalizeManifestPathError(request.ManifestPath, err); absErr != nil {
-			return absErr
-		}
-	}
-	return fmt.Errorf("optimizer run: %w", err)
 }

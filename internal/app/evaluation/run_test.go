@@ -1,4 +1,4 @@
-package localrun
+package evaluation
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -15,9 +14,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	appExperiment "github.com/becker63/searchbench-go/internal/app/experiment"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
@@ -41,12 +39,12 @@ func TestLocalManifestCanBeLoadedAndValidated(t *testing.T) {
 func TestRunRejectsUnsupportedMode(t *testing.T) {
 	t.Parallel()
 
-	_, err := appExperiment.Resolve(context.Background(), Request{
+	_, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
 		BundleID:           "localrun-unsupported-mode",
 	})
-	if err == nil || !strings.Contains(err.Error(), appExperiment.ErrUnsupportedMode.Error()) {
+	if err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
 		t.Fatalf("Resolve() error = %v, want unsupported mode", err)
 	}
 }
@@ -55,14 +53,14 @@ func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 	t.Parallel()
 
 	fixtureDir := createExperimentFixture(t, "")
-	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(fixtureDir))
+	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	out, err := runFakeComparison(context.Background(), plan)
+	out, executions, err := runComparison(context.Background(), plan, sampleRequest(fixtureDir))
 	if err != nil {
-		t.Fatalf("runFakeComparison() error = %v", err)
+		t.Fatalf("runComparison() error = %v", err)
 	}
 	if out.ID != plan.ReportID {
 		t.Fatalf("report ID = %q, want %q", out.ID, plan.ReportID)
@@ -73,19 +71,27 @@ func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 	if out.Decision.Decision != report.DecisionPromote {
 		t.Fatalf("decision = %q, want %q", out.Decision.Decision, report.DecisionPromote)
 	}
+	if len(executions) != 2 {
+		t.Fatalf("len(executions) = %d, want 2", len(executions))
+	}
+	for _, execution := range executions {
+		if execution.Result.Executed == nil {
+			t.Fatalf("execution result = %#v, want executed evaluator result", execution.Result)
+		}
+	}
 }
 
 func TestFakeComparisonProjectsScoreEvidence(t *testing.T) {
 	t.Parallel()
 
 	fixtureDir := createExperimentFixture(t, "")
-	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(fixtureDir))
+	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	out, err := runFakeComparison(context.Background(), plan)
+	out, _, err := runComparison(context.Background(), plan, sampleRequest(fixtureDir))
 	if err != nil {
-		t.Fatalf("runFakeComparison() error = %v", err)
+		t.Fatalf("runComparison() error = %v", err)
 	}
 
 	evidence, err := report.ProjectScoreEvidence(out)
@@ -110,12 +116,14 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
 	result, err := Run(context.Background(), Request{
-		ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
-		BundleRootOverride: bundleCollection,
-		BundleID:           "localrun-success",
-		ReportID:           domain.ReportID("report-localrun-success"),
-		Now: func() time.Time {
-			return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+		Resolve: ResolveRequest{
+			ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
+			BundleRootOverride: bundleCollection,
+			BundleID:           "localrun-success",
+			ReportID:           domain.ReportID("report-localrun-success"),
+			Now: func() time.Time {
+				return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+			},
 		},
 	})
 	if err != nil {
@@ -131,6 +139,9 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 	if result.ObjectiveResult.ObjectiveID == "" {
 		t.Fatalf("ObjectiveResult = %#v, want populated objective result", result.ObjectiveResult)
 	}
+	if len(result.EvaluatorExecutions) != 2 {
+		t.Fatalf("len(EvaluatorExecutions) = %d, want 2", len(result.EvaluatorExecutions))
+	}
 
 	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "resolved.json"))
 	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "report.json"))
@@ -139,7 +150,7 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "metadata.json"))
 	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "COMPLETE"))
 
-	var metadata artifact.BundleMetadata
+	var metadata bundlefs.BundleMetadata
 	decodeJSONFile(t, filepath.Join(string(result.Bundle.Path), "metadata.json"), &metadata)
 	gotPaths := make([]string, 0, len(metadata.Files))
 	for _, file := range metadata.Files {
@@ -152,16 +163,16 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 		t.Fatalf("metadata files = %v, want %v", gotPaths, wantPaths)
 	}
 
-	var resolved artifact.ResolvedComparisonInput
+	var resolved Plan
 	decodeJSONFile(t, filepath.Join(string(result.Bundle.Path), "resolved.json"), &resolved)
 	if got, want := resolved.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("resolved objective path = %q, want %q", got, want)
 	}
-	if got := resolved.Output.ResolvedPolicyPath.Candidate; got == "" {
+	if got := resolved.Output.ResolvedPolicyPaths.Candidate; got == "" {
 		t.Fatal("resolved candidate policy path is empty")
 	}
-	if resolved.Scoring.Evidence.Parent != nil {
-		t.Fatalf("resolved parent evidence = %#v, want nil for no-parent run", resolved.Scoring.Evidence.Parent)
+	if resolved.Scoring.ParentEvidence != nil {
+		t.Fatalf("resolved parent evidence = %#v, want nil for no-parent run", resolved.Scoring.ParentEvidence)
 	}
 	if !metadataHasPath(metadata, "objective.json") {
 		t.Fatalf("metadata files = %#v, want objective.json present", metadata.Files)
@@ -184,7 +195,7 @@ func TestMaterializeScoreEvidenceCreatesCurrentTempModule(t *testing.T) {
 	t.Parallel()
 
 	fixtureDir := createExperimentFixture(t, "")
-	plan, err := appExperiment.Resolve(context.Background(), sampleRequest(fixtureDir))
+	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -214,15 +225,15 @@ func TestMaterializeScoreEvidenceAcceptsExplicitParent(t *testing.T) {
 	fixtureDir := createExperimentFixture(t, "")
 	parentScorePath := writeScoreModuleForTest(t, fixtureDir, "parent-score.pkl", sampleScoreEvidence(t, domain.ReportID("report-parent")))
 	request := sampleRequest(fixtureDir)
-	request.ParentRef = &score.ObjectiveEvidenceRef{
+	request.Resolve.ParentRef = &score.ObjectiveEvidenceRef{
 		Name:       "parent",
 		BundlePath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run"),
 		ScorePath:  filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"),
 		ReportPath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "report.json"),
 	}
-	request.ParentScorePath = parentScorePath
+	request.Resolve.ParentScorePath = parentScorePath
 
-	plan, err := appExperiment.Resolve(context.Background(), request)
+	plan, err := Resolve(context.Background(), request.Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -264,13 +275,15 @@ func TestRunWithParentEvidenceThreadsObjectiveRefs(t *testing.T) {
 
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
 	result, err := Run(context.Background(), Request{
-		ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
-		BundleRootOverride: bundleCollection,
-		BundleID:           "localrun-parent",
-		ParentRef:          parentRef,
-		ParentScorePath:    parentScorePath,
-		Now: func() time.Time {
-			return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+		Resolve: ResolveRequest{
+			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			BundleRootOverride: bundleCollection,
+			BundleID:           "localrun-parent",
+			ParentRef:          parentRef,
+			ParentScorePath:    parentScorePath,
+			Now: func() time.Time {
+				return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+			},
 		},
 	})
 	if err != nil {
@@ -287,12 +300,12 @@ func TestRunWithParentEvidenceThreadsObjectiveRefs(t *testing.T) {
 		t.Fatalf("ObjectiveResult.EvidenceRefs = %#v, want parent ref", result.ObjectiveResult.EvidenceRefs)
 	}
 
-	var resolved artifact.ResolvedComparisonInput
+	var resolved Plan
 	decodeJSONFile(t, filepath.Join(string(result.Bundle.Path), "resolved.json"), &resolved)
-	if resolved.Scoring.Evidence.Parent == nil {
+	if resolved.Scoring.ParentEvidence == nil {
 		t.Fatal("resolved parent evidence is nil")
 	}
-	if got, want := resolved.Scoring.Evidence.Parent.ScorePath, filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"); got != want {
+	if got, want := resolved.Scoring.ParentEvidence.ScorePath, filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"); got != want {
 		t.Fatalf("resolved parent score path = %q, want %q", got, want)
 	}
 }
@@ -305,12 +318,14 @@ func TestRunObjectiveFailurePreventsCompletedBundle(t *testing.T) {
 	fixtureDir := createExperimentFixture(t, `final = ""`)
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
 	_, err := Run(context.Background(), Request{
-		ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
-		BundleRootOverride: bundleCollection,
-		BundleID:           "localrun-objective-failure",
-		ReportID:           domain.ReportID("report-localrun-objective-failure"),
-		Now: func() time.Time {
-			return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+		Resolve: ResolveRequest{
+			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			BundleRootOverride: bundleCollection,
+			BundleID:           "localrun-objective-failure",
+			ReportID:           domain.ReportID("report-localrun-objective-failure"),
+			Now: func() time.Time {
+				return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+			},
 		},
 	})
 	if err == nil {
@@ -341,9 +356,11 @@ func TestRunMissingObjectiveFailsBeforeFinalization(t *testing.T) {
 
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
 	_, err := Run(context.Background(), Request{
-		ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
-		BundleRootOverride: bundleCollection,
-		BundleID:           "localrun-missing-objective",
+		Resolve: ResolveRequest{
+			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			BundleRootOverride: bundleCollection,
+			BundleID:           "localrun-missing-objective",
+		},
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -369,13 +386,15 @@ func TestRunMissingParentScoreFailsCleanly(t *testing.T) {
 	fixtureDir := createExperimentFixture(t, "")
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
 	_, err := Run(context.Background(), Request{
-		ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
-		BundleRootOverride: bundleCollection,
-		BundleID:           "localrun-missing-parent-score",
-		ParentRef: &score.ObjectiveEvidenceRef{
-			Name:       "parent",
-			BundlePath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run"),
-			ScorePath:  filepath.Join(fixtureDir, "missing-parent-score.pkl"),
+		Resolve: ResolveRequest{
+			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			BundleRootOverride: bundleCollection,
+			BundleID:           "localrun-missing-parent-score",
+			ParentRef: &score.ObjectiveEvidenceRef{
+				Name:       "parent",
+				BundlePath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run"),
+				ScorePath:  filepath.Join(fixtureDir, "missing-parent-score.pkl"),
+			},
 		},
 	})
 	if err == nil {
@@ -449,10 +468,7 @@ func TestLocalRunPackageAvoidsRealRuntimeImports(t *testing.T) {
 	}
 
 	forbiddenSubstrings := []string{
-		"cloudwego/eino",
-		"internal/ports/backend",
 		"internal/ports/pipeline",
-		"internal/adapters/executor/eino",
 		"openai",
 		"anthropic",
 		"cerebras",
@@ -477,12 +493,14 @@ func TestLocalRunPackageAvoidsRealRuntimeImports(t *testing.T) {
 
 func sampleRequest(tempDir string) Request {
 	return Request{
-		ManifestPath:       filepath.Join(tempDir, "experiment.pkl"),
-		BundleRootOverride: filepath.Join(tempDir, "artifacts", "runs"),
-		BundleID:           "localrun-test",
-		ReportID:           domain.ReportID("report-localrun-test"),
-		Now: func() time.Time {
-			return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+		Resolve: ResolveRequest{
+			ManifestPath:       filepath.Join(tempDir, "experiment.pkl"),
+			BundleRootOverride: filepath.Join(tempDir, "artifacts", "runs"),
+			BundleID:           "localrun-test",
+			ReportID:           domain.ReportID("report-localrun-test"),
+			Now: func() time.Time {
+				return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+			},
 		},
 	}
 }
@@ -544,22 +562,6 @@ func createExperimentFixture(t *testing.T, objectiveMutation string) string {
 	return root
 }
 
-func requirePkl(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("pkl"); err != nil {
-		t.Skip("pkl CLI not available on PATH")
-	}
-}
-
-func repoRoot(t *testing.T) string {
-	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("filepath.Abs(repo root) error = %v", err)
-	}
-	return root
-}
-
 func assertFileExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err != nil {
@@ -583,7 +585,7 @@ func decodeJSONFile(t *testing.T, path string, target any) {
 	}
 }
 
-func metadataHasPath(metadata artifact.BundleMetadata, path string) bool {
+func metadataHasPath(metadata bundlefs.BundleMetadata, path string) bool {
 	for _, file := range metadata.Files {
 		if file.Path == path {
 			return true
@@ -621,7 +623,7 @@ func sampleScoreEvidence(t *testing.T, reportID domain.ReportID) score.ScoreEvid
 
 func writeScoreModuleForTest(t *testing.T, root string, name string, evidence score.ScoreEvidenceDocument) string {
 	t.Helper()
-	data, err := artifact.MarshalScoreEvidencePKL(evidence)
+	data, err := bundlefs.MarshalScoreEvidencePKL(evidence)
 	if err != nil {
 		t.Fatalf("MarshalScoreEvidencePKL() error = %v", err)
 	}

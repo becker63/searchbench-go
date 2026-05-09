@@ -1,4 +1,4 @@
-package localrun
+package evaluation
 
 import (
 	"context"
@@ -6,10 +6,9 @@ import (
 	"os"
 	"time"
 
-	artifact "github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	scoring "github.com/becker63/searchbench-go/internal/adapters/scoring/pkl"
-	appExperiment "github.com/becker63/searchbench-go/internal/app/experiment"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/surface/console"
 )
@@ -17,23 +16,27 @@ import (
 // Run executes the smallest manifest-driven local fake SearchBench-Go path and
 // writes one immutable bundle.
 func Run(ctx context.Context, request Request) (Result, error) {
-	plan, err := appExperiment.Resolve(ctx, request)
+	plan, err := Resolve(ctx, request.Resolve)
 	if err != nil {
 		phase := PhaseResolvePlanFailed
-		if errors.Is(err, appExperiment.ErrUnsupportedMode) {
+		if errors.Is(err, ErrUnsupportedMode) {
 			phase = PhaseUnsupportedMode
 		} else if errors.Is(err, config.ErrValidationFailed) {
 			phase = PhaseValidateManifestFailed
 		} else if errors.Is(err, os.ErrNotExist) {
 			phase = PhaseResolvePlanFailed
-		} else if request.ManifestPath != "" {
-			if absErr := normalizeManifestPathError(request.ManifestPath, err); absErr != nil {
+		} else if request.Resolve.ManifestPath != "" {
+			if absErr := normalizeManifestPathError(request.Resolve.ManifestPath, err); absErr != nil {
 				return Result{}, &Error{Phase: PhaseLoadManifestFailed, Err: absErr}
 			}
 		}
 		return Result{}, &Error{Phase: phase, Err: err}
 	}
+	return RunResolved(ctx, plan, request)
+}
 
+// RunResolved executes one already-resolved local evaluation plan.
+func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error) {
 	runCtx := ctx
 	cancel := func() {}
 	timeout := timeoutFromSeconds(plan.Evaluator.Bounds.TimeoutSeconds)
@@ -42,9 +45,9 @@ func Run(ctx context.Context, request Request) (Result, error) {
 	}
 	defer cancel()
 
-	candidateReport, err := runFakeComparison(runCtx, plan)
+	candidateReport, evaluatorExecutions, err := runComparison(runCtx, plan, request)
 	if err != nil {
-		return Result{}, &Error{Phase: PhaseFakeComparisonFailed, Err: err}
+		return Result{}, &Error{Phase: PhaseComparisonFailed, Err: err}
 	}
 
 	scoreEvidence, err := report.ProjectScoreEvidence(candidateReport)
@@ -73,15 +76,15 @@ func Run(ctx context.Context, request Request) (Result, error) {
 		return Result{}, &Error{Phase: PhaseObjectiveFailed, Err: err}
 	}
 
-	renderedReport, err := renderReport(plan, candidateReport)
+	renderedReport, err := renderReport(plan, request, candidateReport)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseRenderReportFailed, Err: err}
 	}
 
-	bundleRef, err := artifact.WriteBundle(ctx, artifact.BundleRequest{
+	bundleRef, err := bundlefs.WriteBundle(ctx, bundlefs.BundleRequest{
 		RootPath:        plan.Output.BundleWriterRoot,
 		BundleID:        plan.Bundle.ID,
-		ResolvedInput:   bundleResolvedInput(plan),
+		ResolvedInput:   plan,
 		CandidateReport: candidateReport,
 		ScoreEvidence:   scoreEvidence,
 		ObjectiveResult: &objectiveResult,
@@ -93,24 +96,25 @@ func Run(ctx context.Context, request Request) (Result, error) {
 	}
 
 	return Result{
-		ManifestPath:    plan.ManifestPath,
-		Bundle:          bundleRef,
-		ReportID:        candidateReport.ID,
-		CandidateReport: candidateReport,
-		ScoreEvidence:   scoreEvidence,
-		ObjectiveResult: &objectiveResult,
+		ManifestPath:        plan.ManifestPath,
+		Bundle:              bundleRef,
+		ReportID:            candidateReport.ID,
+		CandidateReport:     candidateReport,
+		ScoreEvidence:       scoreEvidence,
+		ObjectiveResult:     &objectiveResult,
+		EvaluatorExecutions: evaluatorExecutions,
 	}, nil
 }
 
-func renderReport(plan appExperiment.ResolvedExperiment, candidateReport report.CandidateReport) (*artifact.RenderedReport, error) {
-	if !plan.Output.RenderHumanReport {
+func renderReport(plan Plan, request Request, candidateReport report.CandidateReport) (*bundlefs.RenderedReport, error) {
+	if !plan.Output.RenderHumanReport || request.DisableRenderReport {
 		return nil, nil
 	}
 	content := console.RenderCandidateReport(candidateReport, console.Options{
 		Color: false,
 		Width: 100,
 	})
-	return &artifact.RenderedReport{
+	return &bundlefs.RenderedReport{
 		FileName: "report.txt",
 		Content:  content + "\n",
 	}, nil

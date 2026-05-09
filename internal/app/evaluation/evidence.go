@@ -1,4 +1,4 @@
-package localrun
+package evaluation
 
 import (
 	"errors"
@@ -7,8 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	artifact "github.com/becker63/searchbench-go/internal/adapters/artifact/fsbundle"
-	appExperiment "github.com/becker63/searchbench-go/internal/app/experiment"
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -20,8 +19,8 @@ type materializedEvidence struct {
 	cleanup          func()
 }
 
-func materializeScoreEvidence(plan appExperiment.ResolvedExperiment, current score.ScoreEvidenceDocument) (materializedEvidence, error) {
-	data, err := artifact.MarshalScoreEvidencePKL(current)
+func materializeScoreEvidence(plan Plan, current score.ScoreEvidenceDocument) (materializedEvidence, error) {
+	data, err := bundlefs.MarshalScoreEvidencePKL(current)
 	if err != nil {
 		return materializedEvidence{}, err
 	}
@@ -77,12 +76,4 @@ func resolveParentScorePath(ref *score.ObjectiveEvidenceRef, override string) (s
 		return "", fmt.Errorf("parent score path: %w", err)
 	}
 	return path, nil
-}
-
-func cloneEvidenceRef(ref *score.ObjectiveEvidenceRef) *score.ObjectiveEvidenceRef {
-	if ref == nil {
-		return nil
-	}
-	copyRef := *ref
-	return &copyRef
 }

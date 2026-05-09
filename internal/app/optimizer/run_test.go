@@ -22,7 +22,7 @@ func TestResolveOptimizationManifest(t *testing.T) {
 
 	requirePkl(t)
 
-	plan, err := Resolve(context.Background(), Request{
+	plan, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
 		Now: func() time.Time {
 			return time.Date(2026, 5, 8, 20, 0, 0, 0, time.UTC)
@@ -46,13 +46,37 @@ func TestResolveOptimizationManifest(t *testing.T) {
 	}
 }
 
+func TestResolveOptimizationManifestAllowsParentBundleOverride(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	override := filepath.Join(t.TempDir(), "parent-bundle")
+	if err := os.MkdirAll(override, 0o755); err != nil {
+		t.Fatalf("os.MkdirAll() error = %v", err)
+	}
+
+	plan, err := Resolve(context.Background(), ResolveRequest{
+		ManifestPath:             filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		ParentBundlePathOverride: override,
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if got, want := string(plan.ParentBundle.BundlePath), override; got != want {
+		t.Fatalf("ParentBundle.BundlePath = %q, want %q", got, want)
+	}
+}
+
 func TestRunRejectsEvaluationManifest(t *testing.T) {
 	t.Parallel()
 
 	requirePkl(t)
 
 	_, err := Run(context.Background(), Request{
-		ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
+		Resolve: ResolveRequest{
+			ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
+		},
 	})
 	if err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
 		t.Fatalf("Run() error = %v, want unsupported mode", err)
@@ -64,7 +88,7 @@ func TestLoadEvidenceRespectsIncludedKinds(t *testing.T) {
 
 	requirePkl(t)
 
-	plan, err := Resolve(context.Background(), Request{
+	plan, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
 	})
 	if err != nil {
@@ -88,11 +112,8 @@ func TestRunMissingParentBundleFailsTyped(t *testing.T) {
 
 	requirePkl(t)
 
-	plan, err := Resolve(context.Background(), Request{
+	plan, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
-		Model: modeltest.NewScriptedModel(modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{}`, nil),
-		}),
 	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -116,15 +137,17 @@ func TestRunSuccessfulOptimizerWritesBundle(t *testing.T) {
 	policyBefore := mustReadFile(t, inputPolicyPath)
 
 	result, err := Run(context.Background(), Request{
-		ManifestPath:       manifestPath,
-		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
-		BundleID:           "optimize-success",
+		Resolve: ResolveRequest{
+			ManifestPath:       manifestPath,
+			BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
+			BundleID:           "optimize-success",
+			Now: func() time.Time {
+				return time.Date(2026, 5, 8, 20, 15, 0, 0, time.UTC)
+			},
+		},
 		Model: modeltest.NewScriptedModel(modeltest.ScriptedResponse{
 			Message: schema.AssistantMessage(`{"artifact_id":"candidate-policy-round-002","artifact_name":"candidate_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"candidate narrows the search frontier"}`, nil),
 		}),
-		Now: func() time.Time {
-			return time.Date(2026, 5, 8, 20, 15, 0, 0, time.UTC)
-		},
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -160,9 +183,11 @@ func TestRunFailureDoesNotWriteComplete(t *testing.T) {
 	requirePkl(t)
 
 	result, err := Run(context.Background(), Request{
-		ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
-		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
-		BundleID:           "optimize-failure",
+		Resolve: ResolveRequest{
+			ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+			BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
+			BundleID:           "optimize-failure",
+		},
 		Model: modeltest.NewScriptedModel(modeltest.ScriptedResponse{
 			Message: schema.AssistantMessage("{\"artifact_id\":\"candidate-policy-round-002\",\"artifact_name\":\"candidate_policy.round-002.py\",\"interface_id\":\"iterative_context.selection_policy.v1\",\"code\":\"```python\\ndef score(task):\\n    return []\\n```\"}", nil),
 		}),

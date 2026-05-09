@@ -1,4 +1,4 @@
-package artifact
+package bundlefs
 
 import (
 	"bytes"
@@ -337,10 +337,6 @@ func TestReportSafeOutputsDoNotLeakPolicySource(t *testing.T) {
 		t.Fatalf("WriteBundle() error = %v", err)
 	}
 
-	policySource := request.ResolvedInput.Systems.Candidate.Policy
-	if policySource == nil {
-		t.Fatal("expected candidate policy ref")
-	}
 	rawSource := "def score(task):\n    return 'candidate'\n"
 	for _, name := range []string{"report.json", "score.pkl", "metadata.json", "report.md", "objective.json"} {
 		path := filepath.Join(string(ref.Path), name)
@@ -514,58 +510,12 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 	return BundleRequest{
 		RootPath: domain.HostPath(filepath.Join(t.TempDir(), "artifacts")),
 		BundleID: "bundle-2026-04-26-fixed",
-		ResolvedInput: ResolvedComparisonInput{
-			ManifestPath:   "configs/experiments/example/experiment.pkl",
-			ExperimentName: "bundle-writer-test",
-			Mode:           "evaluation",
-			Dataset: DatasetConfig{
-				Kind:   "lca",
-				Name:   "repo/example",
-				Config: "py",
-				Split:  "dev",
-			},
-			Systems: domain.NewPair(baseline.Ref(), candidate.Ref()),
-			Tasks:   tasks,
-			Parallelism: ParallelismConfig{
-				Mode:       "sequential",
-				MaxWorkers: 1,
-			},
-			Evaluator: EvaluatorConfig{
-				Model: EvaluatorModelConfig{
-					Provider:        "openai",
-					Name:            "gpt-candidate",
-					MaxOutputTokens: 2048,
-				},
-				Bounds: EvaluatorBoundsConfig{
-					MaxModelTurns:  8,
-					MaxToolCalls:   24,
-					TimeoutSeconds: 300,
-				},
-				Retry: RetryPolicyConfig{
-					MaxAttempts: 2,
-				},
-			},
-			Scoring: ScoringConfig{
-				ObjectivePath: "configs/experiments/example/scoring/objective.pkl",
-				Evidence: EvidenceConfig{
-					Current: score.ObjectiveEvidenceRef{
-						Name:      "current",
-						ScorePath: "artifacts/runs/example/score.pkl",
-					},
-				},
-			},
-			Output: OutputConfig{
-				BundleRoot:        "artifacts/runs",
-				BundleWriterRoot:  "artifacts",
-				ReportFormats:     []string{"json", "text"},
-				RenderHumanReport: true,
-				ResolvedPolicyPath: ResolvedPolicyPath{
-					Candidate: "configs/experiments/example/policies/candidate.py",
-				},
-			},
-			ReportOptions: ReportOptions{
-				Formats: []string{"json", "text"},
-			},
+		ResolvedInput: map[string]any{
+			"manifest_path":   "configs/experiments/example/experiment.pkl",
+			"experiment_name": "bundle-writer-test",
+			"mode":            "evaluation",
+			"systems":         domain.NewPair(baseline.Ref(), candidate.Ref()),
+			"tasks":           tasks,
 		},
 		CandidateReport: candidateReport,
 		ScoreEvidence:   scoreEvidence,

@@ -1,0 +1,227 @@
+package locale2e
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
+
+	"github.com/becker63/searchbench-go/internal/adapters/executor/eino"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/pure/run"
+	"github.com/becker63/searchbench-go/internal/testing/modeltest"
+)
+
+func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	root := repoRoot(t)
+	evaluationManifest := filepath.Join(root, "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
+	optimizationManifest := filepath.Join(root, "configs", "experiments", "optimize-ic", "experiment.pkl")
+	inputPolicyPath := filepath.Join(root, "configs", "experiments", "optimize-ic", "policies", "candidate_policy.py")
+	bundleRoot := filepath.Join(t.TempDir(), "artifacts")
+
+	evaluationManifestBefore := mustReadFile(t, evaluationManifest)
+	optimizationManifestBefore := mustReadFile(t, optimizationManifest)
+	inputPolicyBefore := mustReadFile(t, inputPolicyPath)
+
+	var evaluatorModels []*modeltest.ScriptedModel
+	evaluatorFactory := func(spec run.Spec) (model.ToolCallingChatModel, error) {
+		prediction := `{"predicted_files":["src/baseline_guess.go"],"reasoning":"baseline fake evaluator stayed conservative"}`
+		if spec.System.Backend == domain.BackendIterativeContext {
+			prediction = `{"predicted_files":["src/search_target.go"],"reasoning":"candidate fake evaluator used structural evidence to localize the issue"}`
+		}
+		scripted := modeltest.NewScriptedModel(
+			modeltest.ScriptedResponse{
+				Message: schema.AssistantMessage("", []schema.ToolCall{{
+					ID: "call-1",
+					Function: schema.FunctionCall{
+						Name:      "resolve_and_expand",
+						Arguments: `{"query":"retry interceptor"}`,
+					},
+				}}),
+			},
+			modeltest.ScriptedResponse{
+				Message: schema.AssistantMessage(prediction, nil),
+			},
+		)
+		evaluatorModels = append(evaluatorModels, scripted)
+		return scripted, nil
+	}
+
+	optimizerModel := modeltest.NewScriptedModel(
+		modeltest.ScriptedResponse{
+			Message: schema.AssistantMessage(`{"artifact_id":"candidate-policy-round-002","artifact_name":"candidate_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"candidate narrows the frontier using the parent evidence"}`, nil),
+		},
+	)
+
+	result, err := Run(context.Background(), Request{
+		EvaluationManifestPath:   evaluationManifest,
+		OptimizationManifestPath: optimizationManifest,
+		BundleRootOverride:       bundleRoot,
+		ParentEvaluationBundleID: "fakee2e-parent",
+		OptimizerBundleID:        "fakee2e-optimizer",
+		Now: func() time.Time {
+			return time.Date(2026, 5, 8, 20, 30, 0, 0, time.UTC)
+		},
+		EvaluatorModelFactory: evaluatorFactory,
+		OptimizerModelFactory: func() (model.ToolCallingChatModel, error) {
+			return optimizerModel, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if result.ParentEvaluationResult == nil || result.OptimizerResult == nil {
+		t.Fatalf("result = %#v, want parent evaluation and optimizer results", result)
+	}
+
+	for _, path := range []string{
+		filepath.Join(result.ParentEvaluationBundle, "COMPLETE"),
+		filepath.Join(result.ParentEvaluationBundle, "report.json"),
+		filepath.Join(result.ParentEvaluationBundle, "score.pkl"),
+		filepath.Join(result.ParentEvaluationBundle, "objective.json"),
+		filepath.Join(result.OptimizerBundle, "COMPLETE"),
+		filepath.Join(result.OptimizerBundle, "candidate_policy.round-002.py"),
+		filepath.Join(result.OptimizerBundle, "optimizer_result.json"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("os.Stat(%q) error = %v", path, err)
+		}
+	}
+
+	if !strings.HasPrefix(result.ParentEvaluationBundle, filepath.Join(bundleRoot, "parent-evaluation")) {
+		t.Fatalf("ParentEvaluationBundle = %q, want Go-owned bundle root under %q", result.ParentEvaluationBundle, bundleRoot)
+	}
+	if !strings.HasPrefix(result.OptimizerBundle, filepath.Join(bundleRoot, "optimizer")) {
+		t.Fatalf("OptimizerBundle = %q, want Go-owned bundle root under %q", result.OptimizerBundle, bundleRoot)
+	}
+
+	var optimizerResolved struct {
+		ParentRun struct {
+			BundlePath string `json:"bundle_path"`
+		} `json:"parent_run"`
+	}
+	decodeJSONFile(t, filepath.Join(result.OptimizerBundle, "resolved.json"), &optimizerResolved)
+	if got, want := optimizerResolved.ParentRun.BundlePath, result.ParentEvaluationBundle; got != want {
+		t.Fatalf("optimizer parent bundle path = %q, want %q", got, want)
+	}
+
+	if got := string(mustReadFile(t, evaluationManifest)); got != string(evaluationManifestBefore) {
+		t.Fatal("evaluation manifest was mutated")
+	}
+	if got := string(mustReadFile(t, optimizationManifest)); got != string(optimizationManifestBefore) {
+		t.Fatal("optimization manifest was mutated")
+	}
+	if got := string(mustReadFile(t, inputPolicyPath)); got != string(inputPolicyBefore) {
+		t.Fatal("input policy was mutated")
+	}
+
+	if len(evaluatorModels) != 2 {
+		t.Fatalf("len(evaluatorModels) = %d, want 2", len(evaluatorModels))
+	}
+	for _, scripted := range evaluatorModels {
+		if len(scripted.Calls()) == 0 {
+			t.Fatal("scripted evaluator model recorded zero calls")
+		}
+	}
+	if len(optimizerModel.Calls()) == 0 {
+		t.Fatal("scripted optimizer model recorded zero calls")
+	}
+
+	if len(result.ParentEvaluationResult.EvaluatorExecutions) != 2 {
+		t.Fatalf("len(EvaluatorExecutions) = %d, want 2", len(result.ParentEvaluationResult.EvaluatorExecutions))
+	}
+	for _, execution := range result.ParentEvaluationResult.EvaluatorExecutions {
+		if !containsEvaluatorPhase(execution.Result.Phases, eino.PhaseRunEvaluator) {
+			t.Fatalf("execution phases = %#v, want run_evaluator", execution.Result.Phases)
+		}
+		if !containsEvaluatorPhase(execution.Result.Phases, eino.PhaseComplete) {
+			t.Fatalf("execution phases = %#v, want complete", execution.Result.Phases)
+		}
+	}
+
+	if !strings.Contains(result.OptimizerResult.Optimizer.RenderedPrompt, "<objective-result>") {
+		t.Fatalf("optimizer prompt missing objective evidence summary:\n%s", result.OptimizerResult.Optimizer.RenderedPrompt)
+	}
+	if strings.Contains(result.OptimizerResult.Optimizer.RenderedPrompt, "oracle_files") {
+		t.Fatalf("optimizer prompt leaked denied evidence:\n%s", result.OptimizerResult.Optimizer.RenderedPrompt)
+	}
+}
+
+func TestFakeE2EParentEvaluationFailurePreventsOptimizer(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	optimizerFactoryCalled := false
+	_, err := Run(context.Background(), Request{
+		EvaluationManifestPath:   filepath.Join(repoRoot(t), "configs", "experiments", "missing", "experiment.pkl"),
+		OptimizationManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		OptimizerModelFactory: func() (model.ToolCallingChatModel, error) {
+			optimizerFactoryCalled = true
+			return modeltest.NewScriptedModel(), nil
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var pathErr *os.PathError
+	if !strings.Contains(err.Error(), "no such file or directory") && !errors.As(err, &pathErr) {
+		t.Fatalf("err = %v, want missing manifest failure", err)
+	}
+	if optimizerFactoryCalled {
+		t.Fatal("optimizer factory should not run after parent evaluation failure")
+	}
+}
+
+func containsEvaluatorPhase(phases []eino.Phase, want eino.Phase) bool {
+	for _, phase := range phases {
+		if phase == want {
+			return true
+		}
+	}
+	return false
+}
+
+func requirePkl(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("pkl"); err != nil {
+		t.Skip("pkl CLI not available on PATH")
+	}
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("filepath.Abs(repo root) error = %v", err)
+	}
+	return root
+}
+
+func mustReadFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
+	}
+	return data
+}
+
+func decodeJSONFile(t *testing.T, path string, target any) {
+	t.Helper()
+	if err := json.Unmarshal(mustReadFile(t, path), target); err != nil {
+		t.Fatalf("json.Unmarshal(%q) error = %v", path, err)
+	}
+}

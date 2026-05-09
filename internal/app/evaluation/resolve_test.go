@@ -1,4 +1,4 @@
-package experiment
+package evaluation
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func TestResolveExampleManifest(t *testing.T) {
 	requirePkl(t)
 
 	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
-	out, err := Resolve(context.Background(), Request{
+	out, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
 		BundleID:           "experiment-resolve",
@@ -70,7 +70,7 @@ func TestResolveOptimizeICManifestRejectsUnsupportedMode(t *testing.T) {
 	requirePkl(t)
 
 	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl")
-	_, err := Resolve(context.Background(), Request{
+	_, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
 		BundleID:           "optimize-ic-example",
@@ -90,7 +90,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 		t.Fatalf("WriteFile(parentScore) error = %v", err)
 	}
 
-	out, err := Resolve(context.Background(), Request{
+	out, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
 		BundleRootOverride: filepath.Join(t.TempDir(), "bundle-root"),
 		BundleID:           "with-parent",
@@ -123,7 +123,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 	}
 }
 
-func TestResolvedExperimentPackageDoesNotImportGeneratedBindings(t *testing.T) {
+func TestEvaluationPackageDoesNotImportGeneratedBindings(t *testing.T) {
 	t.Parallel()
 
 	_, currentFile, _, ok := runtime.Caller(0)
@@ -145,7 +145,7 @@ func TestResolvedExperimentPackageDoesNotImportGeneratedBindings(t *testing.T) {
 			for _, imp := range file.Imports {
 				path := strings.Trim(imp.Path.Value, `"`)
 				if strings.Contains(path, "/internal/adapters/config/pkl/generated") {
-					t.Fatalf("app/experiment import %q leaked generated bindings", path)
+					t.Fatalf("app/evaluation import %q leaked generated bindings", path)
 				}
 			}
 		}
