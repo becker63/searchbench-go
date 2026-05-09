@@ -109,13 +109,19 @@ type AgentConfig struct {
 	SystemPrompt string      `json:"system_prompt,omitempty"`
 }
 
-// Target identifies the policy artifact being optimized.
-type Target struct {
+// NextChallengerTarget identifies the policy artifact used to propose a future
+// challenger.
+type NextChallengerTarget struct {
 	InputArtifactID  domain.ArtifactID `json:"input_artifact_id"`
 	OutputArtifactID domain.ArtifactID `json:"output_artifact_id"`
 	OutputName       string            `json:"output_name"`
 	InterfaceID      string            `json:"interface_id"`
 }
+
+// Target is a transitional alias for NextChallengerTarget.
+//
+// TODO(issue-32): remove after app optimizer callers use NextChallengerTarget.
+type Target = NextChallengerTarget
 
 // ParentRoundRef identifies the completed round bundle used as evidence.
 type ParentRoundRef struct {
@@ -152,8 +158,9 @@ type PolicySource struct {
 	Source      string            `json:"source"`
 }
 
-// Evidence is the prompt-safe optimizer evidence payload.
-type Evidence struct {
+// NextChallengerEvidence is the prompt-safe evidence payload for proposing a
+// possible future challenger.
+type NextChallengerEvidence struct {
 	ParentRound     ParentRoundRef               `json:"parent_round"`
 	IncludedKinds   []string                     `json:"included_kinds,omitempty"`
 	DeniedKinds     []string                     `json:"denied_kinds,omitempty"`
@@ -163,15 +170,20 @@ type Evidence struct {
 	InputPolicy     PolicySource                 `json:"input_policy"`
 }
 
-// Spec is one resolved optimizer execution request.
+// Evidence is a transitional alias for NextChallengerEvidence.
+//
+// TODO(issue-32): remove after prompt/app callers use NextChallengerEvidence.
+type Evidence = NextChallengerEvidence
+
+// Spec is one resolved next-challenger execution request.
 type Spec struct {
-	Target   Target      `json:"target"`
-	Agent    AgentConfig `json:"agent"`
-	Evidence Evidence    `json:"evidence"`
+	Target   NextChallengerTarget   `json:"target"`
+	Agent    AgentConfig            `json:"agent"`
+	Evidence NextChallengerEvidence `json:"evidence"`
 }
 
-// Proposal is one finalized replacement policy artifact proposal.
-type Proposal struct {
+// NextChallengerProposal is one finalized future challenger artifact proposal.
+type NextChallengerProposal struct {
 	ArtifactID   domain.ArtifactID `json:"artifact_id"`
 	ArtifactName string            `json:"artifact_name"`
 	InterfaceID  string            `json:"interface_id"`
@@ -179,6 +191,11 @@ type Proposal struct {
 	Summary      string            `json:"summary,omitempty"`
 	RiskNotes    []string          `json:"risk_notes,omitempty"`
 }
+
+// Proposal is a transitional alias for NextChallengerProposal.
+//
+// TODO(issue-32): remove after executor/app callers use NextChallengerProposal.
+type Proposal = NextChallengerProposal
 
 // Failure is the typed failed optimizer outcome.
 type Failure struct {
@@ -216,20 +233,26 @@ type Attempt struct {
 	State                  AttemptState             `json:"state"`
 	RenderedPrompt         string                   `json:"rendered_prompt,omitempty"`
 	RawOutput              string                   `json:"raw_output,omitempty"`
-	Proposal               *Proposal                `json:"proposal,omitempty"`
+	Proposal               *NextChallengerProposal  `json:"proposal,omitempty"`
 	Failure                *Failure                 `json:"failure,omitempty"`
 	PipelineResults        []pipeline.StepResult    `json:"-"`
 	PipelineClassification *pipeline.Classification `json:"-"`
 	RetryFeedback          string                   `json:"retry_feedback,omitempty"`
 }
 
-// Result is the typed outcome for one optimizer run.
-type Result struct {
-	Success        bool      `json:"success"`
-	Proposal       *Proposal `json:"proposal,omitempty"`
-	Failure        *Failure  `json:"failure,omitempty"`
-	Attempts       []Attempt `json:"attempts,omitempty"`
-	Phases         []Phase   `json:"phases,omitempty"`
-	RenderedPrompt string    `json:"rendered_prompt,omitempty"`
-	RawOutput      string    `json:"raw_output,omitempty"`
+// NextChallengerRecord is the typed outcome for one next-challenger proposal
+// run.
+type NextChallengerRecord struct {
+	Success        bool                    `json:"success"`
+	Proposal       *NextChallengerProposal `json:"proposal,omitempty"`
+	Failure        *Failure                `json:"failure,omitempty"`
+	Attempts       []Attempt               `json:"attempts,omitempty"`
+	Phases         []Phase                 `json:"phases,omitempty"`
+	RenderedPrompt string                  `json:"rendered_prompt,omitempty"`
+	RawOutput      string                  `json:"raw_output,omitempty"`
 }
+
+// Result is a transitional alias for NextChallengerRecord.
+//
+// TODO(issue-32): remove after executor/app callers use NextChallengerRecord.
+type Result = NextChallengerRecord

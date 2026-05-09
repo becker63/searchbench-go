@@ -36,11 +36,11 @@ func TestEvaluateLocalObjectiveWithParent(t *testing.T) {
 	if _, ok := result.FinalValue(); !ok {
 		t.Fatal("FinalValue() missing")
 	}
-	if !hasValue(result.Values, "currentLocalizationQuality") {
-		t.Fatalf("values = %#v, want currentLocalizationQuality", result.Values)
+	if !hasValue(result.Values, "challengerQuality") {
+		t.Fatalf("values = %#v, want challengerQuality", result.Values)
 	}
-	if !hasValue(result.Values, "parentLocalizationQuality") {
-		t.Fatalf("values = %#v, want parentLocalizationQuality", result.Values)
+	if !hasValue(result.Values, "parentChallengerQuality") {
+		t.Fatalf("values = %#v, want parentChallengerQuality", result.Values)
 	}
 	if !hasValue(result.Values, "regressionPenalty") {
 		t.Fatalf("values = %#v, want regressionPenalty", result.Values)
@@ -76,8 +76,8 @@ func TestEvaluateLocalObjectiveWithoutParent(t *testing.T) {
 	if result.Final != "final" {
 		t.Fatalf("result.Final = %q, want final", result.Final)
 	}
-	if !hasValue(result.Values, "parentLocalizationQuality") {
-		t.Fatalf("values = %#v, want parentLocalizationQuality present", result.Values)
+	if !hasValue(result.Values, "parentChallengerQuality") {
+		t.Fatalf("values = %#v, want parentChallengerQuality present", result.Values)
 	}
 	if !hasValue(result.Values, "regressionPenalty") {
 		t.Fatalf("values = %#v, want regressionPenalty present", result.Values)
@@ -142,8 +142,8 @@ func TestVisibleObjectiveFileUsesSharedValueHelpers(t *testing.T) {
 		t.Fatalf("visible objective file still contains inline ObjectiveValue construction:\n%s", content)
 	}
 	for _, want := range []string{
-		`helpers.intermediate("currentLocalizationQuality", currentLocalizationQuality)`,
-		`helpers.intermediate("parentLocalizationQuality", parentLocalizationQuality)`,
+		`helpers.intermediate("challengerQuality", challengerQuality)`,
+		`helpers.intermediate("parentChallengerQuality", parentChallengerQuality)`,
 		`helpers.penalty("regressionPenalty", regressionPenalty)`,
 		`helpers.finalValue("final", finalScore)`,
 		`final = "final"`,
@@ -173,18 +173,18 @@ func sampleRequest(t *testing.T) Request {
 	}
 }
 
-func sampleEvidence(reportID string, goldHop float64, severeCount int, totalTokens domain.TokenCount) score.ScoreEvidenceDocument {
+func sampleEvidence(reportID string, goldHop float64, severeCount int, totalTokens domain.TokenCount) score.RoundEvidenceDocument {
 	goldMetric, err := score.NewMetricEvidence(score.MetricGoldHop, goldHop+1, goldHop)
 	if err != nil {
 		panic(err)
 	}
-	return score.ScoreEvidenceDocument{
+	return score.RoundEvidenceDocument{
 		SchemaVersion: score.EvidenceSchemaVersion,
 		ReportID:      domain.ReportID(reportID),
 		LocalizationDistance: score.LocalizationDistanceEvidence{
 			GoldHop: &goldMetric,
 		},
-		Usage: score.UsageEvidence{
+		ChallengerUsage: score.UsageEvidence{
 			Available:   true,
 			TotalTokens: totalTokens,
 		},
@@ -223,7 +223,7 @@ func writeTempModule(t *testing.T, content string) string {
 	return path
 }
 
-func writeScoreModule(t *testing.T, name string, evidence score.ScoreEvidenceDocument) string {
+func writeScoreModule(t *testing.T, name string, evidence score.RoundEvidenceDocument) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), name)
@@ -232,11 +232,11 @@ reportId = %q
 
 localizationDistance {
   goldHop {
-    candidate = %v
+    challenger = %v
   }
 }
 
-usage {
+challengerUsage {
   totalTokens = %d
 }
 
@@ -251,8 +251,8 @@ invalidPredictions {
 `,
 		evidence.SchemaVersion,
 		evidence.ReportID.String(),
-		evidence.LocalizationDistance.GoldHop.Candidate,
-		evidence.Usage.TotalTokens,
+		evidence.LocalizationDistance.GoldHop.Challenger,
+		evidence.ChallengerUsage.TotalTokens,
 		evidence.Regressions.SevereCount,
 		evidence.InvalidPredictions.Known,
 		evidence.InvalidPredictions.Count,

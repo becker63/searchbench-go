@@ -6,21 +6,21 @@ local tokenBudget = 20000.0
 
 objectiveId = "localization-v1"
 
-local currentLocalizationQuality =
-  1.0 - (if (current.localizationDistance.goldHop.candidate < maxHop) current.localizationDistance.goldHop.candidate else maxHop) / maxHop
+local challengerQuality =
+  1.0 - (if (current.localizationDistance.goldHop.challenger < maxHop) current.localizationDistance.goldHop.challenger else maxHop) / maxHop
 
-local parentLocalizationQuality =
+local parentChallengerQuality =
   if (parent != null)
-    1.0 - (if (parent.localizationDistance.goldHop.candidate < maxHop) parent.localizationDistance.goldHop.candidate else maxHop) / maxHop
+    1.0 - (if (parent.localizationDistance.goldHop.challenger < maxHop) parent.localizationDistance.goldHop.challenger else maxHop) / maxHop
   else
-    currentLocalizationQuality
+    challengerQuality
 
-local improvementVsParent = currentLocalizationQuality - parentLocalizationQuality
+local improvementVsParent = challengerQuality - parentChallengerQuality
 
 local tokenEfficiency =
-  1.0 - (if (current.usage.totalTokens < tokenBudget) current.usage.totalTokens else tokenBudget) / tokenBudget
+  1.0 - (if (current.challengerUsage.totalTokens < tokenBudget) current.challengerUsage.totalTokens else tokenBudget) / tokenBudget
 
-local base = (currentLocalizationQuality * 0.8) + (tokenEfficiency * 0.2)
+local base = (challengerQuality * 0.8) + (tokenEfficiency * 0.2)
 
 local regressionPenalty =
   if (current.regressions.severeCount > 0) 0.0 else 1.0
@@ -31,8 +31,8 @@ local invalidPredictionPenalty =
 local finalScore = base * regressionPenalty * invalidPredictionPenalty
 
 values = new {
-  helpers.intermediate("currentLocalizationQuality", currentLocalizationQuality)
-  helpers.intermediate("parentLocalizationQuality", parentLocalizationQuality)
+  helpers.intermediate("challengerQuality", challengerQuality)
+  helpers.intermediate("parentChallengerQuality", parentChallengerQuality)
   helpers.intermediate("improvementVsParent", improvementVsParent)
   helpers.intermediate("tokenEfficiency", tokenEfficiency)
   helpers.intermediate("base", base)

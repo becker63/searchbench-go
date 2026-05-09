@@ -10,7 +10,7 @@ import (
 
 const (
 	schemaVersion         = "searchbench.bundle.v1"
-	defaultRenderedReport = "report.txt"
+	defaultRenderedReport = "round-report.txt"
 	completeMarkerName    = "COMPLETE"
 )
 
@@ -21,25 +21,35 @@ type RenderedReport struct {
 	Content   string
 }
 
-// BundleRequest is the caller-supplied bundle write contract.
-type BundleRequest struct {
+// RoundBundleInput is the caller-supplied round bundle write contract.
+type RoundBundleInput struct {
 	RootPath        domain.HostPath
 	BundleID        string
 	ResolvedInput   any
-	CandidateReport report.CandidateReport
-	ScoreEvidence   score.ScoreEvidenceDocument
+	RoundReport     report.RoundReport
+	RoundEvidence   score.RoundEvidenceDocument
 	ObjectiveResult *score.ObjectiveResult
 	RenderedReport  *RenderedReport
 	CreatedAt       time.Time
 }
 
-// BundleRef identifies one completed immutable bundle on local disk.
-type BundleRef struct {
+// RoundBundleRef identifies one completed immutable round bundle on local disk.
+type RoundBundleRef struct {
 	BundleID  string
 	Path      domain.HostPath
 	Files     []BundleFile
 	CreatedAt time.Time
 }
+
+// BundleRequest is a transitional alias for RoundBundleInput.
+//
+// TODO(issue-32): remove after callers use RoundBundleInput directly.
+type BundleRequest = RoundBundleInput
+
+// BundleRef is a transitional alias for RoundBundleRef.
+//
+// TODO(issue-32): remove after callers use RoundBundleRef directly.
+type BundleRef = RoundBundleRef
 
 // BundleFile describes one serialized bundle artifact.
 type BundleFile struct {

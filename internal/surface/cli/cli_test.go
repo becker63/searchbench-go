@@ -25,9 +25,9 @@ func TestDemoReportCommandRuns(t *testing.T) {
 
 	got := out.String()
 	for _, want := range []string{
-		"Searchbench Candidate Report",
+		"SearchBench Round Report",
 		"Decision",
-		"PROMOTE",
+		"PROMOTE_CHALLENGER",
 		"Metrics",
 	} {
 		if !strings.Contains(got, want) {
@@ -56,7 +56,7 @@ func TestDemoReportCommandJSONOutput(t *testing.T) {
 		t.Fatal("json output leaked policy source")
 	}
 
-	var got report.CandidateReport
+	var got report.RoundReport
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
@@ -105,7 +105,7 @@ func TestRunCommandExecutesManifest(t *testing.T) {
 	var out bytes.Buffer
 	err := RunWithWriters(
 		context.Background(),
-		[]string{"--quiet", "run", "--manifest", manifestPath, "--bundle-root", temp, "--bundle-id", "cli-localrun"},
+		[]string{"--quiet", "round", "run", "--manifest", manifestPath, "--bundle-root", temp, "--bundle-id", "cli-localrun"},
 		&out,
 		io.Discard,
 	)
@@ -124,8 +124,8 @@ func TestRunCommandExecutesManifest(t *testing.T) {
 			t.Fatalf("output missing %q\n%s", want, got)
 		}
 	}
-	for _, name := range []string{"resolved.json", "report.json", "score.pkl", "objective.json", "metadata.json"} {
-		if _, err := os.Stat(filepath.Join(temp, "runs", "cli-localrun", name)); err != nil {
+	for _, name := range []string{"resolved-round.json", "round-report.json", "evidence.pkl", "decision.json", "objective.json", "metadata.json"} {
+		if _, err := os.Stat(filepath.Join(temp, "games", "code-localization", "rounds", "cli-localrun", name)); err != nil {
 			t.Fatalf("os.Stat(%q) error = %v", name, err)
 		}
 	}

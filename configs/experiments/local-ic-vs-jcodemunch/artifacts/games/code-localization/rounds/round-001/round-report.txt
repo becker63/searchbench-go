@@ -1,0 +1,30 @@
+SearchBench Round Report  report-round-001
+
+Decision                                                            
+╭──────────────────────────────────────────────────────────────────╮
+│ PROMOTE_CHALLENGER                                               │
+│ challenger improves the composite score in local fake comparison │
+╰──────────────────────────────────────────────────────────────────╯
+
+Systems                                                                                        
+Incumbent  jcodemunch         fake/fake-evaluator  jcodemunch  5d0fe88c46c3  default:dev       
+Challenger iterative-context  fake/fake-evaluator  iterative-context  eba3813ecd13  default:dev
+Policy      python:score  0043e149e3b7                                                         
+
+Execution Summary                 
+Incumbent   1 succeeded   0 failed
+Challenger  1 succeeded   0 failed
+
+Metrics                                                           
+Metric              Incumbent   Challenger  Delta       Result    
+gold_hop            6.00        2.00        -4.00       improved  
+issue_hop           7.00        3.00        -4.00       improved  
+token_efficiency    0.35        0.85        +0.50       improved  
+cost                0.60        0.15        -0.45       improved  
+composite           0.30        0.90        +0.60       improved  
+
+Regressions
+none       
+
+Failures
+none    

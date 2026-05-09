@@ -17,12 +17,12 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func TestWriteBundleSerializesCandidateReport(t *testing.T) {
+func TestRoundWritesDurableBundle(t *testing.T) {
 	t.Parallel()
 
 	request := sampleBundleRequest(t)
@@ -34,30 +34,31 @@ func TestWriteBundleSerializesCandidateReport(t *testing.T) {
 	if got, want := ref.BundleID, request.BundleID; got != want {
 		t.Fatalf("BundleID = %q, want %q", got, want)
 	}
-	assertFileExists(t, filepath.Join(string(ref.Path), "resolved.json"))
-	assertFileExists(t, filepath.Join(string(ref.Path), "report.json"))
-	assertFileExists(t, filepath.Join(string(ref.Path), "score.pkl"))
+	assertFileExists(t, filepath.Join(string(ref.Path), "resolved-round.json"))
+	assertFileExists(t, filepath.Join(string(ref.Path), "round-report.json"))
+	assertFileExists(t, filepath.Join(string(ref.Path), "evidence.pkl"))
+	assertFileExists(t, filepath.Join(string(ref.Path), "decision.json"))
 	assertFileExists(t, filepath.Join(string(ref.Path), "metadata.json"))
-	assertFileExists(t, filepath.Join(string(ref.Path), "report.md"))
+	assertFileExists(t, filepath.Join(string(ref.Path), "round-report.md"))
 	assertFileExists(t, filepath.Join(string(ref.Path), completeMarkerName))
 }
 
-func TestWriteBundleSerializesProvidedScoreEvidence(t *testing.T) {
+func TestWriteBundleSerializesProvidedRoundEvidence(t *testing.T) {
 	t.Parallel()
 
 	request := sampleBundleRequest(t)
-	request.ScoreEvidence.Usage.TotalTokens = 999
+	request.RoundEvidence.ChallengerUsage.TotalTokens = 999
 	ref, err := WriteBundle(context.Background(), request)
 	if err != nil {
 		t.Fatalf("WriteBundle() error = %v", err)
 	}
 
-	scorePkl := string(mustReadFile(t, filepath.Join(string(ref.Path), "score.pkl")))
-	if !strings.Contains(scorePkl, "totalTokens = 999") {
-		t.Fatalf("score.pkl = %q, want provided usage totalTokens value", scorePkl)
+	evidencePkl := string(mustReadFile(t, filepath.Join(string(ref.Path), "evidence.pkl")))
+	if !strings.Contains(evidencePkl, "totalTokens = 999") {
+		t.Fatalf("evidence.pkl = %q, want provided usage totalTokens value", evidencePkl)
 	}
-	if !strings.Contains(scorePkl, "localizationDistance {") {
-		t.Fatalf("score.pkl = %q, want Pkl-native camelCase evidence fields", scorePkl)
+	if !strings.Contains(evidencePkl, "localizationDistance {") {
+		t.Fatalf("evidence.pkl = %q, want Pkl-native camelCase evidence fields", evidencePkl)
 	}
 }
 
@@ -163,7 +164,7 @@ func TestWriteBundleDeterministicSerialization(t *testing.T) {
 		t.Fatalf("WriteBundle(requestTwo) error = %v", err)
 	}
 
-	files := []string{"resolved.json", "report.json", "report.md", "score.pkl", "metadata.json", completeMarkerName}
+	files := []string{"resolved-round.json", "round-report.json", "round-report.md", "evidence.pkl", "decision.json", "metadata.json", completeMarkerName}
 	for _, name := range files {
 		left := mustReadFile(t, filepath.Join(string(refOne.Path), name))
 		right := mustReadFile(t, filepath.Join(string(refTwo.Path), name))
@@ -177,7 +178,7 @@ func TestWriteBundleFailsWhenCompletedBundleExists(t *testing.T) {
 	t.Parallel()
 
 	request := sampleBundleRequest(t)
-	finalDir := filepath.Join(string(request.RootPath), "runs", request.BundleID)
+	finalDir := filepath.Join(string(request.RootPath), "games", "code-localization", "rounds", request.BundleID)
 	if err := os.MkdirAll(finalDir, 0o755); err != nil {
 		t.Fatalf("os.MkdirAll() error = %v", err)
 	}
@@ -198,11 +199,11 @@ func TestWriteBundleFailsWhenCompletedBundleExists(t *testing.T) {
 	}
 }
 
-func TestWriteBundleRejectsMissingScoreEvidence(t *testing.T) {
+func TestWriteBundleRejectsMissingRoundEvidence(t *testing.T) {
 	t.Parallel()
 
 	request := sampleBundleRequest(t)
-	request.ScoreEvidence = score.ScoreEvidenceDocument{}
+	request.RoundEvidence = score.RoundEvidenceDocument{}
 
 	_, err := WriteBundle(context.Background(), request)
 	if err == nil {
@@ -222,7 +223,7 @@ func TestSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
 
 	request := sampleBundleRequest(t)
 	w := newWriter()
-	w.marshalScorePKL = func(score.ScoreEvidenceDocument) ([]byte, error) {
+	w.marshalScorePKL = func(score.RoundEvidenceDocument) ([]byte, error) {
 		return nil, errors.New("fixture score serialization failed")
 	}
 
@@ -230,7 +231,7 @@ func TestSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	finalDir := filepath.Join(string(request.RootPath), "runs", request.BundleID)
+	finalDir := filepath.Join(string(request.RootPath), "games", "code-localization", "rounds", request.BundleID)
 	if _, statErr := os.Stat(filepath.Join(finalDir, completeMarkerName)); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("COMPLETE stat error = %v, want not-exist", statErr)
 	}
@@ -253,7 +254,7 @@ func TestInvalidObjectiveResultFailsBeforeFinalization(t *testing.T) {
 	if got, want := bundleErr.Kind, FailureKindValidationFailed; got != want {
 		t.Fatalf("Kind = %q, want %q", got, want)
 	}
-	finalDir := filepath.Join(string(request.RootPath), "runs", request.BundleID)
+	finalDir := filepath.Join(string(request.RootPath), "games", "code-localization", "rounds", request.BundleID)
 	if _, statErr := os.Stat(filepath.Join(finalDir, completeMarkerName)); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("COMPLETE stat error = %v, want not-exist", statErr)
 	}
@@ -275,7 +276,7 @@ func TestObjectiveSerializationFailureDoesNotCreateCompletedBundle(t *testing.T)
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	finalDir := filepath.Join(string(request.RootPath), "runs", request.BundleID)
+	finalDir := filepath.Join(string(request.RootPath), "games", "code-localization", "rounds", request.BundleID)
 	if _, statErr := os.Stat(filepath.Join(finalDir, completeMarkerName)); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("COMPLETE stat error = %v, want not-exist", statErr)
 	}
@@ -296,7 +297,7 @@ func TestMetadataListsEveryGeneratedArtifact(t *testing.T) {
 	for _, file := range metadata.Files {
 		gotPaths = append(gotPaths, file.Path)
 	}
-	wantPaths := []string{"resolved.json", "report.json", "report.md", "score.pkl", "metadata.json", completeMarkerName}
+	wantPaths := []string{"resolved-round.json", "round-report.json", "round-report.md", "evidence.pkl", "decision.json", "metadata.json", completeMarkerName}
 	slices.Sort(gotPaths)
 	slices.Sort(wantPaths)
 	if !slices.Equal(gotPaths, wantPaths) {
@@ -338,7 +339,7 @@ func TestReportSafeOutputsDoNotLeakPolicySource(t *testing.T) {
 	}
 
 	rawSource := "def score(task):\n    return 'candidate'\n"
-	for _, name := range []string{"report.json", "score.pkl", "metadata.json", "report.md", "objective.json"} {
+	for _, name := range []string{"round-report.json", "evidence.pkl", "metadata.json", "round-report.md", "objective.json", "decision.json"} {
 		path := filepath.Join(string(ref.Path), name)
 		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 			continue
@@ -348,8 +349,8 @@ func TestReportSafeOutputsDoNotLeakPolicySource(t *testing.T) {
 			t.Fatalf("%s leaked raw policy source", name)
 		}
 	}
-	if strings.Contains(string(mustReadFile(t, filepath.Join(string(ref.Path), "report.json"))), `"source"`) {
-		t.Fatal(`report.json leaked policy source field`)
+	if strings.Contains(string(mustReadFile(t, filepath.Join(string(ref.Path), "round-report.json"))), `"source"`) {
+		t.Fatal(`round-report.json leaked policy source field`)
 	}
 }
 
@@ -472,7 +473,7 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 		[]run.RunFailure{},
 	)
 
-	candidateReport := report.NewCandidateReport(
+	roundReport := report.NewRoundReport(
 		domain.ReportID("report-immutable-bundle"),
 		spec,
 		runs,
@@ -500,28 +501,30 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 			Reason:   "candidate improves core metrics but has a minor cost regression",
 		},
 	)
-	candidateReport.CreatedAt = time.Date(2026, 4, 26, 15, 4, 5, 0, time.UTC)
+	roundReport.CreatedAt = time.Date(2026, 4, 26, 15, 4, 5, 0, time.UTC)
 
-	scoreEvidence, err := report.ProjectScoreEvidence(candidateReport)
+	roundEvidence, err := report.BuildRoundEvidence(roundReport)
 	if err != nil {
-		t.Fatalf("ProjectScoreEvidence() error = %v", err)
+		t.Fatalf("BuildRoundEvidence() error = %v", err)
 	}
+	roundEvidence.GameID = "code-localization"
+	roundEvidence.RoundID = "bundle-2026-04-26-fixed"
 
 	return BundleRequest{
 		RootPath: domain.HostPath(filepath.Join(t.TempDir(), "artifacts")),
 		BundleID: "bundle-2026-04-26-fixed",
 		ResolvedInput: map[string]any{
-			"manifest_path":   "configs/experiments/example/experiment.pkl",
-			"experiment_name": "bundle-writer-test",
-			"mode":            "evaluation",
-			"systems":         domain.NewPair(baseline.Ref(), candidate.Ref()),
-			"tasks":           tasks,
+			"manifest_path": "configs/experiments/example/experiment.pkl",
+			"round_name":    "bundle-writer-test",
+			"mode":          "evaluation",
+			"policies":      domain.NewPair(baseline.Ref(), candidate.Ref()),
+			"matches":       tasks,
 		},
-		CandidateReport: candidateReport,
-		ScoreEvidence:   scoreEvidence,
+		RoundReport:   roundReport,
+		RoundEvidence: roundEvidence,
 		RenderedReport: &RenderedReport{
-			FileName: "report.md",
-			Content:  "# Candidate Report\n\nPROMOTE? review first.\n",
+			FileName: "round-report.md",
+			Content:  "# Round Report\n\nReview challenger evidence before advancing.\n",
 		},
 		CreatedAt: time.Date(2026, 4, 26, 16, 0, 0, 0, time.UTC),
 	}

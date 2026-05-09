@@ -19,19 +19,19 @@ type materializedEvidence struct {
 	cleanup          func()
 }
 
-func materializeScoreEvidence(plan Plan, current score.ScoreEvidenceDocument) (materializedEvidence, error) {
-	data, err := bundlefs.MarshalScoreEvidencePKL(current)
+func materializeScoreEvidence(plan Plan, current score.RoundEvidenceDocument) (materializedEvidence, error) {
+	data, err := bundlefs.MarshalRoundEvidencePKL(current)
 	if err != nil {
 		return materializedEvidence{}, err
 	}
 
-	dir, err := os.MkdirTemp("", "searchbench-localrun-score-*")
+	dir, err := os.MkdirTemp("", "searchbench-round-evidence-*")
 	if err != nil {
 		return materializedEvidence{}, err
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
 
-	currentScorePath := filepath.Join(dir, "score.pkl")
+	currentScorePath := filepath.Join(dir, "evidence.pkl")
 	if err := os.WriteFile(currentScorePath, data, 0o644); err != nil {
 		cleanup()
 		return materializedEvidence{}, err

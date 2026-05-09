@@ -1,0 +1,54 @@
+{
+  "schema_version": "searchbench.bundle.v1",
+  "bundle_id": "round-001",
+  "created_at": "2026-05-09T20:21:40.43525142Z",
+  "files": [
+    {
+      "kind": "resolved_round",
+      "path": "resolved-round.json",
+      "media_type": "application/json",
+      "sha256": "cae4d007afe07c5dc7d44cddabffea0cf7829c5ea76cb9a8ee8d344c1c95fb2b"
+    },
+    {
+      "kind": "round_report",
+      "path": "round-report.json",
+      "media_type": "application/json",
+      "sha256": "919a7db0cfc31fb3954def2f199fe45d0af680d4b1ed5a6e173f8f81af65e5e6"
+    },
+    {
+      "kind": "rendered_report",
+      "path": "round-report.txt",
+      "media_type": "text/plain",
+      "sha256": "a8cc8e8cef374e4831f2376822b5e71ca40ea9bc77169a1f8d548fe2a9694f3d"
+    },
+    {
+      "kind": "round_evidence",
+      "path": "evidence.pkl",
+      "media_type": "text/plain",
+      "sha256": "115eb87e7e8875336d5bd9937c0682378ebbc6c0724c1156a8bbea6f12f6b843"
+    },
+    {
+      "kind": "decision",
+      "path": "decision.json",
+      "media_type": "application/json",
+      "sha256": "14446b3dce9ec0b30e48596fc332f00bd3a87d9c2519963489ee824816510f72"
+    },
+    {
+      "kind": "objective",
+      "path": "objective.json",
+      "media_type": "application/json",
+      "sha256": "c5f24f05a20e421e52759619a76ca39c33a74e958a804cdfd3157c06587f29f7"
+    },
+    {
+      "kind": "metadata",
+      "path": "metadata.json",
+      "media_type": "application/json"
+    },
+    {
+      "kind": "complete",
+      "path": "COMPLETE",
+      "media_type": "text/plain",
+      "sha256": "37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1"
+    }
+  ]
+}

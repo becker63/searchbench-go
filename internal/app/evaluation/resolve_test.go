@@ -24,9 +24,9 @@ func TestResolveExampleManifest(t *testing.T) {
 	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
 	out, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath:       manifestPath,
-		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
-		BundleID:           "experiment-resolve",
-		ReportID:           domain.ReportID("report-experiment-resolve"),
+		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts"),
+		BundleID:           "round-resolve",
+		ReportID:           domain.ReportID("report-round-resolve"),
 		Now: func() time.Time {
 			return time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 		},
@@ -35,17 +35,17 @@ func TestResolveExampleManifest(t *testing.T) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	if got, want := out.ExperimentName, "local-ic-vs-jcodemunch-round-001"; got != want {
-		t.Fatalf("ExperimentName = %q, want %q", got, want)
+	if got, want := out.RoundName, "local-ic-vs-jcodemunch-round-001"; got != want {
+		t.Fatalf("RoundName = %q, want %q", got, want)
 	}
 	if got, want := out.Mode, "evaluation"; got != want {
 		t.Fatalf("Mode = %q, want %q", got, want)
 	}
 	if got, want := out.Systems.Incumbent.ID, domain.SystemID("jcodemunch"); got != want {
-		t.Fatalf("Baseline.ID = %q, want %q", got, want)
+		t.Fatalf("Incumbent.ID = %q, want %q", got, want)
 	}
 	if got, want := out.Systems.Challenger.ID, domain.SystemID("iterative-context"); got != want {
-		t.Fatalf("Candidate.ID = %q, want %q", got, want)
+		t.Fatalf("Challenger.ID = %q, want %q", got, want)
 	}
 	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("ObjectivePath = %q, want %q", got, want)
@@ -59,7 +59,7 @@ func TestResolveExampleManifest(t *testing.T) {
 	if got, want := out.Output.ReportFormats, []string{"json", "text"}; !reflectStringsEqual(got, want) {
 		t.Fatalf("ReportFormats = %v, want %v", got, want)
 	}
-	if got, want := out.ReportID, domain.ReportID("report-experiment-resolve"); got != want {
+	if got, want := out.ReportID, domain.ReportID("report-round-resolve"); got != want {
 		t.Fatalf("ReportID = %q, want %q", got, want)
 	}
 }
@@ -86,7 +86,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 	requirePkl(t)
 
 	parentScore := filepath.Join(t.TempDir(), "parent-score.pkl")
-	if err := os.WriteFile(parentScore, []byte("schemaVersion = \"searchbench.score_evidence.v1\"\nreportId = \"parent\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(parentScore, []byte("schemaVersion = \"searchbench.round_evidence.v1\"\nreportId = \"parent\"\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(parentScore) error = %v", err)
 	}
 
@@ -97,8 +97,8 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 		ParentRef: &score.ObjectiveEvidenceRef{
 			Name:       "parent",
 			BundlePath: "fixtures/parent-run",
-			ScorePath:  "fixtures/parent-run/score.pkl",
-			ReportPath: "fixtures/parent-run/report.json",
+			ScorePath:  "fixtures/parent-run/evidence.pkl",
+			ReportPath: "fixtures/parent-run/round-report.json",
 		},
 		ParentScorePath: parentScore,
 	})
@@ -106,7 +106,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	if got, want := out.Output.BundleCollectionPath, domain.HostPath(filepath.Join(string(out.Output.BundleWriterRoot), "runs")); got != want {
+	if got, want := out.Output.BundleCollectionPath, domain.HostPath(filepath.Join(string(out.Output.BundleWriterRoot), "games", "code-localization", "rounds")); got != want {
 		t.Fatalf("BundleCollectionPath = %q, want %q", got, want)
 	}
 	if got, want := out.Output.ExpectedBundlePath, domain.HostPath(filepath.Join(string(out.Output.BundleCollectionPath), "with-parent")); got != want {
@@ -115,7 +115,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 	if out.Scoring.ParentEvidence == nil {
 		t.Fatal("ParentEvidence is nil")
 	}
-	if got, want := out.Scoring.ParentEvidence.ScorePath, "fixtures/parent-run/score.pkl"; got != want {
+	if got, want := out.Scoring.ParentEvidence.ScorePath, "fixtures/parent-run/evidence.pkl"; got != want {
 		t.Fatalf("ParentEvidence.ScorePath = %q, want %q", got, want)
 	}
 	if got, want := out.Scoring.ParentScorePath, parentScore; got != want {

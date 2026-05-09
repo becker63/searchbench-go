@@ -6,21 +6,21 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func TestRenderCandidateReportIncludesHighLevelSections(t *testing.T) {
+func TestRenderRoundReportIncludesHighLevelSections(t *testing.T) {
 	t.Parallel()
 
-	out := RenderCandidateReport(sampleCandidateReport(t), DefaultOptions())
+	out := RenderRoundReport(sampleCandidateReport(t), DefaultOptions())
 
 	for _, want := range []string{
-		"Searchbench Candidate Report",
+		"SearchBench Round Report",
 		"Decision",
 		"Systems",
-		"Run Summary",
+		"Execution Summary",
 		"Metrics",
 		"Regressions",
 		"Failures",
@@ -31,13 +31,13 @@ func TestRenderCandidateReportIncludesHighLevelSections(t *testing.T) {
 	}
 }
 
-func TestRenderCandidateReportDoesNotLeakPolicySource(t *testing.T) {
+func TestRenderRoundReportDoesNotLeakPolicySource(t *testing.T) {
 	t.Parallel()
 
 	policySource := "def score(task):\n    return 'candidate'\n"
 	report := sampleCandidateReportWithPolicySource(t, policySource)
 
-	out := RenderCandidateReport(report, DefaultOptions())
+	out := RenderRoundReport(report, DefaultOptions())
 	if strings.Contains(out, policySource) {
 		t.Fatalf("output leaked policy source\n%s", out)
 	}
@@ -46,7 +46,7 @@ func TestRenderCandidateReportDoesNotLeakPolicySource(t *testing.T) {
 	}
 }
 
-func TestRenderCandidateReportShowsFailures(t *testing.T) {
+func TestRenderRoundReportShowsFailures(t *testing.T) {
 	t.Parallel()
 
 	report := sampleCandidateReport(t)
@@ -60,8 +60,8 @@ func TestRenderCandidateReportShowsFailures(t *testing.T) {
 		},
 	}
 
-	out := RenderCandidateReport(report, DefaultOptions())
-	for _, want := range []string{"Failures", "candidate", "execute", "candidate execute failed"} {
+	out := RenderRoundReport(report, DefaultOptions())
+	for _, want := range []string{"Failures", "challenger", "execute", "candidate execute failed"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q\n%s", want, out)
 		}

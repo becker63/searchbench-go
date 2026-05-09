@@ -4,19 +4,19 @@
   "evidence_refs": [
     {
       "name": "current",
-      "bundle_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001",
-      "score_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/score.pkl",
-      "report_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/report.json"
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
+      "score_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
     }
   ],
   "values": [
     {
-      "name": "currentLocalizationQuality",
+      "name": "challengerQuality",
       "value": 0.8333333333333334,
       "kind": ""
     },
     {
-      "name": "parentLocalizationQuality",
+      "name": "parentChallengerQuality",
       "value": 0.8333333333333334,
       "kind": ""
     },
@@ -27,12 +27,12 @@
     },
     {
       "name": "tokenEfficiency",
-      "value": 0.9974,
+      "value": 0.99075,
       "kind": ""
     },
     {
       "name": "base",
-      "value": 0.8661466666666667,
+      "value": 0.8648166666666668,
       "kind": ""
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "name": "final",
-      "value": 0.8661466666666667,
+      "value": 0.8648166666666668,
       "kind": ""
     }
   ],

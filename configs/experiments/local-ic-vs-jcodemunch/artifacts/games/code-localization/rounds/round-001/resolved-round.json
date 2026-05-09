@@ -1,7 +1,14 @@
 {
   "manifest_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/experiment.pkl",
-  "experiment_name": "local-ic-vs-jcodemunch-round-001",
+  "round_name": "local-ic-vs-jcodemunch-round-001",
   "mode": "evaluation",
+  "game": {
+    "id": "code-localization",
+    "kind": "code_localization"
+  },
+  "round": {
+    "id": "round-001"
+  },
   "dataset": {
     "kind": "lca",
     "name": "JetBrains-Research/lca-bug-localization",
@@ -9,8 +16,8 @@
     "split": "dev",
     "max_items": 5
   },
-  "systems": {
-    "baseline": {
+  "policies": {
+    "incumbent": {
       "id": "jcodemunch",
       "name": "jCodeMunch",
       "backend": "jcodemunch",
@@ -29,7 +36,7 @@
       },
       "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
     },
-    "candidate": {
+    "challenger": {
       "id": "iterative-context",
       "name": "Iterative Context",
       "backend": "iterative-context",
@@ -42,7 +49,7 @@
         "version": "dev"
       },
       "policy": {
-        "id": "candidate-policy-round-001",
+        "id": "challenger-policy-round-001",
         "language": "python",
         "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
         "entrypoint": "score"
@@ -52,12 +59,12 @@
         "max_tool_calls": 24,
         "max_output_tokens": 2000
       },
-      "fingerprint": "776c66db10742b615184c87872991d1225a3c6bac40c61ab2aa90d442c8ad29f"
+      "fingerprint": "eba3813ecd13a659b216f366c49ce262a39f5dc2b5f431d9bcef78e8e73dcbd8"
     }
   },
-  "tasks": [
+  "matches": [
     {
-      "id": "local-fake-task-1",
+      "id": "local-fake-match-1",
       "benchmark": "jetbrains-lca",
       "repo": {
         "name": "searchbench/local-fake",
@@ -65,8 +72,8 @@
         "path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/fake-repo"
       },
       "input": {
-        "title": "Fake py/dev task",
-        "body": "This deterministic local task exists only to prove manifest-driven composition."
+        "title": "Fake py/dev match",
+        "body": "This deterministic local match exists only to prove manifest-driven composition."
       },
       "oracle": {
         "gold_files": [
@@ -77,7 +84,8 @@
   ],
   "parallelism": {
     "mode": "sequential",
-    "max_workers": 1
+    "max_workers": 1,
+    "fail_fast": false
   },
   "evaluator": {
     "model": {
@@ -99,17 +107,15 @@
   },
   "scoring": {
     "objective_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",
-    "evidence": {
-      "current": {
-        "name": "current",
-        "bundle_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001",
-        "score_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/score.pkl",
-        "report_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/example-round-001/report.json"
-      }
+    "current_evidence": {
+      "name": "current",
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
+      "score_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
     }
   },
   "output": {
-    "bundle_root": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/runs",
+    "bundle_root": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds",
     "bundle_writer_root": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts",
     "report_formats": [
       "json",
@@ -117,7 +123,7 @@
     ],
     "render_human_report": true,
     "resolved_policy_path": {
-      "candidate": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/policies/candidate_policy.py"
+      "challenger": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/policies/challenger_policy.py"
     }
   },
   "report_options": {
@@ -125,5 +131,10 @@
       "json",
       "text"
     ]
-  }
+  },
+  "bundle": {
+    "id": "round-001"
+  },
+  "report_id": "report-round-001",
+  "created_at": "2026-05-09T20:21:40Z"
 }

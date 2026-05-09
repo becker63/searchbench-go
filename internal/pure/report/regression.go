@@ -15,8 +15,8 @@ const (
 
 // Regression records a metric/match-level reason the challenger regressed.
 type Regression struct {
-	MatchID domain.MatchID `json:"match_id"`
-	Metric score.MetricName `json:"metric"`
+	MatchID domain.MatchID   `json:"match_id"`
+	Metric  score.MetricName `json:"metric"`
 
 	Baseline  float64 `json:"baseline"`
 	Candidate float64 `json:"candidate"`

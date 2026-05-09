@@ -90,14 +90,26 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 		reportID = defaultReportID(bundleID)
 	}
 
+	gameID := cfg.Game.Id
+	if strings.TrimSpace(gameID) == "" {
+		gameID = "code-localization"
+	}
+	bundleCollection = domain.HostPath(filepath.Join(string(bundleWriterRoot), "games", gameID, "rounds"))
 	expectedBundlePath := domain.HostPath(filepath.Join(string(bundleCollection), bundleID))
 	reportFormats := stringifyReportFormats(evaluation.Report.Formats)
 	renderHumanReport := containsReportFormat(reportFormats, config.ReportFormatText.String())
 
 	return Plan{
-		ManifestPath:   manifestPath,
-		ExperimentName: cfg.Name,
-		Mode:           cfg.Mode.String(),
+		ManifestPath: manifestPath,
+		RoundName:    cfg.Name,
+		Mode:         cfg.Mode.String(),
+		Game: GameConfig{
+			ID:   cfg.Game.Id,
+			Kind: cfg.Game.Kind,
+		},
+		Round: RoundConfig{
+			ID: bundleID,
+		},
 		Dataset: DatasetConfig{
 			Kind:     cfg.Dataset.Kind,
 			Name:     cfg.Dataset.Name,
@@ -244,19 +256,15 @@ func fakeTasks(manifestDir string, cfg config.RoundSpec) domain.NonEmpty[domain.
 
 func resolveBundlePaths(manifestDir string, override string) (domain.HostPath, domain.HostPath, error) {
 	if strings.TrimSpace(override) != "" {
-		collectionPath, err := resolveOverridePath(override)
+		writerRoot, err := resolveOverridePath(override)
 		if err != nil {
 			return "", "", err
 		}
-		if filepath.Base(collectionPath) == "runs" {
-			return domain.HostPath(collectionPath), domain.HostPath(filepath.Dir(collectionPath)), nil
-		}
-		return domain.HostPath(filepath.Join(collectionPath, "runs")), domain.HostPath(collectionPath), nil
+		return domain.HostPath(writerRoot), domain.HostPath(writerRoot), nil
 	}
 
 	writerRoot := filepath.Join(manifestDir, "artifacts")
-	collectionPath := filepath.Join(writerRoot, "runs")
-	return domain.HostPath(collectionPath), domain.HostPath(writerRoot), nil
+	return domain.HostPath(writerRoot), domain.HostPath(writerRoot), nil
 }
 
 func resolveExistingManifestPath(baseDir string, path string) (string, error) {

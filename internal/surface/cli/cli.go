@@ -12,8 +12,10 @@ import (
 
 // CLI is the root Searchbench command tree.
 type CLI struct {
-	DemoReport DemoReportCmd `cmd:"demo-report" help:"Run a complete fake comparison and render the candidate report."`
-	Run        RunCmd        `cmd:"run" help:"Run one Pkl experiment manifest through the local fake execution path."`
+	Round RoundCmd `cmd:"round" help:"Run and inspect SearchBench rounds."`
+
+	DemoReport DemoReportCmd `cmd:"demo-report" hidden:"" help:"Render the legacy demo round report."`
+	Run        RunCmd        `cmd:"run" hidden:"" help:"Run one round manifest."`
 
 	LogFormat string `enum:"dev,json,none" default:"dev" help:"Log format."`
 	NoColor   bool   `help:"Disable color in rendered reports."`
@@ -51,7 +53,7 @@ func RunWithWriters(ctx context.Context, args []string, stdout, stderr io.Writer
 	parser, err := kong.New(
 		&cli,
 		kong.Name("searchbench"),
-		kong.Description("Compare agentic code-search systems and render candidate reports."),
+		kong.Description("Run SearchBench games and review round decisions."),
 		kong.Writers(stdout, stderr),
 	)
 	if err != nil {

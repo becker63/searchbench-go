@@ -7,8 +7,8 @@ import (
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 	executoreino "github.com/becker63/searchbench-go/internal/adapters/executor/eino"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -41,10 +41,10 @@ type EvaluatorExecution struct {
 // Result is the completed manifest-driven local evaluation run.
 type Result struct {
 	ManifestPath        string
-	Bundle              bundlefs.BundleRef
+	Bundle              bundlefs.RoundBundleRef
 	ReportID            domain.ReportID
-	CandidateReport     report.CandidateReport
-	ScoreEvidence       score.ScoreEvidenceDocument
+	RoundReport         report.RoundReport
+	RoundEvidence       score.RoundEvidenceDocument
 	ObjectiveResult     *score.ObjectiveResult
 	EvaluatorExecutions []EvaluatorExecution
 }

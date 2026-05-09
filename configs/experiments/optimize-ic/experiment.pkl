@@ -20,7 +20,7 @@ artifacts {
   parentRound001Bundle {
     id = "local-ic-vs-jcodemunch-round-001"
     kind = "completed_round_bundle"
-    path = "../local-ic-vs-jcodemunch/artifacts/runs/example-round-001"
+    path = "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001"
   }
 
   nextChallengerRound002 {

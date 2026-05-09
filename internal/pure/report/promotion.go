@@ -1,19 +1,30 @@
 package report
 
-// Decision is the final release-gate recommendation for a candidate system.
-type Decision string
+// DecisionKind is the final round-gate recommendation.
+type DecisionKind string
 
 const (
-	// DecisionPromote recommends replacing the baseline with the candidate.
-	DecisionPromote Decision = "PROMOTE"
-	// DecisionReview recommends human review before promotion.
-	DecisionReview Decision = "REVIEW"
-	// DecisionReject recommends not promoting the candidate.
-	DecisionReject Decision = "REJECT"
+	// DecisionPromoteChallenger recommends advancing the challenger.
+	DecisionPromoteChallenger DecisionKind = "PROMOTE_CHALLENGER"
+	// DecisionReview recommends human review before advancing.
+	DecisionReview DecisionKind = "REVIEW"
+	// DecisionRejectChallenger recommends rejecting the challenger.
+	DecisionRejectChallenger DecisionKind = "REJECT_CHALLENGER"
+
+	// TODO(issue-32): remove these transitional constant names after callers
+	// finish migrating to challenger-explicit decisions.
+	DecisionPromote = DecisionPromoteChallenger
+	DecisionReject  = DecisionRejectChallenger
 )
 
-// PromotionDecision explains whether a candidate should replace the baseline.
-type PromotionDecision struct {
-	Decision Decision `json:"decision"`
-	Reason   string   `json:"reason"`
+// Decision explains the round decision.
+type Decision struct {
+	Decision DecisionKind `json:"decision"`
+	Reason   string       `json:"reason"`
 }
+
+// PromotionDecision is a transitional alias for code still migrating to
+// round Decision vocabulary.
+//
+// TODO(issue-32): remove after app/report callers use Decision directly.
+type PromotionDecision = Decision

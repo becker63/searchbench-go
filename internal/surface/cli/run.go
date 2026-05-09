@@ -7,15 +7,20 @@ import (
 	"github.com/becker63/searchbench-go/internal/app/evaluation"
 )
 
-// RunCmd executes one manifest-driven local fake experiment run.
+// RoundCmd groups public round commands.
+type RoundCmd struct {
+	Run RunCmd `cmd:"run" help:"Run one Pkl round manifest."`
+}
+
+// RunCmd executes one manifest-driven round.
 type RunCmd struct {
-	Manifest      string `required:"" help:"Path to the experiment manifest." type:"path"`
+	Manifest      string `required:"" help:"Path to the round manifest." type:"path"`
 	BundleRoot    string `help:"Optional bundle root override." type:"path"`
 	BundleID      string `help:"Optional bundle identifier override."`
 	NoHumanReport bool   `help:"Skip writing the optional human-readable report artifact."`
 }
 
-// Run executes the manifest-driven local fake run and prints a short summary.
+// Run executes the manifest-driven round and prints a short summary.
 func (c *RunCmd) Run(ctx context.Context, app *App) error {
 	if app == nil {
 		app = &App{}

@@ -10,26 +10,26 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func TestProjectScoreEvidencePreservesStableFacts(t *testing.T) {
+func TestRoundEvidenceUsesIncumbentChallengerRoles(t *testing.T) {
 	t.Parallel()
 
-	report := sampleCandidateReport(t)
-	got, err := ProjectScoreEvidence(report)
+	report := sampleRoundReport(t)
+	got, err := BuildRoundEvidence(report)
 	if err != nil {
-		t.Fatalf("ProjectScoreEvidence() error = %v", err)
+		t.Fatalf("BuildRoundEvidence() error = %v", err)
 	}
 
 	if got.ReportID != report.ID {
 		t.Fatalf("ReportID = %q, want %q", got.ReportID, report.ID)
 	}
-	if got.RunCounts.Baseline != 2 || got.RunCounts.Candidate != 2 {
-		t.Fatalf("RunCounts = %#v, want 2/2", got.RunCounts)
+	if got.ExecutionCounts.Incumbent != 2 || got.ExecutionCounts.Challenger != 2 {
+		t.Fatalf("ExecutionCounts = %#v, want 2/2", got.ExecutionCounts)
 	}
-	if got.FailureCounts.Baseline != 1 || got.FailureCounts.Candidate != 0 {
+	if got.FailureCounts.Incumbent != 1 || got.FailureCounts.Challenger != 0 {
 		t.Fatalf("FailureCounts = %#v, want 1/0", got.FailureCounts)
 	}
-	if got.PromotionDecision.Decision != string(DecisionReview) {
-		t.Fatalf("PromotionDecision.Decision = %q, want %q", got.PromotionDecision.Decision, DecisionReview)
+	if got.Decision.Decision != string(DecisionReview) {
+		t.Fatalf("Decision.Decision = %q, want %q", got.Decision.Decision, DecisionReview)
 	}
 	if len(got.Metrics) != len(report.Comparisons) {
 		t.Fatalf("len(Metrics) = %d, want %d", len(got.Metrics), len(report.Comparisons))
@@ -38,7 +38,7 @@ func TestProjectScoreEvidencePreservesStableFacts(t *testing.T) {
 	if cost.Direction != score.LowerIsBetter {
 		t.Fatalf("cost.Direction = %q, want %q", cost.Direction, score.LowerIsBetter)
 	}
-	if cost.Baseline != 0.575 || cost.Candidate != 0.15 || math.Abs(cost.Delta-(-0.425)) > 1e-9 {
+	if cost.Incumbent != 0.575 || cost.Challenger != 0.15 || math.Abs(cost.Delta-(-0.425)) > 1e-9 {
 		t.Fatalf("cost evidence = %#v, want stable values", cost)
 	}
 	if !cost.Improved || cost.Regressed {
@@ -47,11 +47,11 @@ func TestProjectScoreEvidencePreservesStableFacts(t *testing.T) {
 	if got.LocalizationDistance.GoldHop == nil || got.LocalizationDistance.IssueHop == nil {
 		t.Fatalf("LocalizationDistance = %#v, want gold_hop and issue_hop", got.LocalizationDistance)
 	}
-	if !got.Usage.Available || got.Usage.TotalTokens == 0 {
-		t.Fatalf("Usage = %#v, want aggregated candidate usage", got.Usage)
+	if !got.ChallengerUsage.Available || got.ChallengerUsage.TotalTokens == 0 {
+		t.Fatalf("ChallengerUsage = %#v, want aggregated challenger usage", got.ChallengerUsage)
 	}
-	if got.BaselineUsage.TotalTokens == 0 {
-		t.Fatalf("BaselineUsage = %#v, want aggregated baseline usage", got.BaselineUsage)
+	if got.IncumbentUsage.TotalTokens == 0 {
+		t.Fatalf("IncumbentUsage = %#v, want aggregated incumbent usage", got.IncumbentUsage)
 	}
 	if got.Regressions.Count != 1 || got.Regressions.MinorCount != 1 || got.Regressions.SevereCount != 0 {
 		t.Fatalf("Regressions = %#v, want summarized minor regression", got.Regressions)
@@ -61,13 +61,13 @@ func TestProjectScoreEvidencePreservesStableFacts(t *testing.T) {
 	}
 }
 
-func TestProjectScoreEvidenceFailsForMissingReportID(t *testing.T) {
+func TestBuildRoundEvidenceFailsForMissingReportID(t *testing.T) {
 	t.Parallel()
 
-	report := sampleCandidateReport(t)
+	report := sampleRoundReport(t)
 	report.ID = ""
 
-	if _, err := ProjectScoreEvidence(report); err == nil {
+	if _, err := BuildRoundEvidence(report); err == nil {
 		t.Fatal("expected error")
 	}
 }
@@ -84,7 +84,7 @@ func findMetricEvidence(t *testing.T, metrics []score.MetricEvidence, name score
 	return score.MetricEvidence{}
 }
 
-func sampleCandidateReport(t *testing.T) CandidateReport {
+func sampleRoundReport(t *testing.T) RoundReport {
 	t.Helper()
 
 	policySource := "def score(task):\n    return 'candidate'\n"
@@ -110,7 +110,7 @@ func sampleCandidateReport(t *testing.T) CandidateReport {
 		[]run.RunFailure{},
 	)
 
-	out := NewCandidateReport(
+	out := NewRoundReport(
 		domain.ReportID("report-evidence"),
 		spec,
 		runs,

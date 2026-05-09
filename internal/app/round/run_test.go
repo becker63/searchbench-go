@@ -1,4 +1,4 @@
-package locale2e
+package round
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
 )
 
-func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
+func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 	t.Parallel()
 
 	requirePkl(t)
@@ -36,9 +36,9 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 
 	var evaluatorModels []*modeltest.ScriptedModel
 	evaluatorFactory := func(spec run.Spec) (model.ToolCallingChatModel, error) {
-		prediction := `{"predicted_files":["src/baseline_guess.go"],"reasoning":"baseline fake evaluator stayed conservative"}`
+		prediction := `{"predicted_files":["src/baseline_guess.go"],"reasoning":"incumbent fake evaluator stayed conservative"}`
 		if spec.System.Backend == domain.BackendIterativeContext {
-			prediction = `{"predicted_files":["src/search_target.go"],"reasoning":"candidate fake evaluator used structural evidence to localize the issue"}`
+			prediction = `{"predicted_files":["src/search_target.go"],"reasoning":"challenger fake evaluator used structural evidence to localize the issue"}`
 		}
 		scripted := modeltest.NewScriptedModel(
 			modeltest.ScriptedResponse{
@@ -64,11 +64,11 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 		},
 	)
 
-	result, err := Run(context.Background(), Request{
+	result, err := Run(context.Background(), Input{
 		EvaluationManifestPath:   evaluationManifest,
 		OptimizationManifestPath: optimizationManifest,
 		BundleRootOverride:       bundleRoot,
-		ParentEvaluationBundleID: "fakee2e-parent",
+		RoundID:                  "round-001",
 		OptimizerBundleID:        "fakee2e-optimizer",
 		Now: func() time.Time {
 			return time.Date(2026, 5, 8, 20, 30, 0, 0, time.UTC)
@@ -81,15 +81,18 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if result.ParentEvaluationResult == nil || result.OptimizerResult == nil {
-		t.Fatalf("result = %#v, want parent evaluation and optimizer results", result)
+	if result.RoundResult == nil || result.OptimizerResult == nil {
+		t.Fatalf("result = %#v, want round evaluation and next challenger results", result)
 	}
 
 	for _, path := range []string{
-		filepath.Join(result.ParentEvaluationBundle, "COMPLETE"),
-		filepath.Join(result.ParentEvaluationBundle, "report.json"),
-		filepath.Join(result.ParentEvaluationBundle, "score.pkl"),
-		filepath.Join(result.ParentEvaluationBundle, "objective.json"),
+		filepath.Join(result.RoundBundle, "COMPLETE"),
+		filepath.Join(result.RoundBundle, "resolved-round.json"),
+		filepath.Join(result.RoundBundle, "round-report.json"),
+		filepath.Join(result.RoundBundle, "round-report.txt"),
+		filepath.Join(result.RoundBundle, "evidence.pkl"),
+		filepath.Join(result.RoundBundle, "decision.json"),
+		filepath.Join(result.RoundBundle, "objective.json"),
 		filepath.Join(result.OptimizerBundle, "COMPLETE"),
 		filepath.Join(result.OptimizerBundle, "challenger_policy.round-002.py"),
 		filepath.Join(result.OptimizerBundle, "optimizer_result.json"),
@@ -99,8 +102,8 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 		}
 	}
 
-	if !strings.HasPrefix(result.ParentEvaluationBundle, filepath.Join(bundleRoot, "parent-evaluation")) {
-		t.Fatalf("ParentEvaluationBundle = %q, want Go-owned bundle root under %q", result.ParentEvaluationBundle, bundleRoot)
+	if !strings.HasPrefix(result.RoundBundle, filepath.Join(bundleRoot, "games", "code-localization", "rounds")) {
+		t.Fatalf("RoundBundle = %q, want game-scoped round bundle root under %q", result.RoundBundle, bundleRoot)
 	}
 	if !strings.HasPrefix(result.OptimizerBundle, filepath.Join(bundleRoot, "optimizer")) {
 		t.Fatalf("OptimizerBundle = %q, want Go-owned bundle root under %q", result.OptimizerBundle, bundleRoot)
@@ -112,7 +115,7 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 		} `json:"parent_round"`
 	}
 	decodeJSONFile(t, filepath.Join(result.OptimizerBundle, "resolved.json"), &optimizerResolved)
-	if got, want := optimizerResolved.ParentRound.BundlePath, result.ParentEvaluationBundle; got != want {
+	if got, want := optimizerResolved.ParentRound.BundlePath, result.RoundBundle; got != want {
 		t.Fatalf("optimizer parent bundle path = %q, want %q", got, want)
 	}
 
@@ -138,10 +141,10 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 		t.Fatal("scripted optimizer model recorded zero calls")
 	}
 
-	if len(result.ParentEvaluationResult.EvaluatorExecutions) != 2 {
-		t.Fatalf("len(EvaluatorExecutions) = %d, want 2", len(result.ParentEvaluationResult.EvaluatorExecutions))
+	if len(result.RoundResult.EvaluatorExecutions) != 2 {
+		t.Fatalf("len(EvaluatorExecutions) = %d, want 2", len(result.RoundResult.EvaluatorExecutions))
 	}
-	for _, execution := range result.ParentEvaluationResult.EvaluatorExecutions {
+	for _, execution := range result.RoundResult.EvaluatorExecutions {
 		if !containsEvaluatorPhase(execution.Result.Phases, eino.PhaseRunEvaluator) {
 			t.Fatalf("execution phases = %#v, want run_evaluator", execution.Result.Phases)
 		}
@@ -158,13 +161,13 @@ func TestFakeE2EComposesEvaluatorAndOptimizerAgents(t *testing.T) {
 	}
 }
 
-func TestFakeE2EParentEvaluationFailurePreventsOptimizer(t *testing.T) {
+func TestRoundResolutionFailurePreventsNextChallenger(t *testing.T) {
 	t.Parallel()
 
 	requirePkl(t)
 
 	optimizerFactoryCalled := false
-	_, err := Run(context.Background(), Request{
+	_, err := Run(context.Background(), Input{
 		EvaluationManifestPath:   filepath.Join(repoRoot(t), "configs", "experiments", "missing", "experiment.pkl"),
 		OptimizationManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
 		OptimizerModelFactory: func() (model.ToolCallingChatModel, error) {

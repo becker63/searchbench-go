@@ -35,7 +35,7 @@ func TestResolveOptimizationManifest(t *testing.T) {
 	if got, want := plan.Target.OutputName, "challenger_policy.round-002.py"; got != want {
 		t.Fatalf("Target.OutputName = %q, want %q", got, want)
 	}
-	if got, want := plan.ParentBundle.BundleID, "example-round-001"; got != want {
+	if got, want := plan.ParentBundle.BundleID, "round-001"; got != want {
 		t.Fatalf("ParentBundle.BundleID = %q, want %q", got, want)
 	}
 	if got, want := filepath.Base(plan.InputPolicy.Path), "challenger_policy.py"; got != want {

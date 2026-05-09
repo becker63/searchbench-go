@@ -21,20 +21,33 @@ type ResolveRequest struct {
 
 // Plan is the canonical app-layer evaluation projection used by execution.
 type Plan struct {
-	ManifestPath   string                           `json:"manifest_path,omitempty"`
-	ExperimentName string                           `json:"experiment_name,omitempty"`
-	Mode           string                           `json:"mode,omitempty"`
-	Dataset        DatasetConfig                    `json:"dataset,omitempty"`
-	Systems        domain.Pair[domain.SystemSpec]   `json:"-"`
-	Matches        domain.NonEmpty[domain.MatchSpec] `json:"matches"`
-	Parallelism    compare.Parallelism              `json:"-"`
-	Evaluator      EvaluatorConfig                  `json:"evaluator,omitempty"`
-	Scoring        ScoringConfig                    `json:"scoring,omitempty"`
-	Output         OutputConfig                     `json:"output,omitempty"`
-	Report         ReportConfig                     `json:"report_options,omitempty"`
-	Bundle         BundleConfig                     `json:"bundle,omitempty"`
-	ReportID       domain.ReportID                  `json:"report_id,omitempty"`
-	CreatedAt      time.Time                        `json:"created_at"`
+	ManifestPath string                            `json:"manifest_path,omitempty"`
+	RoundName    string                            `json:"round_name,omitempty"`
+	Mode         string                            `json:"mode,omitempty"`
+	Game         GameConfig                        `json:"game,omitempty"`
+	Round        RoundConfig                       `json:"round,omitempty"`
+	Dataset      DatasetConfig                     `json:"dataset,omitempty"`
+	Systems      domain.Pair[domain.SystemSpec]    `json:"-"`
+	Matches      domain.NonEmpty[domain.MatchSpec] `json:"matches"`
+	Parallelism  compare.Parallelism               `json:"-"`
+	Evaluator    EvaluatorConfig                   `json:"evaluator,omitempty"`
+	Scoring      ScoringConfig                     `json:"scoring,omitempty"`
+	Output       OutputConfig                      `json:"output,omitempty"`
+	Report       ReportConfig                      `json:"report_options,omitempty"`
+	Bundle       BundleConfig                      `json:"bundle,omitempty"`
+	ReportID     domain.ReportID                   `json:"report_id,omitempty"`
+	CreatedAt    time.Time                         `json:"created_at"`
+}
+
+// GameConfig records the resolved game contract identity from the manifest.
+type GameConfig struct {
+	ID   string `json:"id,omitempty"`
+	Kind string `json:"kind,omitempty"`
+}
+
+// RoundConfig records the resolved round identity.
+type RoundConfig struct {
+	ID string `json:"id,omitempty"`
 }
 
 // ComparePlan converts the canonical evaluation model into the executable

@@ -13,7 +13,7 @@ import (
 //
 //	baseline system + candidate system + fixed task slice
 type ComparisonSpec struct {
-	Systems domain.Pair[domain.SystemRef]    `json:"systems"`
+	Systems domain.Pair[domain.SystemRef]     `json:"systems"`
 	Matches domain.NonEmpty[domain.MatchSpec] `json:"matches"`
 }
 

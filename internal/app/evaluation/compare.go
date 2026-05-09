@@ -16,8 +16,8 @@ import (
 	"github.com/becker63/searchbench-go/internal/app/compare"
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -391,23 +391,23 @@ func (fakeScorer) Score(_ context.Context, input score.Input) (score.ScoreSet, e
 
 type fakeDecider struct{}
 
-func (fakeDecider) Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision {
+func (fakeDecider) Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.Decision {
 	if len(regressions) > 0 {
-		return report.PromotionDecision{
+		return report.Decision{
 			Decision: report.DecisionReview,
-			Reason:   "candidate has regressions in local fake comparison",
+			Reason:   "challenger has regressions in local fake comparison",
 		}
 	}
 	for _, comparison := range comparisons {
 		if comparison.Metric == score.MetricComposite && comparison.Candidate > comparison.Baseline {
-			return report.PromotionDecision{
-				Decision: report.DecisionPromote,
-				Reason:   "candidate improves the composite score in local fake comparison",
+			return report.Decision{
+				Decision: report.DecisionPromoteChallenger,
+				Reason:   "challenger improves the composite score in local fake comparison",
 			}
 		}
 	}
-	return report.PromotionDecision{
+	return report.Decision{
 		Decision: report.DecisionReview,
-		Reason:   "candidate did not improve the composite score in local fake comparison",
+		Reason:   "challenger did not improve the composite score in local fake comparison",
 	}
 }

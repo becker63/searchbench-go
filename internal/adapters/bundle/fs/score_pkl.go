@@ -9,23 +9,30 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func marshalScoreEvidencePkl(doc score.ScoreEvidenceDocument) ([]byte, error) {
+func marshalRoundEvidencePkl(doc score.RoundEvidenceDocument) ([]byte, error) {
 	if err := doc.Validate(); err != nil {
 		return nil, err
 	}
 
 	var w pklWriter
 	w.linef("schemaVersion = %s", pklString(doc.SchemaVersion))
+	w.linef("gameId = %s", pklString(doc.GameID))
+	w.linef("roundId = %s", pklString(doc.RoundID))
 	w.linef("reportId = %s", pklString(doc.ReportID.String()))
 	w.blank()
 
-	w.object("systems", func() {
-		writeSystemRef(&w, "baseline", doc.Systems.Incumbent)
-		writeSystemRef(&w, "candidate", doc.Systems.Challenger)
+	w.object("policies", func() {
+		writeSystemRef(&w, "incumbent", doc.Policies.Incumbent)
+		writeSystemRef(&w, "challenger", doc.Policies.Challenger)
 	})
 	w.blank()
 
-	writeRoleCounts(&w, "runCounts", doc.RunCounts)
+	w.object("matchCounts", func() {
+		w.linef("total = %d", doc.MatchCounts.Total)
+	})
+	w.blank()
+
+	writeRoleCounts(&w, "executionCounts", doc.ExecutionCounts)
 	w.blank()
 	writeRoleCounts(&w, "failureCounts", doc.FailureCounts)
 	w.blank()
@@ -36,9 +43,9 @@ func marshalScoreEvidencePkl(doc score.ScoreEvidenceDocument) ([]byte, error) {
 	})
 	w.blank()
 
-	writeUsageEvidence(&w, "usage", doc.Usage)
+	writeUsageEvidence(&w, "challengerUsage", doc.ChallengerUsage)
 	w.blank()
-	writeUsageEvidence(&w, "baselineUsage", doc.BaselineUsage)
+	writeUsageEvidence(&w, "incumbentUsage", doc.IncumbentUsage)
 	w.blank()
 
 	w.object("regressions", func() {
@@ -53,8 +60,8 @@ func marshalScoreEvidencePkl(doc score.ScoreEvidenceDocument) ([]byte, error) {
 			w.listObject(func() {
 				w.linef("matchId = %s", pklString(detail.MatchID.String()))
 				w.linef("metric = %s", pklString(string(detail.Metric)))
-				w.linef("baseline = %s", pklFloat(detail.Baseline))
-				w.linef("candidate = %s", pklFloat(detail.Candidate))
+				w.linef("incumbent = %s", pklFloat(detail.Incumbent))
+				w.linef("challenger = %s", pklFloat(detail.Challenger))
 				w.linef("delta = %s", pklFloat(detail.Delta))
 				w.linef("severity = %s", pklString(detail.Severity))
 				w.linef("reason = %s", pklString(detail.Reason))
@@ -79,18 +86,18 @@ func marshalScoreEvidencePkl(doc score.ScoreEvidenceDocument) ([]byte, error) {
 	})
 	w.blank()
 
-	w.object("promotionDecision", func() {
-		w.linef("decision = %s", pklString(doc.PromotionDecision.Decision))
-		w.linef("reason = %s", pklString(doc.PromotionDecision.Reason))
+	w.object("decision", func() {
+		w.linef("decision = %s", pklString(doc.Decision.Decision))
+		w.linef("reason = %s", pklString(doc.Decision.Reason))
 	})
 
 	return []byte(w.String()), nil
 }
 
-// MarshalScoreEvidencePKL deterministically serializes score evidence into the
-// Pkl-native score artifact format used by local scoring and bundles.
-func MarshalScoreEvidencePKL(doc score.ScoreEvidenceDocument) ([]byte, error) {
-	return marshalScoreEvidencePkl(doc)
+// MarshalRoundEvidencePKL deterministically serializes round evidence into the
+// Pkl-native evidence artifact format used by local scoring and bundles.
+func MarshalRoundEvidencePKL(doc score.RoundEvidenceDocument) ([]byte, error) {
+	return marshalRoundEvidencePkl(doc)
 }
 
 func writeSystemRef(w *pklWriter, name string, ref domain.SystemRef) {
@@ -130,8 +137,8 @@ func writeSystemRef(w *pklWriter, name string, ref domain.SystemRef) {
 
 func writeRoleCounts(w *pklWriter, name string, counts score.RoleCounts) {
 	w.object(name, func() {
-		w.linef("baseline = %d", counts.Baseline)
-		w.linef("candidate = %d", counts.Candidate)
+		w.linef("incumbent = %d", counts.Incumbent)
+		w.linef("challenger = %d", counts.Challenger)
 	})
 }
 
@@ -148,8 +155,8 @@ func writeOptionalMetricEvidence(w *pklWriter, name string, metric *score.Metric
 func writeMetricEvidenceBody(w *pklWriter, metric score.MetricEvidence) {
 	w.linef("metric = %s", pklString(string(metric.Metric)))
 	w.linef("direction = %s", pklString(string(metric.Direction)))
-	w.linef("baseline = %s", pklFloat(metric.Baseline))
-	w.linef("candidate = %s", pklFloat(metric.Candidate))
+	w.linef("incumbent = %s", pklFloat(metric.Incumbent))
+	w.linef("challenger = %s", pklFloat(metric.Challenger))
 	w.linef("delta = %s", pklFloat(metric.Delta))
 	w.linef("improved = %s", pklBool(metric.Improved))
 	w.linef("regressed = %s", pklBool(metric.Regressed))

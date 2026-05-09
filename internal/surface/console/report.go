@@ -5,14 +5,14 @@ import (
 	"strings"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// RenderCandidateReport renders a candidate report for human terminal output.
-func RenderCandidateReport(r report.CandidateReport, opts Options) string {
+// RenderRoundReport renders a round report for human terminal output.
+func RenderRoundReport(r report.RoundReport, opts Options) string {
 	if opts == (Options{}) {
 		opts = DefaultOptions()
 	}
@@ -30,20 +30,27 @@ func RenderCandidateReport(r report.CandidateReport, opts Options) string {
 	return strings.Join(sections, "\n\n")
 }
 
-// RenderCandidateReportDefault renders a candidate report using default options.
-func RenderCandidateReportDefault(r report.CandidateReport) string {
-	return RenderCandidateReport(r, DefaultOptions())
+// RenderRoundReportDefault renders a round report using default options.
+func RenderRoundReportDefault(r report.RoundReport) string {
+	return RenderRoundReport(r, DefaultOptions())
 }
 
-func renderTitle(r report.CandidateReport, styles Styles) string {
-	title := styles.Title.Render("Searchbench Candidate Report")
+// RenderCandidateReport is a transitional wrapper for RenderRoundReport.
+//
+// TODO(issue-32): remove after surfaces call RenderRoundReport directly.
+func RenderCandidateReport(r report.RoundReport, opts Options) string {
+	return RenderRoundReport(r, opts)
+}
+
+func renderTitle(r report.RoundReport, styles Styles) string {
+	title := styles.Title.Render("SearchBench Round Report")
 	if r.ID == "" {
 		return title
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, title, "  ", styles.Muted.Render(r.ID.String()))
 }
 
-func renderDecision(r report.CandidateReport, styles Styles) string {
+func renderDecision(r report.RoundReport, styles Styles) string {
 	bodyStyle := stylesForDecision(r.Decision.Decision, styles)
 	body := bodyStyle.Render(string(r.Decision.Decision))
 	if r.Decision.Reason != "" {
@@ -52,7 +59,7 @@ func renderDecision(r report.CandidateReport, styles Styles) string {
 	return renderSection("Decision", styles, styles.Box.Render(body))
 }
 
-func stylesForDecision(decision report.Decision, styles Styles) lipgloss.Style {
+func stylesForDecision(decision report.DecisionKind, styles Styles) lipgloss.Style {
 	switch decision {
 	case report.DecisionPromote:
 		return styles.Success
@@ -65,10 +72,10 @@ func stylesForDecision(decision report.Decision, styles Styles) lipgloss.Style {
 	}
 }
 
-func renderSystems(r report.CandidateReport, styles Styles) string {
+func renderSystems(r report.RoundReport, styles Styles) string {
 	lines := []string{
-		renderSystemLine("Baseline", r.Spec.Systems.Incumbent, styles),
-		renderSystemLine("Candidate", r.Spec.Systems.Challenger, styles),
+		renderSystemLine("Incumbent", r.Spec.Systems.Incumbent, styles),
+		renderSystemLine("Challenger", r.Spec.Systems.Challenger, styles),
 	}
 	if r.Spec.Systems.Challenger.Policy != nil {
 		policy := r.Spec.Systems.Challenger.Policy
@@ -82,20 +89,20 @@ func renderSystems(r report.CandidateReport, styles Styles) string {
 	return renderSection("Systems", styles, strings.Join(lines, "\n"))
 }
 
-func renderRunSummary(r report.CandidateReport, styles Styles) string {
+func renderRunSummary(r report.RoundReport, styles Styles) string {
 	lines := []string{
-		fmt.Sprintf("Baseline   %d succeeded   %d failed", len(r.Runs.Incumbent), len(r.Failures.Incumbent)),
-		fmt.Sprintf("Candidate  %d succeeded   %d failed", len(r.Runs.Challenger), len(r.Failures.Challenger)),
+		fmt.Sprintf("Incumbent   %d succeeded   %d failed", len(r.Runs.Incumbent), len(r.Failures.Incumbent)),
+		fmt.Sprintf("Challenger  %d succeeded   %d failed", len(r.Runs.Challenger), len(r.Failures.Challenger)),
 	}
-	return renderSection("Run Summary", styles, strings.Join(lines, "\n"))
+	return renderSection("Execution Summary", styles, strings.Join(lines, "\n"))
 }
 
-func renderMetrics(r report.CandidateReport, styles Styles) string {
+func renderMetrics(r report.RoundReport, styles Styles) string {
 	lines := make([]string, 0, len(r.Comparisons)+1)
 	lines = append(lines, renderTableRow(
 		styles.TableHead,
-		columnWidths([]string{"Metric", "Baseline", "Candidate", "Delta", "Result"}),
-		"Metric", "Baseline", "Candidate", "Delta", "Result",
+		columnWidths([]string{"Metric", "Incumbent", "Challenger", "Delta", "Result"}),
+		"Metric", "Incumbent", "Challenger", "Delta", "Result",
 	))
 	for _, comparison := range r.Comparisons {
 		result, style := metricResult(comparison, styles)
@@ -112,7 +119,7 @@ func renderMetrics(r report.CandidateReport, styles Styles) string {
 	return renderSection("Metrics", styles, strings.Join(lines, "\n"))
 }
 
-func renderRegressions(r report.CandidateReport, styles Styles) string {
+func renderRegressions(r report.RoundReport, styles Styles) string {
 	if len(r.Regressions) == 0 {
 		return renderSection("Regressions", styles, styles.Muted.Render("none"))
 	}
@@ -120,8 +127,8 @@ func renderRegressions(r report.CandidateReport, styles Styles) string {
 	lines := make([]string, 0, len(r.Regressions)+1)
 	lines = append(lines, renderTableRow(
 		styles.TableHead,
-		columnWidths([]string{"Task", "Metric", "Baseline", "Candidate", "Delta", "Severity", "Reason"}),
-		"Task", "Metric", "Baseline", "Candidate", "Delta", "Severity", "Reason",
+		columnWidths([]string{"Match", "Metric", "Incumbent", "Challenger", "Delta", "Severity", "Reason"}),
+		"Match", "Metric", "Incumbent", "Challenger", "Delta", "Severity", "Reason",
 	))
 	for _, regression := range r.Regressions {
 		lines = append(lines, renderTableRow(
@@ -139,7 +146,7 @@ func renderRegressions(r report.CandidateReport, styles Styles) string {
 	return renderSection("Regressions", styles, strings.Join(lines, "\n"))
 }
 
-func renderFailures(r report.CandidateReport, styles Styles) string {
+func renderFailures(r report.RoundReport, styles Styles) string {
 	failures := make([]failureRow, 0, len(r.Failures.Incumbent)+len(r.Failures.Challenger))
 	for _, failure := range r.Failures.Incumbent {
 		failures = append(failures, failureRow{Role: domain.RoleIncumbent, Failure: failure})
@@ -154,8 +161,8 @@ func renderFailures(r report.CandidateReport, styles Styles) string {
 	lines := make([]string, 0, len(failures)+1)
 	lines = append(lines, renderTableRow(
 		styles.TableHead,
-		columnWidths([]string{"Role", "Run ID", "Task ID", "System ID", "Stage", "Message"}),
-		"Role", "Run ID", "Task ID", "System ID", "Stage", "Message",
+		columnWidths([]string{"Role", "Run ID", "Match ID", "System ID", "Stage", "Message"}),
+		"Role", "Run ID", "Match ID", "System ID", "Stage", "Message",
 	))
 	for _, item := range failures {
 		lines = append(lines, renderTableRow(

@@ -263,16 +263,16 @@ func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.Result) (s
 }
 
 type resolvedPlanDocument struct {
-	ManifestPath     string                     `json:"manifest_path"`
-	ExperimentName   string                     `json:"experiment_name"`
-	Mode             string                     `json:"mode"`
+	ManifestPath     string                       `json:"manifest_path"`
+	ExperimentName   string                       `json:"experiment_name"`
+	Mode             string                       `json:"mode"`
 	ParentRound      pureoptimizer.ParentRoundRef `json:"parent_round"`
-	Target           pureoptimizer.Target       `json:"target"`
-	Agent            pureoptimizer.AgentConfig  `json:"agent"`
-	IncludedEvidence []string                   `json:"included_evidence,omitempty"`
-	DeniedEvidence   []string                   `json:"denied_evidence,omitempty"`
-	InputPolicyPath  string                     `json:"input_policy_path,omitempty"`
-	OutputBundlePath string                     `json:"output_bundle_path,omitempty"`
+	Target           pureoptimizer.Target         `json:"target"`
+	Agent            pureoptimizer.AgentConfig    `json:"agent"`
+	IncludedEvidence []string                     `json:"included_evidence,omitempty"`
+	DeniedEvidence   []string                     `json:"denied_evidence,omitempty"`
+	InputPolicyPath  string                       `json:"input_policy_path,omitempty"`
+	OutputBundlePath string                       `json:"output_bundle_path,omitempty"`
 }
 
 type attemptDocument struct {

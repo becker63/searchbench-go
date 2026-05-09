@@ -14,38 +14,38 @@ var (
 	ErrInvalidMetricEvidence    = errors.New("report: invalid metric evidence")
 )
 
-// ProjectScoreEvidence projects a candidate report into the pure score evidence
-// document used by artifact serialization and future objective layers.
-func ProjectScoreEvidence(candidateReport CandidateReport) (score.ScoreEvidenceDocument, error) {
-	if candidateReport.ID == "" {
-		return score.ScoreEvidenceDocument{}, fmt.Errorf("%w: %w", ErrEvidenceProjectionFailed, ErrMissingReportID)
+// BuildRoundEvidence projects a round report into the pure round evidence
+// document used by artifact serialization and objective layers.
+func BuildRoundEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, error) {
+	if roundReport.ID == "" {
+		return score.RoundEvidenceDocument{}, fmt.Errorf("%w: %w", ErrEvidenceProjectionFailed, ErrMissingReportID)
 	}
-	if err := candidateReport.Spec.Validate(); err != nil {
-		return score.ScoreEvidenceDocument{}, fmt.Errorf("%w: %w: %v", ErrEvidenceProjectionFailed, ErrInvalidReportSpec, err)
+	if err := roundReport.Spec.Validate(); err != nil {
+		return score.RoundEvidenceDocument{}, fmt.Errorf("%w: %w: %v", ErrEvidenceProjectionFailed, ErrInvalidReportSpec, err)
 	}
 
-	metrics := make([]score.MetricEvidence, 0, len(candidateReport.Comparisons))
-	for _, comparison := range candidateReport.Comparisons {
+	metrics := make([]score.MetricEvidence, 0, len(roundReport.Comparisons))
+	for _, comparison := range roundReport.Comparisons {
 		metricEvidence, err := score.NewMetricEvidence(comparison.Metric, comparison.Baseline, comparison.Candidate)
 		if err != nil {
-			return score.ScoreEvidenceDocument{}, fmt.Errorf("%w: %w: %v", ErrEvidenceProjectionFailed, ErrInvalidMetricEvidence, err)
+			return score.RoundEvidenceDocument{}, fmt.Errorf("%w: %w: %v", ErrEvidenceProjectionFailed, ErrInvalidMetricEvidence, err)
 		}
 		metrics = append(metrics, metricEvidence)
 	}
 
-	regressionDetails := make([]score.RegressionEvidence, 0, len(candidateReport.Regressions))
+	regressionDetails := make([]score.RegressionEvidence, 0, len(roundReport.Regressions))
 	regressionSummary := score.RegressionEvidenceSummary{
-		Count: len(candidateReport.Regressions),
+		Count: len(roundReport.Regressions),
 	}
-	for _, regression := range candidateReport.Regressions {
+	for _, regression := range roundReport.Regressions {
 		regressionDetails = append(regressionDetails, score.RegressionEvidence{
-			MatchID:   regression.MatchID,
-			Metric:    regression.Metric,
-			Baseline:  regression.Baseline,
-			Candidate: regression.Candidate,
-			Delta:     regression.Delta,
-			Severity:  string(regression.Severity),
-			Reason:    regression.Reason,
+			MatchID:    regression.MatchID,
+			Metric:     regression.Metric,
+			Incumbent:  regression.Baseline,
+			Challenger: regression.Candidate,
+			Delta:      regression.Delta,
+			Severity:   string(regression.Severity),
+			Reason:     regression.Reason,
 		})
 		switch regression.Severity {
 		case RegressionMinor:
@@ -55,21 +55,24 @@ func ProjectScoreEvidence(candidateReport CandidateReport) (score.ScoreEvidenceD
 		}
 	}
 
-	return score.ScoreEvidenceDocument{
+	return score.RoundEvidenceDocument{
 		SchemaVersion: score.EvidenceSchemaVersion,
-		ReportID:      candidateReport.ID,
-		Systems:       candidateReport.Spec.Systems,
-		RunCounts: score.RoleCounts{
-			Baseline:  len(candidateReport.Runs.Incumbent),
-			Candidate: len(candidateReport.Runs.Challenger),
+		ReportID:      roundReport.ID,
+		Policies:      roundReport.Spec.Systems,
+		MatchCounts: score.MatchCounts{
+			Total: roundReport.Spec.Matches.Len(),
+		},
+		ExecutionCounts: score.RoleCounts{
+			Incumbent:  len(roundReport.Runs.Incumbent),
+			Challenger: len(roundReport.Runs.Challenger),
 		},
 		FailureCounts: score.RoleCounts{
-			Baseline:  len(candidateReport.Failures.Incumbent),
-			Candidate: len(candidateReport.Failures.Challenger),
+			Incumbent:  len(roundReport.Failures.Incumbent),
+			Challenger: len(roundReport.Failures.Challenger),
 		},
 		LocalizationDistance: score.ExtractLocalizationDistance(metrics),
-		Usage:                score.AggregateUsage(candidateReport.Runs.Challenger),
-		BaselineUsage:        score.AggregateUsage(candidateReport.Runs.Incumbent),
+		ChallengerUsage:      score.AggregateUsage(roundReport.Runs.Challenger),
+		IncumbentUsage:       score.AggregateUsage(roundReport.Runs.Incumbent),
 		Regressions:          regressionSummary,
 		RegressionDetails:    regressionDetails,
 		InvalidPredictions: score.InvalidPredictionEvidence{
@@ -77,9 +80,16 @@ func ProjectScoreEvidence(candidateReport CandidateReport) (score.ScoreEvidenceD
 			Count: 0,
 		},
 		Metrics: metrics,
-		PromotionDecision: score.PromotionDecisionEvidence{
-			Decision: string(candidateReport.Decision.Decision),
-			Reason:   candidateReport.Decision.Reason,
+		Decision: score.DecisionEvidence{
+			Decision: string(roundReport.Decision.Decision),
+			Reason:   roundReport.Decision.Reason,
 		},
 	}, nil
+}
+
+// ProjectScoreEvidence is a transitional wrapper for BuildRoundEvidence.
+//
+// TODO(issue-32): remove after callers use BuildRoundEvidence directly.
+func ProjectScoreEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, error) {
+	return BuildRoundEvidence(roundReport)
 }
