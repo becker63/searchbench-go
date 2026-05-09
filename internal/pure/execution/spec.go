@@ -1,27 +1,27 @@
-package run
+package execution
 
 import "github.com/becker63/searchbench-go/internal/pure/domain"
 
-// Spec is a planned request to run one system on one task.
+// Spec is a planned request to run one system on one match.
 //
 // Conceptually:
 //
-//	RunSpec = TaskSpec + SystemSpec
+//	Spec = MatchSpec + SystemSpec
 //
 // It should be deterministic and serializable. Runtime state belongs in
 // PreparedRun or ExecutedRun, not here.
 type Spec struct {
 	ID     domain.RunID      `json:"id"`
-	Task   domain.TaskSpec   `json:"task"`
+	Match  domain.MatchSpec  `json:"match"`
 	System domain.SystemSpec `json:"system"`
 }
 
-// NewSpec constructs a planned run request from one task and one executable
+// NewSpec constructs a planned run request from one match and one executable
 // system.
-func NewSpec(id domain.RunID, task domain.TaskSpec, system domain.SystemSpec) Spec {
+func NewSpec(id domain.RunID, match domain.MatchSpec, system domain.SystemSpec) Spec {
 	return Spec{
 		ID:     id,
-		Task:   task,
+		Match:  match,
 		System: system,
 	}
 }
