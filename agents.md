@@ -1,577 +1,311 @@
 # AGENTS.md
 
-This repository is `searchbench-go`.
+SearchBench-Go is an evaluation harness for agentic code-search systems.
 
-Searchbench-Go is a strongly typed evaluation harness for comparing agentic code-search systems. The core product object is a `report.CandidateReport`: a release-style artifact that records what was compared, what ran, what failed, what improved, what regressed, and whether a candidate should promote.
+The project compares a baseline retrieval system against a candidate retrieval system, executes both against the same task slice, scores the results, and produces durable evidence bundles suitable for promotion/regression decisions.
 
-This project is intentionally type-first, boring, and explicit. Do not add clever shims, generic frameworks, dynamic maps, or parallel data models unless specifically asked.
+This repository intentionally separates:
+- pure evaluation/scoring models
+- orchestration/application flow
+- effectful integrations (LLMs, MCP, tracing, filesystem, providers)
 
-## Core architecture
+The architecture is designed to keep the evaluation model inspectable and reproducible.
 
-Current package responsibilities:
+---
 
-```text
-internal/pure/domain        stable vocabulary: IDs, tasks, systems, policies, repos, predictions, usage
-internal/pure/run           run lifecycle: specs, phases, executed runs, failures
-internal/pure/score         metric types, score sets, metric direction, scored runs
-internal/pure/report        candidate reports, comparison specs, regressions, promotion decisions
-internal/pure/codegraph     graph model used by ingestion/scoring
-internal/app/compare        orchestration: plans, runner, task comparison, aggregation, parallelism
-internal/ports/backend      backend/session/tool contracts
-internal/app/logging        safe structured/event logging
-internal/surface/console    human terminal rendering
-internal/surface/cli        thin command-line surface
-```
+# Start Here
 
-The intended flow is:
+If you are trying to understand the system quickly, read these files in order:
 
-```text
-compare.Plan
-  -> compare.Runner.Run
-  -> compare.Runner.RunTasks
-  -> compare.Runner.CompareTask
-  -> compare.Runner.ExecuteAndScore
-  -> compare.Results
-  -> report.CandidateReport
-```
+## 1. Complete End-to-End Flow
 
-Preserve this flow.
+These files demonstrate the entire intended lifecycle of the system.
 
-## Most important model distinctions
+- `internal/app/locale2e/run.go`
+- `internal/app/locale2e/run_test.go`
 
-Do not blur these:
+This is the clearest expression of the current system model.
 
-```text
-compare.Plan              = executable comparison input
-report.ComparisonSpec     = report-safe comparison identity
+The E2E flow currently models:
 
-domain.SystemSpec         = executable system recipe
-domain.SystemRef          = report-safe system identity
+1. loading manifests
+2. running evaluation
+3. producing scored bundles
+4. invoking optimizer flow
+5. generating optimization outputs
 
-domain.PolicyArtifact     = may contain source code
-domain.PolicyRef          = source-free policy identity
+The E2E tests are intentionally more important than the CLI surface.
 
-run.ExecutedRun           = execution succeeded
-score.ScoredRun           = execution and scoring succeeded
-run.RunFailure            = report-facing failure path
-```
+---
 
-Reports, logs, CLI output, and console rendering must use report-safe views by default.
+## 2. Evaluation Flow
 
-## What agents must not do
+- `internal/app/evaluation/run.go`
+- `internal/domain/evaluation/...`
 
-### Do not create parallel data models
+Evaluation is responsible for:
+- executing baseline/candidate systems
+- collecting predictions/results
+- producing scoring inputs
+- rendering reports/evidence bundles
 
-Do not introduce new structs that duplicate existing model concepts.
+Evaluation should remain structurally deterministic and inspectable.
 
-Bad:
+---
 
-```go
-type TaskResult struct {
-    TaskID string
-    Scores map[string]float64
-}
-```
+## 3. Optimizer Flow
 
-Use the existing model instead:
+- `internal/app/optimizer/run.go`
+- `internal/domain/optimizer/...`
 
-```go
-run.ExecutedRun
-score.ScoreSet
-score.ScoredRun
-run.RunFailure
-report.CandidateReport
-```
+The optimizer consumes evaluation outputs and proposes improvements.
 
-If the existing model feels inconvenient, improve the existing model or add a small projection type in an appropriate package. Do not invent a second model.
+The optimizer is intentionally modeled separately from evaluation:
+- evaluator = bounded execution/scoring
+- optimizer = proposal generation
 
-### Avoid `map[string]any` even at adapter boundaries
+---
 
-Massively prefer not to use:
+## 4. PKL Configuration + Lineage
 
-```go
-map[string]any
-interface{}
-any
-reflect
-```
+- `pkl/`
+- `examples/`
+- `schema/`
 
-Even at adapter boundaries, these should be a last resort, not the default design.
+PKL manifests are the canonical interface of the system.
 
-Preferred order:
+The repository prefers explicit lineage and inspectable configuration over hidden orchestration state.
 
-```text
-1. Typed request/response structs
-2. Small typed adapter DTOs
-3. json.RawMessage at the narrow transport edge
-4. map[string]any only when the external API truly has no stable shape
-```
-
-If an external API is dynamic, quarantine that dynamism immediately:
+The `amends` model is important:
+- runs inherit from prior runs
+- scoring can reference parent outputs
+- evaluation history becomes structurally inspectable
 
-```text
-provider SDK object
-  -> adapter-local DTO / parser
-  -> typed Searchbench value
-```
+---
 
-Do not let dynamic payloads flow inward.
+# Architectural Principles
 
-Acceptable narrow uses:
+## Prefer Explicit Models
 
-```text
-backend tool arguments at the raw protocol boundary
-provider SDK response parsing before typed normalization
-telemetry metadata payload construction inside a telemetry adapter
-test fixtures for malformed external payloads
-```
+If a concept matters to evaluation semantics, it should usually exist as:
+- a typed domain structure
+- a manifest field
+- a scoring intermediary
+- or a bundle artifact
 
-Even then:
+Avoid hiding important evaluation state in:
+- traces
+- callbacks
+- implicit runtime behavior
+- provider-specific abstractions
 
-```text
-keep it adapter-local
-convert to typed values immediately
-do not store it on core structs
-do not pass it through compare/report/score/domain
-do not use it as a convenience escape hatch
-```
+---
 
-Bad:
+## Pure vs Effectful Separation
 
-```go
-type ExecutedRun struct {
-    Raw map[string]any
-}
+The repository intentionally separates:
+- pure domain modeling
+- orchestration/application flow
+- infrastructure integrations
 
-type ScoreInput struct {
-    Metadata map[string]any
-}
+Pure layers should not depend on:
+- filesystem access
+- network calls
+- tracing SDKs
+- provider SDKs
+- CLI frameworks
 
-func Score(payload map[string]any) score.ScoreSet
-```
-
-Better:
-
-```go
-type ProviderUsageDTO struct {
-    InputTokens  int64 `json:"input_tokens"`
-    OutputTokens int64 `json:"output_tokens"`
-    TotalTokens  int64 `json:"total_tokens"`
-}
-
-func NormalizeUsage(dto ProviderUsageDTO) domain.UsageSummary
-```
+Effectful adapters belong near the edges.
 
-If you think you need `map[string]any`, first ask:
+---
 
-```text
-Can this be a small typed DTO?
-Can this be json.RawMessage until parsed?
-Can this live entirely inside the adapter?
-Can this be converted before crossing a package boundary?
-```
+## Bundles Are First-Class Outputs
 
-Only use dynamic maps when the answer to all of those is no.
+A run is not just a trace.
 
-### Do not log or render unsafe values
-
-Never log, render, or JSON-dump these directly:
-
-```text
-domain.SystemSpec
-domain.PolicyArtifact
-domain.TaskSpec with oracle fields
-compare.Plan
-raw report.CandidateReport in logs
-raw model/provider responses
-```
+A run produces:
+- reports
+- objectives
+- resolved manifests
+- metadata
+- scoring projections
+- lineage information
 
-Use safe views:
+The bundle is the durable artifact.
 
-```go
-system.Ref()
-domain.PolicyRef
-logging.SystemSpecKV(system)
-logging.TaskKV(task)
-logging.ReportSummaryKV(report)
-console.RenderCandidateReport(report, opts)
-```
+---
 
-Policy source and scorer-only oracle data must not leak into reports, logs, or terminal output.
+## The System Is About Promotion Decisions
 
-### Do not put rendering on report types
+The core question is not:
+> "Did the agent run?"
 
-Do not add:
+The question is:
+> "Should this candidate replace the current system?"
 
-```go
-func (r CandidateReport) String() string
-func (r CandidateReport) Pretty() string
-```
+Everything in the architecture should support:
+- comparison
+- regression detection
+- inspectability
+- reproducibility
+- promotion confidence
 
-Rendering belongs in:
+---
 
-```text
-internal/console
-```
+# Repository Navigation
 
-Structured report data belongs in:
+## Application Layer
 
-```text
-internal/pure/report
-```
+Application orchestration lives in:
 
-### Do not make `compare` know concrete backends
+- `internal/app/...`
 
-`compare.Runner` coordinates. It should not know how Iterative Context, jCodeMunch, Eino, Langfuse, OpenAI, Cerebras, tree-sitter, or filesystem materialization works.
+These packages coordinate:
+- loading manifests
+- wiring dependencies
+- executing flows
+- emitting bundles
 
-Concrete integrations must enter through interfaces:
+Application packages may depend on effectful integrations.
 
-```go
-compare.Executor
-compare.GraphProvider
-compare.Scorer
-compare.Decider
-backend.Backend
-backend.Session
-codegraph.Graph
-codegraph.Builder
-```
+---
 
-### Do not recreate the old Python mega-localizer
+## Domain Layer
 
-Do not create one large file that owns all of these at once:
+Core models live in:
 
-```text
-prompt construction
-model calls
-tool dispatch
-context budget management
-backend sessions
-usage normalization
-prediction finalization
-retry logic
-telemetry
-scoring
-report generation
-```
+- `internal/domain/...`
 
-Split these into explicit packages or interfaces. Keep `compare` as orchestration only.
+These packages should remain:
+- deterministic
+- typed
+- inspectable
+- provider-agnostic
 
-### Do not add generic pipeline frameworks
+Avoid introducing:
+- filesystem access
+- tracing logic
+- provider SDKs
+- CLI behavior
 
-Avoid abstract pipeline machinery like:
+into the domain layer.
 
-```go
-type Pipeline[A, B, C any] struct { ... }
-type Step[T any] interface { ... }
-type Reducer[A, B any] interface { ... }
-```
+---
 
-Prefer Searchbench nouns:
+## Integrations
 
-```text
-Plan
-Runner
-TaskComparisonResult
-Results
-CandidateReport
-ScoreSet
-RunFailure
-```
-
-Generics are welcome for simple structural helpers like `Pair[T]`, `NonEmpty[T]`, or task-aligned containers. They should not hide the domain.
-
-Sometimes I will ask you to do this in a prompt, if Im telling you to use a generic you can trust my judgement.
-
-### Do not add unnecessary interfaces
-
-Interfaces should live at consumer boundaries.
-
-Good:
-
-```go
-type Executor interface {
-    Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
-}
-```
-
-Bad:
-
-```go
-type ExecutorProvider interface {
-    Executor() Executor
-}
-
-type ReportProvider interface {
-    Report() report.CandidateReport
-}
-```
-
-Do not add an interface unless a package consumes behavior through that interface.
-
-### Do not spread concurrency everywhere
-
-Parallelism currently belongs in:
-
-```go
-compare.Runner.RunTasks
-```
-
-Do not add goroutines, channels, mutexes, worker pools, or concurrent mutation in domain/report/score packages.
-
-Current rule:
-
-```text
-parallelize over tasks only
-collect TaskWorkResult values
-restore deterministic plan order
-mutate Results only on the main goroutine
-```
-
-Do not parallelize baseline/candidate inside a task unless explicitly requested.
-
-### Do not use package globals for runtime services
-
-Avoid global loggers, global clients, global registries, global backend sessions, or global mutable state.
-
-Prefer explicit construction and injection.
-
-## Error handling rules
-
-Use existing failure concepts.
-
-Internal control/classification error:
-
-```go
-compare.StageError
-```
-
-Report-facing failure:
-
-```go
-run.RunFailure
-```
-
-Execution/scoring failures should usually become `run.RunFailure`, not top-level process errors.
-
-Top-level errors are for:
-
-```text
-invalid configuration
-invalid plan
-context cancellation
-orchestration bugs
-I/O failures at CLI/adapters
-```
-
-Wrap errors with context, but do not create huge parallel error taxonomies unless needed.
-
-## Scoring rules
-
-`score.ScoreSet` means all required metrics were computed.
-
-Do not represent missing required metrics with booleans like:
-
-```go
-Available bool
-```
-
-If a required metric cannot be computed, scoring should fail and become a `RunFailure`.
-
-Metric direction matters. Positive delta is not always good.
+Integrations live near the edges of the repository.
 
 Examples:
+- MCP clients
+- LangSmith callbacks
+- filesystem materialization
+- model providers
+- repository cloning
+- bundle persistence
 
-```text
-gold_hop          lower is better
-issue_hop         lower is better
-token_efficiency  higher is better
-cost              lower is better
-composite         higher is better
-```
+The architecture intentionally treats these as adapters.
 
-Use existing score comparison helpers instead of hand-rolling delta logic.
+---
 
-## Report rules
+# Current Development Priorities
 
-`report.CandidateReport` is the product artifact.
+The current repository phase is:
 
-It should answer:
+## Transition From Modeling → Real Integrations
 
-```text
-What was compared?
-What ran successfully?
-What failed?
-Which metrics improved?
-Which metrics regressed?
-Should the candidate promote, be reviewed, or be rejected?
-```
+The high-level architecture and evaluation model are largely established.
 
-Do not put runtime-only, executable-only, or source-bearing fields into reports.
+Current work focuses on:
+- real MCP integration
+- real provider execution
+- LangSmith tracing integration
+- repository materialization
+- end-to-end execution against real datasets
 
-## Logging rules
+without collapsing architectural boundaries.
 
-Searchbench uses `internal/logging` with Zap sugar and event-shaped helpers.
+---
 
-Use event helpers:
+# Guidance For Agents
 
-```go
-logger.RunStarted(role, spec)
-logger.RunExecuted(role, executed)
-logger.RunScored(role, executed, scores)
-logger.RunFailed(role, failure)
-logger.ReportCreated(report)
-```
+When making changes:
 
-Avoid raw calls like:
+## Prefer Extending Existing Models
 
-```go
-logger.Sugar().Infow("thing", "system", systemSpec)
-```
+Avoid introducing parallel abstractions unless necessary.
 
-Development logs should be pretty and human-readable. JSON logs should remain structured and machine-readable.
+Search for:
+- existing domain types
+- reducers
+- manifest structures
+- bundle projections
 
-## Console and CLI rules
+before adding new concepts.
 
-`internal/console` renders structured artifacts for humans.
+---
 
-`internal/cli` parses user intent and wires commands.
+## Preserve Structural Legibility
 
-The CLI should stay small and opinionated. Do not expose every internal concept as a command or flag.
+This repository values:
+- explicitness
+- inspectability
+- typed flows
+- deterministic structure
 
-Prefer commands like:
+over:
+- hidden magic
+- framework-heavy abstractions
+- implicit state propagation
 
-```text
-searchbench demo-report
-searchbench report <path>
-searchbench compare --config searchbench.yaml
-```
+---
 
-Avoid large command trees unless requested.
+## Keep Integrations Contained
 
-## Backend implementation rules
+When adding:
+- tracing
+- providers
+- MCP execution
+- filesystem behavior
+- runtime orchestration
 
-The backend boundary is:
+keep those concerns isolated from pure evaluation/scoring logic.
 
-```go
-type Backend interface {
-    StartSession(ctx context.Context, spec SessionSpec) (Session, error)
-}
+---
 
-type Session interface {
-    Tools(ctx context.Context) ([]ToolSpec, error)
-    CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)
-    Close(ctx context.Context) error
-}
-```
+## Favor Readable Flows
 
-Rules:
+The repository prefers:
+- obvious orchestration
+- explicit lifecycle stages
+- inspectable transformations
 
-```text
-Backend starts isolated sessions.
-Session represents one isolated run/session.
-Session is not assumed safe for concurrent tool calls.
-Backend must be safe for concurrent StartSession if used with parallel Runner execution.
-Concrete SDK weirdness stays inside backend adapters.
-```
+over excessive abstraction.
 
-Do not leak SDK-specific types into `compare`, `report`, `score`, or `domain`.
+If a new reader cannot follow the lifecycle from:
+- manifest
+→ evaluation
+→ scoring
+→ bundle
+→ optimizer
 
-## Dynamic boundary rules
+the abstraction is probably too indirect.
 
-External APIs are allowed to be ugly. Core packages are not.
+---
 
-When integrating external systems:
+# Mental Model
 
-```text
-provider SDK object -> adapter -> typed Searchbench object
-```
+SearchBench-Go is closer to:
+- a release engineering system
+- an evaluation control plane
+- a reproducible experiment harness
 
-Do not push raw SDK objects inward.
+than a traditional agent framework.
 
-Examples:
+The unit of concern is not a single trace.
 
-```text
-OpenAI/Cerebras usage -> typed adapter DTO -> domain.UsageSummary
-model output          -> typed adapter DTO/finalizer -> domain.Prediction
-Langfuse span         -> telemetry adapter interface
-IC tool result        -> backend.ToolResult -> typed finalizer
-```
-
-## Testing rules
-
-Place tests near the package that owns the invariant.
-
-Examples:
-
-```text
-score invariants       -> internal/pure/score
-report safety          -> internal/pure/report
-console output safety  -> internal/surface/console
-logging safety         -> internal/app/logging
-runner orchestration   -> internal/app/compare
-CLI smoke tests        -> internal/surface/cli
-```
-
-Do not test everything through the CLI.
-
-Avoid brittle golden tests for ANSI output. Prefer substring and invariant checks:
-
-```text
-contains high-level section names
-does not contain policy source
-does not contain "source"
-contains decision
-contains expected metric keys
-```
-
-## Agent review checklist
-
-Before finishing a change, verify:
-
-```text
-1. Did I use existing Searchbench nouns instead of creating a parallel model?
-2. Did I avoid map[string]any entirely unless it is truly unavoidable and adapter-local?
-3. Did I avoid raw SystemSpec/PolicyArtifact/TaskOracle/report dumps?
-4. Did I keep compare free of concrete backend/provider logic?
-5. Did I keep report as data and console as rendering?
-6. Did I avoid package globals?
-7. Did I avoid unnecessary interfaces?
-8. Did I avoid generic pipeline abstractions?
-9. Did I preserve deterministic report ordering?
-10. Did I add tests near the invariant I changed?
-```
-
-## Required commands
-
-Before handing off, run:
-
-```bash
-gofmt -w .
-go test ./...
-go mod tidy
-```
-
-If CLI behavior changed, also run the relevant command manually, for example:
-
-```bash
-go run ./cmd/searchbench --quiet --no-color demo-report
-go run ./cmd/searchbench --quiet demo-report --output json
-```
-
-## Guiding principle
-
-This codebase exists because the Python version became too flexible.
-
-When in doubt, choose:
-
-```text
-explicit types
-small packages
-boring constructors
-clear interfaces
-safe report views
-deterministic orchestration
-```
-
-Do not be clever. Make the model hard to misuse.
+The unit of concern is:
+- a candidate system
+- evaluated against a baseline
+- producing durable evidence
+- suitable for promotion decisions.

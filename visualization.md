@@ -2,9 +2,9 @@
 
 ## Current status
 
-The “cool right pane” already exists.
+The “SAT” / graph-stage visualization already exists.
 
-It is currently a full-page graph proof-trace demo, but that is mostly a styling/layout issue. The core interaction is already built:
+It is currently a full-page graph proof-trace demo, but that is mostly a layout and product-shape issue. The core interaction is already built:
 
 - GraphEvent-driven replay
 - React Flow graph stage
@@ -16,147 +16,412 @@ It is currently a full-page graph proof-trace demo, but that is mostly a styling
 - token/context visual hints
 - tests around layout, panning, and animation behavior
 
-So the visualization plan should not treat the right pane as a new system.
+So this plan should not treat the graph stage as a new system.
 
-The plan is to embed the existing graph-stage demo as the right pane inside a broader SearchBench evaluation visualization.
+The real work now is to place it inside a broader SearchBench product story.
+
+---
 
 ## Core product idea
 
 The real value of SearchBench is not only showing an agent searching code.
 
-The real value is showing that a candidate prompt can be tested against a baseline across a dataset, using deterministic tooling, and reduced into a clear release decision.
+The real value is showing that a new policy can challenge the current one, be evaluated on the same task conditions, and be reduced into a clear release decision.
 
 The visualization should communicate this:
 
-    one prompt change
-    plus deterministic tooling
-    plus dataset-wide evaluation
-    equals an inspectable release decision
+    IncumbentPolicy
+    vs
+    ChallengerPolicy
+    on the same task
+    across the same dataset
+    reduced into a Decision
+    and, optionally, a NextChallenger
 
-The homepage version should make this obvious to business-facing visitors.
+This should feel like a round-based comparison system, not just a trace viewer.
 
-The deeper case-study version can expose more technical detail.
+---
 
-## High-level layout
+## Two visualization products
 
-The final visualization should have three major regions.
+There are really two related visualization products here.
 
-### 1. Left pane: evaluation surface
+### 1. Round View
 
-The left pane shows the controlled change and the scoring logic.
+This is the explanatory / cinematic / homepage / video-friendly view.
+
+Its job is to make the system instantly legible.
 
 It should answer:
 
+    What is competing?
     What changed?
-    What stayed constant?
-    How are we judging it?
+    Why did one side win?
+    Should the challenger advance?
 
-It should include:
+This is the side-by-side “race” view.
 
-- baseline system
-- candidate system
-- candidate prompt or policy fingerprint
-- dataset name/config/split
-- objective summary
-- score intermediates
-- token/cost summary
-- promotion/review/reject rule
-- lineage: parent run and current run when available
+### 2. Analysis View
 
-This pane should feel like a polished projection of the run artifacts, not a raw config dump.
+This is the serious operator / optimization workbench.
 
-It can visually reference PKL, but it should present the meaning first.
+Its job is to help someone tune prompts, policies, and retrieval behavior.
 
-### 2. Right pane: existing proof-trace demo
+It should answer:
 
-The right pane is the already-built graph-stage visualization.
+    What is happening inside this one run?
+    What changed in the config?
+    How can I improve the challenger?
 
-Its job is to provide the emotional/intuitive proof of how the system works on one representative task.
+This is the single-pane, more technical view.
 
-It should show:
+Both modes should share a common projection model and a common replay/status bar.
 
-- task prompt or issue
-- anchors
+---
+
+# Round View
+
+## High-level concept
+
+Round View should lean hard into the competitive story.
+
+Two mirrored panes sit side by side:
+
+- left = IncumbentPolicy
+- right = ChallengerPolicy
+
+Both receive the same task.
+Both run at the same time.
+Both navigate the same code universe independently.
+The viewer sees how each one behaves and how close each one gets to the localization target.
+
+At the end of the round, SearchBench overlays a release-report modal explaining the outcome.
+
+This should feel like a polished native app experience, even if it is implemented on the web.
+
+Not a dashboard first.
+
+A comparison viewer first.
+
+## Core message
+
+The Round View should communicate:
+
+    the current policy defends its position
+    the challenger tries to replace it
+    both are evaluated under the same conditions
+    the evidence produces a Decision
+
+---
+
+## Round View layout
+
+### 1. Match header
+
+A compact top header should establish the round immediately.
+
+Fields:
+
+- Round ID / number
+- task title or issue summary
+- IncumbentPolicy name
+- ChallengerPolicy name
+- current status:
+  - LIVE
+  - REPLAY
+  - EVALUATING
+  - DECISION READY
+
+Possible visual shape:
+
+    Round 002
+    IncumbentPolicy: jCodeMunch
+    vs
+    ChallengerPolicy: Iterative Context + Lookahead
+
+This should feel like a match card.
+
+### 2. Side-by-side mirrored panes
+
+The center of the UI is the most important part.
+
+There should be two mirrored panes:
+
+- left pane = incumbent
+- right pane = challenger
+
+Both panes should use the existing SAT / graph-stage interaction.
+
+Each pane should show the same categories of information so that the comparison is immediate:
+
+- task / issue being localized
+- current anchor(s)
 - graph expansion
+- explored nodes
 - pending nodes
 - resolved evidence
-- context inclusion
+- chosen context
 - token movement
-- causal edge animations
+- tool-call behavior
 
-This is the “look, the system is actually doing structured work” pane.
+The panes should be structurally similar, not two unrelated views.
 
-Important: this pane does not need to be live-streamed in the homepage version.
+The viewer should feel like they are watching two policies compete in the same arena.
 
-It can replay from static GraphEvent JSON.
+### 3. Visual closeness to the target
 
-The existing full-page demo becomes a component inside the larger evaluation layout.
+A key addition:
 
-### 3. Bottom pane: dataset result grid
+show how close each side is to the correct localization target.
 
-The bottom pane spans the full width below the left and right panes.
+This is important because it turns the scoring logic into something visible.
 
-This is the most important business-facing piece.
+Possible ways to express it:
 
-It should look like a GitHub status / uptime grid.
+- lay out the graph/tree so the target region exists in a visible spatial location
+- pan the view over the code graph to show how far each system is from the correct neighborhood
+- visually indicate hop distance to the relevant nodes/files
+- show explored paths diverging toward or away from the correct cluster
+- highlight correct target nodes/files once the replay completes, or faintly reveal them as a reference layer
+
+This is where the explanatory power really increases.
+
+Instead of only saying:
+
+    challenger improved hop distance
+
+the viewer can see:
+
+    challenger moved into the correct neighborhood
+    incumbent wandered elsewhere or stopped early
+
+### 4. Live comparison ribbon
+
+A comparison strip should sit between or below the panes.
+
+It should update live during the replay and make the “race” feeling explicit.
+
+Possible fields:
+
+- token usage
+- tool calls
+- current hop distance
+- files localized
+- localization quality
+- current lead / trailing status
+
+Example shape:
+
+    Tokens:        12.4k   vs   8.9k
+    Files found:   4/6     vs   5/6
+    Hop distance:  3.1     vs   1.8
+    Status:        trailing vs leading
+
+This is not the final score.
+
+It is the live comparison layer that helps the user read the match.
+
+### 5. Final release-report modal
+
+When both runs complete, the visualization should freeze into a judgment moment.
+
+At that point:
+
+- the winning side gets a green highlight or glow
+- the losing side becomes visually quieter
+- the background dims slightly
+- a release-report modal overlays the content
+
+This modal is one of the most important product surfaces.
+
+It should not feel like a generic pop-up.
+
+It should feel like a release judgment.
+
+Fields:
+
+- Decision: PROMOTE / REVIEW / REJECT
+- IncumbentPolicy
+- ChallengerPolicy
+- summary of what changed
+- what improved
+- what regressed
+- average score delta
+- token delta
+- cost delta
+- protected regressions
+- plain-language decision rule
+
+Example:
+
+    Decision: PROMOTE CHALLENGER
+
+    Why:
+    - better localization quality
+    - lower token usage
+    - no protected regressions
+
+    Margin:
+    +0.12 final score
+    -18% token cost
+
+If the round is part of an evolving series, the modal can also optionally show:
+
+    Challenger promoted
+    → becomes next round’s IncumbentPolicy
+
+That makes the temporal spine visible.
+
+---
+
+# Analysis View
+
+## High-level concept
+
+The Analysis View is the more technical, workbench-like interface.
+
+It is for users who want to actually optimize prompts, policies, and retrieval behavior.
+
+This mode should not be forced to serve the homepage story.
+
+It can be denser and more operational.
+
+## Core message
+
+The Analysis View should communicate:
+
+    here is one run
+    here is the controlled configuration
+    here is how the policy behaved
+    here is the score/evidence you would use to improve it
+
+## Analysis View layout
+
+This mode can use a single main graph pane plus supporting context.
+
+Suggested regions:
+
+### 1. Main graph pane
+
+Use the existing SAT / graph-stage demo as the primary focus.
+
+### 2. Config / evidence pane
+
+A left or side pane can show:
+
+- IncumbentPolicy summary
+- ChallengerPolicy summary
+- what changed
+- task slice / dataset summary
+- objective values
+- score/evidence summary
+- lineage / prior round
+- policy fingerprint / prompt fingerprint
+
+This should present meaning first, not raw config first.
+
+It can visually reference PKL, but should not be a raw config dump.
+
+### 3. Event / trace detail
+
+Optional operator-focused detail:
+
+- current tool call
+- current context set
+- event log
+- symbol/file details
+- selected node metadata
+
+This mode is where serious users inspect and improve behavior.
+
+---
+
+# Shared bottom status bar
+
+Both Round View and Analysis View should have a shared bottom bar.
+
+This should feel like a Git status / CI / replay strip.
+
+It is a core unifying surface.
+
+## Purpose
+
+The bottom bar should let the user:
+
+- browse all dataset items
+- replay specific runs
+- see outcome distribution at a glance
+- navigate red/yellow/green cases
+- jump directly to interesting regressions
+
+## Semantics
 
 Each cell represents one dataset item.
 
 Cell semantics:
 
-    green  = candidate improved over baseline
-    yellow = tied, ambiguous, or within review threshold
-    red    = candidate regressed
-    gray   = pending, excluded, or not run
+- green  = challenger improved
+- yellow = tie / ambiguous / review threshold
+- red    = challenger regressed
+- gray   = pending / excluded / not run
 
 Protected regressions should be visually distinct.
 
 Possibilities:
 
-- red cell with stronger border
-- red cell with warning glyph
-- separate protected-case lane
-- tooltip explaining why it matters
+- stronger red border
+- warning glyph
+- separate lane
+- tooltip explaining why the case is protected
 
-This pane answers:
+This bar is important because it makes the system feel like:
+- a dataset viewer
+- a replay chooser
+- a release engineering surface
+- a durable evaluation artifact
 
-    Did the candidate prompt actually hold up across the dataset?
+---
 
-## Final decision surface
+# Product language
 
-Above or beside the grid, show a compact summary.
+The visualization should consistently use the following names:
 
-Example fields:
+- IncumbentPolicy
+- ChallengerPolicy
+- Round
+- Decision
+- NextChallenger
 
-- Decision: PROMOTE / REVIEW / REJECT
-- Improved: N
-- Neutral: N
-- Regressed: N
-- Protected regressions: N
-- Average score delta
-- Token delta
-- Cost delta
+These names should appear in:
 
-The decision rule should be visible in plain language.
+- UI copy
+- visualizations
+- reports
+- docs
+- narration
+- future videos
 
-Example:
+Avoid centering older language like:
 
-    Promote only if average score improves, token cost stays within budget,
-    regression count stays under threshold, and protected regressions are zero.
+- baseline
+- candidate
+- projection
 
-This is the part that makes the tool feel governable instead of magical.
+Those terms can still exist internally where useful, but the public/explanatory product language should be temporal and story-shaped.
 
-## Architecture
+---
 
-The visualization should be static/projection-first.
+# Architecture
+
+The visualization should remain static/projection-first.
 
 Do not build a live dashboard first.
 
-The right pane can animate, but the source of truth should be static artifacts.
+The graph panes can animate, but the source of truth should still be static artifacts and replayable event streams.
 
 Flow:
 
-    SearchBench run bundle
+    SearchBench round bundle
       -> visualization projection
       -> visualization.json
       -> website renderer
@@ -164,78 +429,92 @@ Flow:
 
 The UI should not become another source of truth.
 
-The UI renders the evidence.
+The UI renders durable evidence.
 
-## Artifact inputs
+---
 
-The projection should be built from the run bundle.
+# Artifact inputs
+
+The visualization should be built from the round bundle.
 
 Expected inputs:
 
 - metadata.json
 - resolved.json
 - report.json
+- report.txt
 - objective.json
 - score.pkl
 - optional trace-events.json
 - optional representative-task trace
+- optional per-side graph replay events for incumbent and challenger
 
-The exact artifact names can evolve, but the important rule is:
+Important rule:
 
-    the visualization renders the run bundle;
-    it does not invent evaluation state.
+    the visualization renders the round bundle;
+    it does not invent evaluation state
 
-## Projection output
+---
 
-The first milestone should be a single presentation-facing JSON file.
+# Projection output
+
+The first milestone should still be a single presentation-facing JSON file.
 
 Suggested output:
 
     visualization.json
 
+But the shape should now reflect the round-based comparison model.
+
 Minimum contents:
 
-- run id
-- run hash
-- parent run hash if available
-- decision
-- baseline summary
-- candidate summary
-- prompt/policy summary
+- round id
+- round hash
+- parent round hash if available
+- Decision
+- IncumbentPolicy summary
+- ChallengerPolicy summary
+- what changed
 - dataset summary
-- per-item cells
+- per-item result cells
 - aggregate counts
 - objective values
-- representative trace events for the right pane
+- replay events for both sides
+- representative task metadata
+- release-report summary
 
 The website should consume only this projection.
 
-## Suggested projection shape
+---
 
+# Suggested projection shape
+
+```ts
 type VisualizationProjection = {
-  run: {
+  round: {
     id: string
     createdAt?: string
     decision: "PROMOTE" | "REVIEW" | "REJECT"
-    runHash?: string
-    parentRunHash?: string
+    roundHash?: string
+    parentRoundHash?: string
   }
 
-  systems: {
-    baseline: SystemSummary
-    candidate: SystemSummary
+  policies: {
+    incumbent: PolicySummary
+    challenger: PolicySummary
+    nextChallenger?: PolicySummary
   }
 
-  promptChange?: {
-    baselineFingerprint?: string
-    candidateFingerprint?: string
+  change?: {
     summary: string
+    incumbentFingerprint?: string
+    challengerFingerprint?: string
   }
 
   objective: {
     finalScore: number
     values: ObjectiveValue[]
-    promotionRule: PromotionRuleSummary
+    decisionRule: string
   }
 
   dataset: {
@@ -247,223 +526,137 @@ type VisualizationProjection = {
     summary: DatasetSummary
   }
 
-  representativeTrace?: {
+  representativeTask?: {
     taskId: string
     title?: string
     prompt?: string
-    events: GraphEvent[]
+
+    incumbentReplay?: {
+      events: GraphEvent[]
+    }
+
+    challengerReplay?: {
+      events: GraphEvent[]
+    }
+
+    target?: {
+      filePaths?: string[]
+      nodeIds?: string[]
+      hopAnnotations?: HopAnnotation[]
+    }
+  }
+
+  releaseReport: {
+    summary: string
+    improvedCount: number
+    neutralCount: number
+    regressedCount: number
+    protectedRegressionCount: number
+    averageScoreDelta?: number
+    tokenDelta?: number
+    costDelta?: number
+    recommendation?: string
   }
 }
 
 type DatasetCell = {
   id: string
   index: number
-  status: "improved" | "neutral" | "regressed" | "pending" | "excluded"
+  status: "IMPROVED" | "NEUTRAL" | "REGRESSED" | "PENDING"
   protected?: boolean
-
-  baselineScore?: number
-  candidateScore?: number
-  delta?: number
-
-  baselineTokens?: number
-  candidateTokens?: number
+  scoreDelta?: number
   tokenDelta?: number
-
-  reason?: string
 }
 
-## Relationship to the existing right pane
-
-The existing right-pane demo should become a reusable component.
-
-Current role:
-
-    full-page proof-trace demo
-
-Future role:
-
-    representative-trace pane inside SearchBench evaluation hero
-
-The component should accept a trace/event list and render the same proof-trace behavior it already supports.
-
-The work is mostly:
-
-- layout adaptation
-- prop/interface cleanup
-- projection JSON input
-- styling integration with the two-pane + bottom-grid layout
-- making sure the graph remains legible at pane size
-
-The right pane should not be redesigned from scratch.
-
-## Homepage use
-
-Homepage headline options:
-
-    Making AI workflows inspectable
-
-or:
-
-    From one prompt change to a release decision
-
-or:
-
-    Test whether a prompt actually beats the baseline
-
-Suggested subhead:
-
-    SearchBench compares a candidate prompt against a baseline across a dataset,
-    then turns traces, scores, regressions, and token costs into a decision surface
-    teams can inspect.
-
-The homepage animation should show:
-
-    prompt change
-    -> representative trace
-    -> dataset cells filling in
-    -> final decision
-
-## Animation sequence
-
-The motion should be explanatory, not the source of truth.
-
-Suggested sequence:
-
-1. Left pane shows baseline and candidate.
-2. Candidate prompt/policy becomes highlighted.
-3. Right pane replays one representative GraphEvent trace.
-4. Bottom grid starts gray.
-5. Cells fill in green/yellow/red as dataset results “complete.”
-6. Summary counters update.
-7. Objective values resolve.
-8. Final decision appears.
-
-This can all be driven from static visualization.json.
-
-No streaming required.
-
-## Why static-first matters
-
-The strongest architecture is:
-
-    the run is static
-    the evidence is static
-    the projection is static
-    the motion is explanation
-
-That matches the SearchBench thesis.
-
-Truth should live in inspectable artifacts, not inside a running dashboard.
-
-## What not to build first
-
-Do not start with:
-
-- a generic live dashboard
-- mandatory streaming
-- a frontend event bus beyond what already exists for the graph replay
-- trace-provider lock-in
-- UI-owned evaluation state
-- hand-authored one-off animation data
-- a second graph event protocol
-
-The existing graph-event protocol should be reused for the right pane.
-
-The dataset grid should come from per-item evaluation results.
-
-The left pane should come from the run/objective/config artifacts.
-
-## Required backend/schema gap
-
-The biggest likely backend gap is per-item comparison data.
-
-The bottom grid requires report data at dataset-item granularity.
-
-The report should preserve, per item:
-
-- item id
-- baseline score
-- candidate score
-- score delta
-- baseline token count
-- candidate token count
-- token delta
-- status classification
-- protected-case flag if applicable
-- short reason or failure/regression summary
-
-Without this, the UI can show aggregate score but not the dataset-wide status map.
-
-## First milestone
-
-Build a static visualization fixture.
-
-Input:
-
-    one completed run bundle
-
-Output:
-
-    visualization.json
-
-Minimum useful fields:
-
-- run id
-- baseline id
-- candidate id
-- final decision
-- final score
-- dataset cells
-- aggregate counts
-- representative GraphEvent trace
-
-Then render a static page from that JSON.
-
-## Second milestone
-
-Embed the existing graph-stage demo as the right pane.
-
-Tasks:
-
-- extract the current full-page demo into a reusable pane component
-- feed it representativeTrace.events from visualization.json
-- keep the existing animation/replay behavior
-- tune sizing so it works inside a pane
-- avoid major graph redesign
-
-## Third milestone
-
-Build the dataset grid.
-
-Tasks:
-
-- render one cell per dataset item
-- support green/yellow/red/gray statuses
-- show aggregate counts
-- show final decision
-- add hover/click detail later, but not in v1
-
-## Fourth milestone
-
-Add homepage polish.
-
-Tasks:
-
-- integrate left pane, right pane, and bottom grid into the site hero
-- add short business-facing copy
-- make the animation loop cleanly
-- optionally export the same flow as a video
-
-## Acceptance criteria
-
-The visualization succeeds when a non-specialist can understand this in under ten seconds:
-
-1. A candidate prompt was tested against a baseline.
-2. It was tested across many tasks, not one cherry-picked demo.
-3. The graph pane shows how one representative run works.
-4. The bottom grid shows whether the candidate generalized.
-5. The final decision comes from inspectable artifacts, not vibes.
-
-## One-line thesis
-
-SearchBench turns prompt changes into release decisions.
+type PolicySummary = {
+  id: string
+  name: string
+  backend?: string
+  promptBundleName?: string
+  promptBundleVersion?: string
+  policyId?: string
+  summary?: string
+}
+
+type ObjectiveValue = {
+  name: string
+  kind: "intermediate" | "penalty" | "final"
+  value: number | string | boolean
+}
+
+type DatasetSummary = {
+  improved: number
+  neutral: number
+  regressed: number
+  pending: number
+  protectedRegressions: number
+}
+
+type HopAnnotation = {
+  nodeId: string
+  hopDistance: number
+}
+````
+
+---
+
+# Implementation priorities
+
+## Milestone 1: Projection and replay foundation
+
+* define the new round-oriented visualization projection
+* adapt current graph-stage data into a reusable replay payload
+* support two independent replay streams in one layout
+* build the shared bottom status bar
+* render a static Decision summary
+
+## Milestone 2: Round View
+
+* side-by-side mirrored incumbent/challenger panes
+* live comparison ribbon
+* visual closeness / hop-distance cues
+* winner highlight
+* release-report modal
+* polished animation / match-like flow
+
+## Milestone 3: Analysis View
+
+* single-pane serious-user view
+* config/evidence side panel
+* more detailed trace inspection
+* run replay and case switching from the shared bottom bar
+
+## Milestone 4: Homepage and video usage
+
+* use Round View as the main explanatory artifact
+* use Analysis View for deeper technical demos
+* ensure both read clearly in narration and recording
+* ensure the final flow communicates:
+
+  * what changed
+  * why the challenger won or lost
+  * whether it should advance
+
+---
+
+# Final product thesis
+
+The visualization should make SearchBench feel like a round-based comparison system for agentic code-search policies.
+
+Not just:
+
+```
+here is an agent trace
+```
+
+But:
+
+```
+here is an IncumbentPolicy
+here is a ChallengerPolicy
+here is the Round where they compete
+here is the Decision
+and here is the NextChallenger
+```
+
+That is the story the visualization should tell.
