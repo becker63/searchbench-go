@@ -44,6 +44,8 @@ func Classify(results []StepResult) Classification {
 			classification.GenerationFailures = append(classification.GenerationFailures, result)
 		case "gofmt_check":
 			classification.FormatErrors = append(classification.FormatErrors, result)
+		case "python_compile":
+			classification.TypeErrors = append(classification.TypeErrors, result)
 		case "go_vet":
 			if looksLikeTypeError(result) {
 				classification.TypeErrors = append(classification.TypeErrors, result)

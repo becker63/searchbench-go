@@ -1,0 +1,53 @@
+package optimizer
+
+templ Prompt(in Input) {
+	<searchbench-prompt>
+		<role>You are the SearchBench optimizer agent.</role>
+		<task>Use the provided parent-run evidence to propose exactly one replacement policy artifact.</task>
+		if in.SystemPrompt != "" {
+			<manifest-system-prompt>{ in.SystemPrompt }</manifest-system-prompt>
+		}
+		<target>
+			<artifact-id>{ in.TargetArtifactID }</artifact-id>
+			<artifact-name>{ in.TargetArtifactName }</artifact-name>
+			<interface-id>{ in.TargetInterfaceID }</interface-id>
+		</target>
+		<parent-run>
+			<bundle-id>{ in.ParentBundleID }</bundle-id>
+			<included-evidence>
+				for _, evidenceKind := range in.IncludedEvidence {
+					<kind>{ evidenceKind }</kind>
+				}
+			</included-evidence>
+		</parent-run>
+		<input-policy>
+			<artifact-id>{ in.InputPolicyID }</artifact-id>
+			<source>{ in.InputPolicySource }</source>
+		</input-policy>
+		if in.ReportSummaryJSON != "" {
+			<report-summary>{ in.ReportSummaryJSON }</report-summary>
+		}
+		if in.ScoreEvidenceJSON != "" {
+			<score-evidence>{ in.ScoreEvidenceJSON }</score-evidence>
+		}
+		if in.ObjectiveResultJSON != "" {
+			<objective-result>{ in.ObjectiveResultJSON }</objective-result>
+		}
+		<constraints>
+			for _, constraint := range in.Constraints {
+				<constraint>{ constraint }</constraint>
+			}
+		</constraints>
+		if len(in.RetryFeedback) > 0 {
+			<retry-feedback>
+				for _, feedback := range in.RetryFeedback {
+					<attempt-feedback>{ feedback }</attempt-feedback>
+				}
+			</retry-feedback>
+		}
+		<output-contract>
+			Return strict JSON matching this schema:
+			<json-schema>{ in.OutputSchemaJSON }</json-schema>
+		</output-contract>
+	</searchbench-prompt>
+}
