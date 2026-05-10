@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -33,12 +33,12 @@ func roleLabel(role domain.Role) string {
 	return string(role)
 }
 
-func taskLabel(task domain.TaskSpec) string {
+func taskLabel(task domain.MatchSpec) string {
 	return task.ID.String()
 }
 
 func runTaskLabel(spec run.Spec) string {
-	return spec.Task.ID.String()
+	return spec.Match.ID.String()
 }
 
 func formatFloat(value float64) string {
@@ -62,11 +62,11 @@ func summarizeScores(scores score.ScoreSet) string {
 	}, " ")
 }
 
-func summarizeReport(report report.CandidateReport) string {
+func summarizeReport(report report.RoundReport) string {
 	return strings.Join([]string{
 		string(report.Decision.Decision),
-		fmt.Sprintf("baseline=%d ok/%d failed", len(report.Runs.Baseline), len(report.Failures.Baseline)),
-		fmt.Sprintf("candidate=%d ok/%d failed", len(report.Runs.Candidate), len(report.Failures.Candidate)),
+		fmt.Sprintf("incumbent=%d ok/%d failed", len(report.Runs.Incumbent), len(report.Failures.Incumbent)),
+		fmt.Sprintf("challenger=%d ok/%d failed", len(report.Runs.Challenger), len(report.Failures.Challenger)),
 		fmt.Sprintf("%d regressions", len(report.Regressions)),
 	}, " · ")
 }

@@ -1,0 +1,232 @@
+@go.Package { name = "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated" }
+module searchbench.config.SearchBenchRound
+
+import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/go.pkl"
+
+game: Game = new {}
+
+name: String
+
+mode: RunMode = "evaluation"
+
+dataset: Dataset
+
+interfaces: Interfaces = new {}
+policies: Policies
+artifacts: Artifacts = new {}
+agents: Agents = new {}
+evaluation: Evaluation?
+optimization: Optimization?
+
+typealias RunMode =
+  "evaluation" |
+  "optimization"
+
+typealias DatasetKind = "lca"
+typealias Backend = "iterative_context" | "jcodemunch" | "fake"
+typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
+typealias ReportFormat = "json" | "text"
+typealias TracingProvider = "langsmith"
+typealias ArtifactKind =
+  "policy" |
+  "next_challenger" |
+  "completed_round_bundle"
+typealias NextChallengerEvidenceKind =
+  "report_summary" |
+  "round_evidence" |
+  "objective_result" |
+  "challenger_policy"
+typealias OptimizerDeniedEvidenceKind =
+  "gold_labels" |
+  "oracle_files" |
+  "raw_dataset_answers"
+
+class Game {
+  id: String = "code-localization"
+  kind: String = "code_localization"
+}
+
+class Dataset {
+  kind: DatasetKind = "lca"
+  name: String = "JetBrains-Research/lca-bug-localization"
+  config: String
+  split: String
+  maxItems: Int(this > 0)?
+}
+
+class Interfaces {
+  iterativeContextSelectionPolicyV1: Interface = new {
+    id = "iterative_context.selection_policy.v1"
+  }
+}
+
+class Interface {
+  id: String
+}
+
+class Policies {
+  incumbent: System
+  challenger: System
+}
+
+class System {
+  id: String
+  name: String = id
+  backend: Backend
+  promptBundle: PromptBundle = new {}
+  runtime: Runtime = new {}
+}
+
+class PromptBundle {
+  name: String = "default"
+  version: String? = "dev"
+}
+
+class Runtime {
+  maxSteps: Int(this > 0) = 16
+  timeoutSeconds: Int(this > 0) = 300
+}
+
+class Artifacts {
+  challengerPolicyRound001: PolicyArtifact?
+  nextChallengerRound002: NextChallengerArtifact?
+  parentRound001Bundle: CompletedRoundBundleArtifact?
+}
+
+class PolicyArtifact {
+  id: String
+  kind: "policy" = "policy"
+  path: String
+  implements: Interface
+}
+
+class NextChallengerArtifact {
+  id: String
+  kind: "next_challenger" = "next_challenger"
+  artifactName: String
+  implements: Interface
+}
+
+class CompletedRoundBundleArtifact {
+  id: String
+  kind: "completed_round_bundle" = "completed_round_bundle"
+  path: String
+}
+
+class Agents {
+  evaluator: Evaluator?
+  optimizer: Optimizer?
+}
+
+class AgentToolPolicy {
+  allow: Listing<String> = new {}
+  deny: Listing<String> = new {}
+}
+
+class Model {
+  provider: Provider
+  name: String
+  routing: String?
+  maxOutputTokens: Int(this > 0)? = 2000
+}
+
+class AgentBounds {
+  maxModelTurns: Int(this > 0) = 8
+  maxToolCalls: Int(this >= 0) = 24
+  timeoutSeconds: Int(this > 0) = 300
+}
+
+class Evaluator {
+  model: Model
+  bounds: AgentBounds = new {}
+  tools: AgentToolPolicy = new {}
+  systemPrompt: String?
+  retry: RetryPolicy = new {}
+  tracing: Tracing?
+}
+
+class Optimizer {
+  model: Model
+  bounds: AgentBounds = new {}
+  tools: AgentToolPolicy = new {}
+  systemPrompt: String?
+}
+
+class RetryPolicy {
+  maxAttempts: Int(this > 0) = 2
+  retryOnModelError: Boolean = true
+  retryOnToolFailure: Boolean = false
+  retryOnFinalizationFailure: Boolean = true
+  retryOnInvalidPrediction: Boolean = true
+}
+
+class Tracing {
+  enabled: Boolean = false
+  provider: TracingProvider?
+  project: String?
+}
+
+class Evaluation {
+  agent: Evaluator
+  incumbent: EvaluationSystemBinding
+  challenger: ChallengerEvaluationBinding
+  scoring: Scoring
+  report: Report = new {}
+}
+
+class EvaluationSystemBinding {
+  system: System
+}
+
+class ChallengerEvaluationBinding {
+  system: System
+  uses: ChallengerUses = new {}
+}
+
+class ChallengerUses {
+  selectionPolicy: PolicyArtifact
+}
+
+class Scoring {
+  objective: String
+}
+
+class Report {
+  formats: Listing<ReportFormat> = new {
+    "json"
+    "text"
+  }
+}
+
+class Optimization {
+  agent: Optimizer
+  parentRound: ParentRound
+  target: NextChallengerTarget
+  evidence: NextChallengerEvidence = new {}
+}
+
+class ParentRound {
+  bundle: CompletedRoundBundleArtifact
+}
+
+class NextChallengerTarget {
+  input: PolicyArtifact
+  output: NextChallengerArtifact
+}
+
+class NextChallengerEvidence {
+  from: CompletedRoundBundleArtifact
+
+  include: Listing<NextChallengerEvidenceKind> = new {
+    "report_summary"
+    "round_evidence"
+    "objective_result"
+    "challenger_policy"
+  }
+
+  deny: Listing<OptimizerDeniedEvidenceKind> = new {
+    "gold_labels"
+    "oracle_files"
+    "raw_dataset_answers"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "schema_version": "searchbench.objective_result.v1",
+  "objective_id": "localization-v1",
+  "evidence_refs": [
+    {
+      "name": "current",
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
+      "evidence_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
+    }
+  ],
+  "values": [
+    {
+      "name": "challengerQuality",
+      "value": 0.8333333333333334,
+      "kind": ""
+    },
+    {
+      "name": "parentChallengerQuality",
+      "value": 0.8333333333333334,
+      "kind": ""
+    },
+    {
+      "name": "improvementVsParent",
+      "value": 0,
+      "kind": ""
+    },
+    {
+      "name": "tokenEfficiency",
+      "value": 0.99075,
+      "kind": ""
+    },
+    {
+      "name": "base",
+      "value": 0.8648166666666668,
+      "kind": ""
+    },
+    {
+      "name": "regressionPenalty",
+      "value": 1,
+      "kind": ""
+    },
+    {
+      "name": "invalidPredictionPenalty",
+      "value": 1,
+      "kind": ""
+    },
+    {
+      "name": "final",
+      "value": 0.8648166666666668,
+      "kind": ""
+    }
+  ],
+  "final": "final",
+  "bounds": {
+    "min": 0,
+    "max": 1
+  }
+}

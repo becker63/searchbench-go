@@ -3,7 +3,7 @@ package optimizer
 templ Prompt(in Input) {
 	<searchbench-prompt>
 		<role>You are the SearchBench optimizer agent.</role>
-		<task>Use the provided parent-run evidence to propose exactly one replacement policy artifact.</task>
+		<goal>Use the provided parent-round evidence to propose exactly one next-challenger policy artifact.</goal>
 		if in.SystemPrompt != "" {
 			<manifest-system-prompt>{ in.SystemPrompt }</manifest-system-prompt>
 		}
@@ -12,14 +12,14 @@ templ Prompt(in Input) {
 			<artifact-name>{ in.TargetArtifactName }</artifact-name>
 			<interface-id>{ in.TargetInterfaceID }</interface-id>
 		</target>
-		<parent-run>
+		<parent-round>
 			<bundle-id>{ in.ParentBundleID }</bundle-id>
 			<included-evidence>
 				for _, evidenceKind := range in.IncludedEvidence {
 					<kind>{ evidenceKind }</kind>
 				}
 			</included-evidence>
-		</parent-run>
+		</parent-round>
 		<input-policy>
 			<artifact-id>{ in.InputPolicyID }</artifact-id>
 			<source>{ in.InputPolicySource }</source>
@@ -27,8 +27,8 @@ templ Prompt(in Input) {
 		if in.ReportSummaryJSON != "" {
 			<report-summary>{ in.ReportSummaryJSON }</report-summary>
 		}
-		if in.ScoreEvidenceJSON != "" {
-			<score-evidence>{ in.ScoreEvidenceJSON }</score-evidence>
+		if in.RoundEvidenceJSON != "" {
+			<round-evidence>{ in.RoundEvidenceJSON }</round-evidence>
 		}
 		if in.ObjectiveResultJSON != "" {
 			<objective-result>{ in.ObjectiveResultJSON }</objective-result>

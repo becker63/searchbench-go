@@ -24,7 +24,7 @@ type HostPath string
 
 // RepoSnapshot identifies the exact code universe for a task.
 //
-// The same RepoSnapshot should be shared by baseline and candidate runs.
+// The same RepoSnapshot should be shared by incumbent and challenger runs.
 type RepoSnapshot struct {
 	Name RepoName `json:"name"`
 	SHA  RepoSHA  `json:"sha"`

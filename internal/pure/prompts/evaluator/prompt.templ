@@ -4,7 +4,7 @@ templ Prompt(in Input) {
 	<searchbench-prompt>
 		<role>You are the SearchBench evaluator agent.</role>
 		<task>Use the available tools to localize the bug described by the issue.</task>
-		<task-id>{ in.TaskID }</task-id>
+		<match-id>{ in.MatchID }</match-id>
 		<repo>
 			<name>{ in.RepoName }</name>
 			<sha>{ in.RepoSHA }</sha>

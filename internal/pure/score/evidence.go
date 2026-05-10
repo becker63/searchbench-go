@@ -8,51 +8,59 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 )
 
-const EvidenceSchemaVersion = "searchbench.score_evidence.v1"
+const EvidenceSchemaVersion = "searchbench.round_evidence.v1"
 
 var (
 	ErrUnsupportedMetricDirection   = errors.New("score: unsupported metric direction")
-	ErrInvalidScoreEvidence         = errors.New("score: invalid score evidence")
-	ErrMissingEvidenceSchemaVersion = errors.New("score: missing score evidence schema version")
-	ErrMissingEvidenceReportID      = errors.New("score: missing score evidence report id")
+	ErrInvalidRoundEvidence         = errors.New("score: invalid round evidence")
+	ErrMissingEvidenceSchemaVersion = errors.New("score: missing round evidence schema version")
+	ErrMissingEvidenceReportID      = errors.New("score: missing round evidence report id")
 )
 
-// ScoreEvidenceDocument is the objective-ready raw evidence view derived from a
-// candidate report.
+// RoundEvidenceDocument is the objective-ready durable evidence view derived
+// from a round report.
 //
 // It is intentionally field-addressable so future objective layers can read
 // durable facts without parsing report tables or artifact package internals.
-type ScoreEvidenceDocument struct {
+type RoundEvidenceDocument struct {
 	SchemaVersion        string                        `json:"schema_version"`
+	GameID               string                        `json:"game_id,omitempty"`
+	RoundID              string                        `json:"round_id,omitempty"`
 	ReportID             domain.ReportID               `json:"report_id"`
-	Systems              domain.Pair[domain.SystemRef] `json:"systems"`
-	RunCounts            RoleCounts                    `json:"run_counts"`
+	Policies             domain.Pair[domain.SystemRef] `json:"policies"`
+	MatchCounts          MatchCounts                   `json:"match_counts"`
+	ExecutionCounts      RoleCounts                    `json:"execution_counts"`
 	FailureCounts        RoleCounts                    `json:"failure_counts"`
 	LocalizationDistance LocalizationDistanceEvidence  `json:"localization_distance"`
-	Usage                UsageEvidence                 `json:"usage"`
-	BaselineUsage        UsageEvidence                 `json:"baseline_usage"`
+	ChallengerUsage      UsageEvidence                 `json:"challenger_usage"`
+	IncumbentUsage       UsageEvidence                 `json:"incumbent_usage"`
 	Regressions          RegressionEvidenceSummary     `json:"regressions"`
 	RegressionDetails    []RegressionEvidence          `json:"regression_details,omitempty"`
 	InvalidPredictions   InvalidPredictionEvidence     `json:"invalid_predictions"`
 	Metrics              []MetricEvidence              `json:"metrics"`
-	PromotionDecision    PromotionDecisionEvidence     `json:"promotion_decision"`
+	Decision             DecisionEvidence              `json:"decision"`
 }
 
-// RoleCounts records baseline/candidate counts in stable role order.
+// MatchCounts records how many matches were included in the round evidence.
+type MatchCounts struct {
+	Total int `json:"total"`
+}
+
+// RoleCounts records incumbent/challenger counts in stable role order.
 type RoleCounts struct {
-	Baseline  int `json:"baseline"`
-	Candidate int `json:"candidate"`
+	Incumbent  int `json:"incumbent"`
+	Challenger int `json:"challenger"`
 }
 
 // MetricEvidence is the pure metric-comparison evidence shape.
 type MetricEvidence struct {
-	Metric    MetricName `json:"metric"`
-	Direction Direction  `json:"direction"`
-	Baseline  float64    `json:"baseline"`
-	Candidate float64    `json:"candidate"`
-	Delta     float64    `json:"delta"`
-	Improved  bool       `json:"improved"`
-	Regressed bool       `json:"regressed"`
+	Metric     MetricName `json:"metric"`
+	Direction  Direction  `json:"direction"`
+	Incumbent  float64    `json:"incumbent"`
+	Challenger float64    `json:"challenger"`
+	Delta      float64    `json:"delta"`
+	Improved   bool       `json:"improved"`
+	Regressed  bool       `json:"regressed"`
 }
 
 // LocalizationDistanceEvidence exposes existing localization-oriented metric
@@ -83,13 +91,13 @@ type RegressionEvidenceSummary struct {
 // RegressionEvidence preserves report-level regression detail in a score-owned
 // evidence shape.
 type RegressionEvidence struct {
-	TaskID    domain.TaskID `json:"task_id"`
-	Metric    MetricName    `json:"metric"`
-	Baseline  float64       `json:"baseline"`
-	Candidate float64       `json:"candidate"`
-	Delta     float64       `json:"delta"`
-	Severity  string        `json:"severity"`
-	Reason    string        `json:"reason"`
+	MatchID    domain.MatchID `json:"match_id"`
+	Metric     MetricName     `json:"metric"`
+	Incumbent  float64        `json:"incumbent"`
+	Challenger float64        `json:"challenger"`
+	Delta      float64        `json:"delta"`
+	Severity   string         `json:"severity"`
+	Reason     string         `json:"reason"`
 }
 
 // InvalidPredictionEvidence is explicit about whether invalid-prediction
@@ -99,40 +107,40 @@ type InvalidPredictionEvidence struct {
 	Count int  `json:"count"`
 }
 
-// PromotionDecisionEvidence is the stable objective-facing decision summary.
-type PromotionDecisionEvidence struct {
+// DecisionEvidence is the stable objective-facing decision summary.
+type DecisionEvidence struct {
 	Decision string `json:"decision"`
 	Reason   string `json:"reason,omitempty"`
 }
 
 // Validate checks that the evidence document has the minimum structure needed
 // for persistence and future objective use.
-func (d ScoreEvidenceDocument) Validate() error {
+func (d RoundEvidenceDocument) Validate() error {
 	if strings.TrimSpace(d.SchemaVersion) == "" {
-		return fmt.Errorf("%w: %w", ErrInvalidScoreEvidence, ErrMissingEvidenceSchemaVersion)
+		return fmt.Errorf("%w: %w", ErrInvalidRoundEvidence, ErrMissingEvidenceSchemaVersion)
 	}
 	if strings.TrimSpace(d.ReportID.String()) == "" {
-		return fmt.Errorf("%w: %w", ErrInvalidScoreEvidence, ErrMissingEvidenceReportID)
+		return fmt.Errorf("%w: %w", ErrInvalidRoundEvidence, ErrMissingEvidenceReportID)
 	}
 	return nil
 }
 
 // NewMetricEvidence constructs evidence for one metric comparison using the
 // canonical metric direction.
-func NewMetricEvidence(metric MetricName, baseline, candidate float64) (MetricEvidence, error) {
+func NewMetricEvidence(metric MetricName, incumbent, challenger float64) (MetricEvidence, error) {
 	direction, ok := DirectionForMetric(metric)
 	if !ok {
 		return MetricEvidence{}, ErrUnsupportedMetricDirection
 	}
-	improved := Improved(direction, baseline, candidate)
+	improved := Improved(direction, incumbent, challenger)
 	return MetricEvidence{
-		Metric:    metric,
-		Direction: direction,
-		Baseline:  baseline,
-		Candidate: candidate,
-		Delta:     candidate - baseline,
-		Improved:  improved,
-		Regressed: baseline != candidate && !improved,
+		Metric:     metric,
+		Direction:  direction,
+		Incumbent:  incumbent,
+		Challenger: challenger,
+		Delta:      challenger - incumbent,
+		Improved:   improved,
+		Regressed:  incumbent != challenger && !improved,
 	}, nil
 }
 

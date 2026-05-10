@@ -15,37 +15,50 @@ type ResolveRequest struct {
 	BundleID           string
 	ReportID           domain.ReportID
 	ParentRef          *score.ObjectiveEvidenceRef
-	ParentScorePath    string
+	ParentEvidencePath string
 	Now                func() time.Time
 }
 
 // Plan is the canonical app-layer evaluation projection used by execution.
 type Plan struct {
-	ManifestPath   string                           `json:"manifest_path,omitempty"`
-	ExperimentName string                           `json:"experiment_name,omitempty"`
-	Mode           string                           `json:"mode,omitempty"`
-	Dataset        DatasetConfig                    `json:"dataset,omitempty"`
-	Systems        domain.Pair[domain.SystemSpec]   `json:"-"`
-	Tasks          domain.NonEmpty[domain.TaskSpec] `json:"tasks"`
-	Parallelism    compare.Parallelism              `json:"-"`
-	Evaluator      EvaluatorConfig                  `json:"evaluator,omitempty"`
-	Scoring        ScoringConfig                    `json:"scoring,omitempty"`
-	Output         OutputConfig                     `json:"output,omitempty"`
-	Report         ReportConfig                     `json:"report_options,omitempty"`
-	Bundle         BundleConfig                     `json:"bundle,omitempty"`
-	ReportID       domain.ReportID                  `json:"report_id,omitempty"`
-	CreatedAt      time.Time                        `json:"created_at"`
+	ManifestPath string                            `json:"manifest_path,omitempty"`
+	RoundName    string                            `json:"round_name,omitempty"`
+	Mode         string                            `json:"mode,omitempty"`
+	Game         GameConfig                        `json:"game,omitempty"`
+	Round        RoundConfig                       `json:"round,omitempty"`
+	Dataset      DatasetConfig                     `json:"dataset,omitempty"`
+	Policies     domain.Pair[domain.SystemSpec]    `json:"-"`
+	Matches      domain.NonEmpty[domain.MatchSpec] `json:"matches"`
+	Parallelism  compare.Parallelism               `json:"-"`
+	Evaluator    EvaluatorConfig                   `json:"evaluator,omitempty"`
+	Scoring      ScoringConfig                     `json:"scoring,omitempty"`
+	Output       OutputConfig                      `json:"output,omitempty"`
+	Report       ReportConfig                      `json:"report_options,omitempty"`
+	Bundle       BundleConfig                      `json:"bundle,omitempty"`
+	ReportID     domain.ReportID                   `json:"report_id,omitempty"`
+	CreatedAt    time.Time                         `json:"created_at"`
+}
+
+// GameConfig records the resolved game contract identity from the manifest.
+type GameConfig struct {
+	ID   string `json:"id,omitempty"`
+	Kind string `json:"kind,omitempty"`
+}
+
+// RoundConfig records the resolved round identity.
+type RoundConfig struct {
+	ID string `json:"id,omitempty"`
 }
 
 // ComparePlan converts the canonical evaluation model into the executable
 // comparison plan used by current runners.
 func (p Plan) ComparePlan() compare.Plan {
-	return compare.NewPlan(p.Systems, p.Tasks)
+	return compare.NewPlan(p.Policies, p.Matches)
 }
 
 // BundleSystems returns the report-safe system identities used for serialization.
 func (p Plan) BundleSystems() domain.Pair[domain.SystemRef] {
-	return p.ComparePlan().ReportSpec().Systems
+	return p.ComparePlan().ReportSpec().Policies
 }
 
 // DatasetConfig records the resolved dataset selection from the manifest.
@@ -90,10 +103,10 @@ type RetryPolicyConfig struct {
 
 // ScoringConfig records the resolved scoring objective and evidence refs.
 type ScoringConfig struct {
-	ObjectivePath   string                      `json:"objective_path,omitempty"`
-	CurrentEvidence score.ObjectiveEvidenceRef  `json:"current_evidence"`
-	ParentEvidence  *score.ObjectiveEvidenceRef `json:"parent_evidence,omitempty"`
-	ParentScorePath string                      `json:"-"`
+	ObjectivePath      string                      `json:"objective_path,omitempty"`
+	CurrentEvidence    score.ObjectiveEvidenceRef  `json:"current_evidence"`
+	ParentEvidence     *score.ObjectiveEvidenceRef `json:"parent_evidence,omitempty"`
+	ParentEvidencePath string                      `json:"-"`
 }
 
 // OutputConfig records resolved artifact output and policy path preferences.
@@ -108,8 +121,8 @@ type OutputConfig struct {
 
 // ResolvedPolicyPaths records resolved manifest-relative policy paths.
 type ResolvedPolicyPaths struct {
-	Baseline  string `json:"baseline,omitempty"`
-	Candidate string `json:"candidate,omitempty"`
+	Incumbent  string `json:"incumbent,omitempty"`
+	Challenger string `json:"challenger,omitempty"`
 }
 
 // ReportConfig records durable report rendering preferences.

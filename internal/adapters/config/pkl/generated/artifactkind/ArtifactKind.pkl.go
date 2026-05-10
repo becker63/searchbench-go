@@ -1,4 +1,4 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package artifactkind
 
 import (
@@ -9,9 +9,9 @@ import (
 type ArtifactKind string
 
 const (
-	Policy                    ArtifactKind = "policy"
-	PolicyProposal            ArtifactKind = "policy_proposal"
-	CompletedEvaluationBundle ArtifactKind = "completed_evaluation_bundle"
+	Policy               ArtifactKind = "policy"
+	NextChallenger       ArtifactKind = "next_challenger"
+	CompletedRoundBundle ArtifactKind = "completed_round_bundle"
 )
 
 // String returns the string representation of ArtifactKind
@@ -26,10 +26,10 @@ func (rcv *ArtifactKind) UnmarshalBinary(data []byte) error {
 	switch str := string(data); str {
 	case "policy":
 		*rcv = Policy
-	case "policy_proposal":
-		*rcv = PolicyProposal
-	case "completed_evaluation_bundle":
-		*rcv = CompletedEvaluationBundle
+	case "next_challenger":
+		*rcv = NextChallenger
+	case "completed_round_bundle":
+		*rcv = CompletedRoundBundle
 	default:
 		return fmt.Errorf(`illegal: "%s" is not a valid ArtifactKind`, str)
 	}

@@ -39,7 +39,7 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 	}
 
 	manifestDir := filepath.Dir(manifestPath)
-	parentBundlePath, err := resolveExistingManifestPath(manifestDir, cfg.Optimization.ParentRun.Bundle.Path)
+	parentBundlePath, err := resolveExistingManifestPath(manifestDir, cfg.Optimization.ParentRound.Bundle.Path)
 	if err != nil {
 		return Plan{}, fmt.Errorf("resolve parent bundle path: %w", err)
 	}
@@ -72,7 +72,7 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 
 	return Plan{
 		ManifestPath:       manifestPath,
-		ExperimentName:     cfg.Name,
+		RoundName:          cfg.Name,
 		CreatedAt:          now,
 		BundleID:           bundleID,
 		BundleCollection:   bundleCollection,
@@ -95,14 +95,14 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			},
 			SystemPrompt: systemPrompt,
 		},
-		Target: pureoptimizer.Target{
+		Target: pureoptimizer.NextChallengerTarget{
 			InputArtifactID:  artifactID(cfg.Optimization.Target.Input.Id),
 			OutputArtifactID: artifactID(cfg.Optimization.Target.Output.Id),
 			OutputName:       cfg.Optimization.Target.Output.ArtifactName,
 			InterfaceID:      cfg.Optimization.Target.Output.Implements.Id,
 		},
-		ParentBundle: pureoptimizer.ParentRunRef{
-			ArtifactID: artifactID(cfg.Optimization.ParentRun.Bundle.Id),
+		ParentBundle: pureoptimizer.ParentRoundRef{
+			ArtifactID: artifactID(cfg.Optimization.ParentRound.Bundle.Id),
 			BundleID:   parentBundleID,
 			BundlePath: hostPath(parentBundlePath),
 		},
@@ -165,7 +165,7 @@ func stringifyTools(values []string) []string {
 	return out
 }
 
-func stringifyEvidenceKinds(values []config.OptimizerEvidenceKind) []string {
+func stringifyEvidenceKinds(values []config.NextChallengerEvidenceKind) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, value.String())

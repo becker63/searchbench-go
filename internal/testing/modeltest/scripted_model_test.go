@@ -53,7 +53,7 @@ func TestScriptedModelRecordsCalls(t *testing.T) {
 
 	withTools, err := model.WithTools([]*schema.ToolInfo{{
 		Name: "resolve_file",
-		Desc: "Resolve a file candidate.",
+		Desc: "Resolve a file challenger.",
 	}})
 	if err != nil {
 		t.Fatalf("WithTools() error = %v", err)

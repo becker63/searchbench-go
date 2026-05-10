@@ -184,7 +184,7 @@ Examples:
 - Eino execution types may leak into core models
 - testing helpers may start shaping production architecture
 - prompt inputs may become too coupled to executor packages
-- CLI pipeline types may want to become shared run records
+- CLI pipeline types may want to become shared execution records
 - old Python semantics may be preserved in the wrong layer
 
 Stopping immediately to fix all of this would break sequencing.
@@ -218,7 +218,7 @@ The agent’s results help generate the next issue list.
 
 Order issues by information exposure.
 
-Prefer proving seams before composing systems.
+Prefer proving seams before composing policies.
 
 A useful sequence is:
 
@@ -229,11 +229,11 @@ A useful sequence is:
     5. prove MCP tool wiring
     6. add process/session lifecycle
     7. add policy installation
-    8. run IC evaluator
+    8. execute IC-backed match evaluation
     9. add scoring
-    10. compose full run
+    10. compose full round
     11. add tracing
-    12. add writer/optimization loop
+    12. add next-challenger optimization loop
     13. perform package-boundary sweep
 
 Do not ask an agent to build the full system before the seams exist.

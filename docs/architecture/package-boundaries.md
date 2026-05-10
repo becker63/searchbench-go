@@ -30,10 +30,10 @@ pure / generic
 SearchBench-specific deterministic model code.
 
 Belongs here:
-- domain vocabulary
-- run records and failures
-- score models, evidence, and objective results
-- report models and report-to-score projection
+- game/round/match/policy vocabulary
+- execution records and failures
+- score models, round evidence, and objective results
+- round report models and report-to-evidence construction
 - pure codegraph models
 - pure prompt input and rendering
 - harness-owned usage accounting
@@ -49,8 +49,12 @@ Does not belong here:
 - CLI presentation
 
 Current packages:
+- `internal/pure/game`
+- `internal/pure/round`
 - `internal/pure/domain`
-- `internal/pure/run`
+- `internal/pure/match`
+- `internal/pure/policy`
+- `internal/pure/execution`
 - `internal/pure/score`
 - `internal/pure/report`
 - `internal/pure/codegraph`
@@ -70,7 +74,7 @@ are genuinely generic.
 
 ## `internal/ports/`
 
-Project-owned contracts for effectful systems.
+Project-owned contracts for effectful policies.
 
 Belongs here:
 - backend/session interfaces
@@ -92,7 +96,7 @@ Use-case orchestration and composition.
 
 Belongs here:
 - comparison orchestration
-- canonical resolved experiment semantics
+- canonical resolved round semantics
 - manifest resolution, explicit evidence threading, and execution composition
 - cross-cutting app logging used by orchestrators and surfaces
 
@@ -101,9 +105,10 @@ Does not belong here:
 - concrete provider or filesystem adapters
 
 Current packages:
-- `internal/app/experiment`
+- `internal/app/round`
 - `internal/app/compare`
-- `internal/app/localrun`
+- `internal/app/evaluation`
+- `internal/app/optimizer`
 - `internal/app/logging`
 
 ## `internal/adapters/`

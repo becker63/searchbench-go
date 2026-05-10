@@ -1,0 +1,108 @@
+amends "../local-ic-vs-jcodemunch/round.pkl"
+
+name = "optimize-ic-round-002"
+mode = "optimization"
+
+interfaces {
+  iterativeContextSelectionPolicyV1 {
+    id = "iterative_context.selection_policy.v1"
+  }
+}
+
+artifacts {
+  challengerPolicyRound001 {
+    id = "challenger-policy-round-001"
+    kind = "policy"
+    path = "policies/challenger_policy.py"
+    implements = interfaces.iterativeContextSelectionPolicyV1
+  }
+
+  parentRound001Bundle {
+    id = "local-ic-vs-jcodemunch-round-001"
+    kind = "completed_round_bundle"
+    path = "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001"
+  }
+
+  nextChallengerRound002 {
+    id = "next-challenger-round-002"
+    kind = "next_challenger"
+    artifactName = "next_challenger_policy.round-002.py"
+    implements = interfaces.iterativeContextSelectionPolicyV1
+  }
+}
+
+evaluation = null
+
+agents {
+  optimizer {
+    model {
+      provider = "fake"
+      name = "fake-optimizer"
+      maxOutputTokens = 4000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 16
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "read_parent_bundle"
+        "read_score_evidence"
+        "read_objective_result"
+        "read_report_summary"
+        "read_artifact"
+        "write_artifact_proposal"
+      }
+
+      deny {
+        "run_evaluator"
+        "shell"
+        "go_test"
+        "write_manifest"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Improve the Iterative Context selection policy using only the provided parent-run evidence.
+
+    Prefer small, inspectable changes.
+    Preserve the declared policy interface.
+    Do not overfit to hidden labels or oracle files.
+    Emit exactly one replacement policy proposal.
+    """
+  }
+}
+
+optimization {
+  agent = agents.optimizer
+
+  parentRound {
+    bundle = artifacts.parentRound001Bundle
+  }
+
+  target {
+    input = artifacts.challengerPolicyRound001
+    output = artifacts.nextChallengerRound002
+  }
+
+  evidence {
+    from = artifacts.parentRound001Bundle
+
+    include {
+      "report_summary"
+      "round_evidence"
+      "objective_result"
+      "challenger_policy"
+    }
+
+    deny {
+      "gold_labels"
+      "oracle_files"
+      "raw_dataset_answers"
+    }
+  }
+}

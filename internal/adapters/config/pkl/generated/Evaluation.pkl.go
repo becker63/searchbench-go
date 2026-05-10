@@ -1,12 +1,12 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package generated
 
 type Evaluation struct {
 	Agent Evaluator `pkl:"agent"`
 
-	Baseline EvaluationSystemBinding `pkl:"baseline"`
+	Incumbent EvaluationSystemBinding `pkl:"incumbent"`
 
-	Candidate CandidateEvaluationBinding `pkl:"candidate"`
+	Challenger ChallengerEvaluationBinding `pkl:"challenger"`
 
 	Scoring Scoring `pkl:"scoring"`
 

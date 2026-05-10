@@ -25,11 +25,11 @@ const (
 	completeMarkerContent        = "complete\n"
 )
 
-func defaultValidateProposal(ctx context.Context, proposal pureoptimizer.Proposal) (executoreino.ProposalValidationResult, *pureoptimizer.Failure) {
+func defaultValidateProposal(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (executoreino.ProposalValidationResult, *pureoptimizer.Failure) {
 	stageDir, err := os.MkdirTemp("", "searchbench-optimizer-stage-*")
 	if err != nil {
 		return executoreino.ProposalValidationResult{}, &pureoptimizer.Failure{
-			Phase:   pureoptimizer.PhaseWriteCandidateStage,
+			Phase:   pureoptimizer.PhaseWriteNextChallengerStage,
 			Kind:    pureoptimizer.FailureKindPolicyStageWriteFailed,
 			Message: "create staged policy directory",
 			Cause:   err,
@@ -40,7 +40,7 @@ func defaultValidateProposal(ctx context.Context, proposal pureoptimizer.Proposa
 	stagePath := filepath.Join(stageDir, proposal.ArtifactName)
 	if err := os.WriteFile(stagePath, []byte(proposal.Code), 0o644); err != nil {
 		return executoreino.ProposalValidationResult{}, &pureoptimizer.Failure{
-			Phase:   pureoptimizer.PhaseWriteCandidateStage,
+			Phase:   pureoptimizer.PhaseWriteNextChallengerStage,
 			Kind:    pureoptimizer.FailureKindPolicyStageWriteFailed,
 			Message: "write staged policy proposal",
 			Cause:   err,
@@ -115,8 +115,8 @@ func defaultValidateProposal(ctx context.Context, proposal pureoptimizer.Proposa
 }
 
 func resolvePython() (string, error) {
-	for _, candidate := range []string{"python3", "python"} {
-		path, err := exec.LookPath(candidate)
+	for _, challenger := range []string{"python3", "python"} {
+		path, err := exec.LookPath(challenger)
 		if err == nil {
 			return path, nil
 		}
@@ -124,7 +124,7 @@ func resolvePython() (string, error) {
 	return "", errors.New("python interpreter not found")
 }
 
-func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.Result) (string, error) {
+func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.NextChallengerRecord) (string, error) {
 	runsRoot := plan.BundleCollection
 	finalDir := filepath.Join(runsRoot, plan.BundleID)
 	stageDir := filepath.Join(runsRoot, "."+plan.BundleID+".staging")
@@ -165,7 +165,7 @@ func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.Result) (s
 		return nil
 	}
 
-	if err := writeJSON("resolved.json", resolvedDocument(plan)); err != nil {
+	if err := writeJSON("resolved-next-challenger.json", resolvedDocument(plan)); err != nil {
 		return "", err
 	}
 	if result.RenderedPrompt != "" {
@@ -180,7 +180,7 @@ func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.Result) (s
 			SHA256:    sha256String(data),
 		})
 	}
-	if err := writeJSON("optimizer_result.json", optimizerResultDocument(result)); err != nil {
+	if err := writeJSON("optimizer_result.json", nextChallengerRecordDocument(result)); err != nil {
 		return "", err
 	}
 	for _, attempt := range result.Attempts {
@@ -214,7 +214,7 @@ func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.Result) (s
 			return "", err
 		}
 		files = append(files, bundleFile{
-			Kind:      "policy_proposal",
+			Kind:      "next_challenger",
 			Path:      filepath.ToSlash(result.Proposal.ArtifactName),
 			MediaType: "text/x-python",
 			SHA256:    sha256String(data),
@@ -263,35 +263,35 @@ func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.Result) (s
 }
 
 type resolvedPlanDocument struct {
-	ManifestPath     string                     `json:"manifest_path"`
-	ExperimentName   string                     `json:"experiment_name"`
-	Mode             string                     `json:"mode"`
-	ParentRun        pureoptimizer.ParentRunRef `json:"parent_run"`
-	Target           pureoptimizer.Target       `json:"target"`
-	Agent            pureoptimizer.AgentConfig  `json:"agent"`
-	IncludedEvidence []string                   `json:"included_evidence,omitempty"`
-	DeniedEvidence   []string                   `json:"denied_evidence,omitempty"`
-	InputPolicyPath  string                     `json:"input_policy_path,omitempty"`
-	OutputBundlePath string                     `json:"output_bundle_path,omitempty"`
+	ManifestPath     string                             `json:"manifest_path"`
+	RoundName        string                             `json:"round_name"`
+	Mode             string                             `json:"mode"`
+	ParentRound      pureoptimizer.ParentRoundRef       `json:"parent_round"`
+	Target           pureoptimizer.NextChallengerTarget `json:"target"`
+	Agent            pureoptimizer.AgentConfig          `json:"agent"`
+	IncludedEvidence []string                           `json:"included_evidence,omitempty"`
+	DeniedEvidence   []string                           `json:"denied_evidence,omitempty"`
+	InputPolicyPath  string                             `json:"input_policy_path,omitempty"`
+	OutputBundlePath string                             `json:"output_bundle_path,omitempty"`
 }
 
 type attemptDocument struct {
-	Number                 int                        `json:"number"`
-	State                  pureoptimizer.AttemptState `json:"state"`
-	RawOutput              string                     `json:"raw_output,omitempty"`
-	Proposal               *pureoptimizer.Proposal    `json:"proposal,omitempty"`
-	Failure                *pureoptimizer.Failure     `json:"failure,omitempty"`
-	PipelineResults        []stepResultDocument       `json:"pipeline_results,omitempty"`
-	PipelineClassification *classificationDocument    `json:"pipeline_classification,omitempty"`
-	RetryFeedback          string                     `json:"retry_feedback,omitempty"`
+	Number                 int                                   `json:"number"`
+	State                  pureoptimizer.AttemptState            `json:"state"`
+	RawOutput              string                                `json:"raw_output,omitempty"`
+	Proposal               *pureoptimizer.NextChallengerProposal `json:"proposal,omitempty"`
+	Failure                *pureoptimizer.Failure                `json:"failure,omitempty"`
+	PipelineResults        []stepResultDocument                  `json:"pipeline_results,omitempty"`
+	PipelineClassification *classificationDocument               `json:"pipeline_classification,omitempty"`
+	RetryFeedback          string                                `json:"retry_feedback,omitempty"`
 }
 
 type resultDocument struct {
-	Success  bool                    `json:"success"`
-	Proposal *pureoptimizer.Proposal `json:"proposal,omitempty"`
-	Failure  *pureoptimizer.Failure  `json:"failure,omitempty"`
-	Attempts []attemptDocument       `json:"attempts,omitempty"`
-	Phases   []pureoptimizer.Phase   `json:"phases,omitempty"`
+	Success  bool                                  `json:"success"`
+	Proposal *pureoptimizer.NextChallengerProposal `json:"proposal,omitempty"`
+	Failure  *pureoptimizer.Failure                `json:"failure,omitempty"`
+	Attempts []attemptDocument                     `json:"attempts,omitempty"`
+	Phases   []pureoptimizer.Phase                 `json:"phases,omitempty"`
 }
 
 type bundleMetadata struct {
@@ -337,9 +337,9 @@ type classificationDocument struct {
 func resolvedDocument(plan Plan) resolvedPlanDocument {
 	return resolvedPlanDocument{
 		ManifestPath:     plan.ManifestPath,
-		ExperimentName:   plan.ExperimentName,
+		RoundName:        plan.RoundName,
 		Mode:             "optimization",
-		ParentRun:        plan.ParentBundle,
+		ParentRound:      plan.ParentBundle,
 		Target:           plan.Target,
 		Agent:            plan.Agent,
 		IncludedEvidence: append([]string(nil), plan.IncludedEvidence...),
@@ -349,7 +349,7 @@ func resolvedDocument(plan Plan) resolvedPlanDocument {
 	}
 }
 
-func optimizerResultDocument(result pureoptimizer.Result) resultDocument {
+func nextChallengerRecordDocument(result pureoptimizer.NextChallengerRecord) resultDocument {
 	out := resultDocument{
 		Success:  result.Success,
 		Proposal: result.Proposal,
@@ -414,7 +414,7 @@ func writeAttemptJSON(stageDir string, name string, attempt pureoptimizer.Attemp
 	return nil
 }
 
-func bundleStatus(result pureoptimizer.Result) string {
+func bundleStatus(result pureoptimizer.NextChallengerRecord) string {
 	if result.Success {
 		return "complete"
 	}

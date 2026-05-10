@@ -1,0 +1,4 @@
+{
+  "decision": "PROMOTE_CHALLENGER",
+  "reason": "challenger improves the composite score in local fake comparison"
+}

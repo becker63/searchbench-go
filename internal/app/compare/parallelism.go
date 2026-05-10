@@ -30,9 +30,9 @@ type Parallelism struct {
 //
 // Runner uses the index to restore plan order after parallel work completes.
 type TaskWorkResult struct {
-	Index  int
-	TaskID domain.TaskID
-	Result TaskComparisonResult
+	Index   int
+	MatchID domain.MatchID
+	Result  TaskComparisonResult
 }
 
 // DefaultParallelism returns the default runner policy: sequential task

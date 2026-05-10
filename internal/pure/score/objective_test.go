@@ -207,8 +207,8 @@ func TestObjectiveResultRejectsDuplicateEvidenceRefNames(t *testing.T) {
 
 	result := sampleObjectiveResult()
 	result.EvidenceRefs = append(result.EvidenceRefs, ObjectiveEvidenceRef{
-		Name:      "current",
-		ScorePath: "artifacts/runs/current/score.pkl",
+		Name:         "current",
+		EvidencePath: "artifacts/games/code-localization/rounds/current/evidence.pkl",
 	})
 
 	if err := result.Validate(); err == nil || !strings.Contains(err.Error(), ErrDuplicateEvidenceRef.Error()) {
@@ -290,19 +290,19 @@ func sampleObjectiveResult() ObjectiveResult {
 
 	return ObjectiveResult{
 		SchemaVersion: ObjectiveSchemaVersion,
-		ObjectiveID:   "candidate_vs_parent_v1",
+		ObjectiveID:   "challenger_vs_parent_v1",
 		EvidenceRefs: []ObjectiveEvidenceRef{
 			{
-				Name:       "current",
-				BundlePath: "artifacts/runs/current",
-				ScorePath:  "artifacts/runs/current/score.pkl",
-				SHA256:     "abc123",
+				Name:         "current",
+				BundlePath:   "artifacts/games/code-localization/rounds/current",
+				EvidencePath: "artifacts/games/code-localization/rounds/current/evidence.pkl",
+				SHA256:       "abc123",
 			},
 			{
-				Name:       "parent",
-				BundlePath: "artifacts/runs/parent",
-				ScorePath:  "artifacts/runs/parent/score.pkl",
-				ReportPath: "artifacts/runs/parent/report.json",
+				Name:         "parent",
+				BundlePath:   "artifacts/games/code-localization/rounds/parent",
+				EvidencePath: "artifacts/games/code-localization/rounds/parent/evidence.pkl",
+				ReportPath:   "artifacts/games/code-localization/rounds/parent/round-report.json",
 			},
 		},
 		Values: []ObjectiveValue{

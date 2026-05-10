@@ -23,7 +23,7 @@ const selectionPolicyV1DefaultSymbol = "score"
 var ErrUnsupportedMode = errors.New("evaluation: only evaluation mode is supported")
 
 // Resolve loads one Pkl manifest through the config adapter and projects it
-// into the canonical resolved experiment plan.
+// into the canonical resolved round plan.
 func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 	request = normalizeRequest(request)
 
@@ -59,22 +59,22 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 		return Plan{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
 
-	baseline, err := resolveSystem(manifestDir, *evaluator, evaluation.Baseline.System, nil)
+	incumbent, err := resolveSystem(manifestDir, *evaluator, evaluation.Incumbent.System, nil)
 	if err != nil {
-		return Plan{}, fmt.Errorf("resolve baseline system: %w", err)
+		return Plan{}, fmt.Errorf("resolve incumbent policy: %w", err)
 	}
-	candidate, err := resolveSystem(
+	challenger, err := resolveSystem(
 		manifestDir,
 		*evaluator,
-		evaluation.Candidate.System,
-		&evaluation.Candidate.Uses.SelectionPolicy,
+		evaluation.Challenger.System,
+		&evaluation.Challenger.Uses.SelectionPolicy,
 	)
 	if err != nil {
-		return Plan{}, fmt.Errorf("resolve candidate system: %w", err)
+		return Plan{}, fmt.Errorf("resolve challenger policy: %w", err)
 	}
 
 	tasks := fakeTasks(manifestDir, cfg)
-	systems := domain.NewPair(baseline.spec, candidate.spec)
+	systems := domain.NewPair(incumbent.spec, challenger.spec)
 	comparePlan := compare.NewPlan(systems, tasks)
 	if err := comparePlan.Validate(); err != nil {
 		return Plan{}, fmt.Errorf("validate compare plan: %w", err)
@@ -90,14 +90,26 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 		reportID = defaultReportID(bundleID)
 	}
 
+	gameID := cfg.Game.Id
+	if strings.TrimSpace(gameID) == "" {
+		gameID = "code-localization"
+	}
+	bundleCollection = domain.HostPath(filepath.Join(string(bundleWriterRoot), "games", gameID, "rounds"))
 	expectedBundlePath := domain.HostPath(filepath.Join(string(bundleCollection), bundleID))
 	reportFormats := stringifyReportFormats(evaluation.Report.Formats)
 	renderHumanReport := containsReportFormat(reportFormats, config.ReportFormatText.String())
 
 	return Plan{
-		ManifestPath:   manifestPath,
-		ExperimentName: cfg.Name,
-		Mode:           cfg.Mode.String(),
+		ManifestPath: manifestPath,
+		RoundName:    cfg.Name,
+		Mode:         cfg.Mode.String(),
+		Game: GameConfig{
+			ID:   cfg.Game.Id,
+			Kind: cfg.Game.Kind,
+		},
+		Round: RoundConfig{
+			ID: bundleID,
+		},
 		Dataset: DatasetConfig{
 			Kind:     cfg.Dataset.Kind,
 			Name:     cfg.Dataset.Name,
@@ -105,8 +117,8 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			Split:    cfg.Dataset.Split,
 			MaxItems: cfg.Dataset.MaxItems,
 		},
-		Systems:     systems,
-		Tasks:       tasks,
+		Policies:    systems,
+		Matches:     tasks,
 		Parallelism: compare.DefaultParallelism(),
 		Evaluator: EvaluatorConfig{
 			Model: EvaluatorModelConfig{
@@ -130,13 +142,13 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 		Scoring: ScoringConfig{
 			ObjectivePath: objectivePath,
 			CurrentEvidence: score.ObjectiveEvidenceRef{
-				Name:       "current",
-				BundlePath: string(expectedBundlePath),
-				ScorePath:  filepath.Join(string(expectedBundlePath), "score.pkl"),
-				ReportPath: filepath.Join(string(expectedBundlePath), "report.json"),
+				Name:         "current",
+				BundlePath:   string(expectedBundlePath),
+				EvidencePath: filepath.Join(string(expectedBundlePath), "evidence.pkl"),
+				ReportPath:   filepath.Join(string(expectedBundlePath), "round-report.json"),
 			},
-			ParentEvidence:  cloneEvidenceRef(request.ParentRef),
-			ParentScorePath: request.ParentScorePath,
+			ParentEvidence:     cloneEvidenceRef(request.ParentRef),
+			ParentEvidencePath: request.ParentEvidencePath,
 		},
 		Output: OutputConfig{
 			BundleCollectionPath: bundleCollection,
@@ -145,8 +157,8 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			ReportFormats:        reportFormats,
 			RenderHumanReport:    renderHumanReport,
 			ResolvedPolicyPaths: ResolvedPolicyPaths{
-				Baseline:  filepath.ToSlash(baseline.policyPath),
-				Candidate: filepath.ToSlash(candidate.policyPath),
+				Incumbent:  filepath.ToSlash(incumbent.policyPath),
+				Challenger: filepath.ToSlash(challenger.policyPath),
 			},
 		},
 		Report: ReportConfig{
@@ -221,21 +233,21 @@ func resolveSystem(
 	return out, nil
 }
 
-func fakeTasks(manifestDir string, cfg config.Experiment) domain.NonEmpty[domain.TaskSpec] {
+func fakeTasks(manifestDir string, cfg config.RoundSpec) domain.NonEmpty[domain.MatchSpec] {
 	repoPath := domain.HostPath(filepath.Join(manifestDir, "fake-repo"))
-	task := domain.TaskSpec{
-		ID:        domain.TaskID("local-fake-task-1"),
+	task := domain.MatchSpec{
+		ID:        domain.MatchID("local-fake-match-1"),
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
 			Name: domain.RepoName("searchbench/local-fake"),
 			SHA:  domain.RepoSHA("0000000"),
 			Path: repoPath,
 		},
-		Input: domain.TaskInput{
-			Title: fmt.Sprintf("Fake %s/%s task", cfg.Dataset.Config, cfg.Dataset.Split),
-			Body:  "This deterministic local task exists only to prove manifest-driven composition.",
+		Input: domain.MatchInput{
+			Title: fmt.Sprintf("Fake %s/%s match", cfg.Dataset.Config, cfg.Dataset.Split),
+			Body:  "This deterministic local match exists only to prove manifest-driven composition.",
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{"src/search_target.go"},
 		},
 	}
@@ -244,19 +256,15 @@ func fakeTasks(manifestDir string, cfg config.Experiment) domain.NonEmpty[domain
 
 func resolveBundlePaths(manifestDir string, override string) (domain.HostPath, domain.HostPath, error) {
 	if strings.TrimSpace(override) != "" {
-		collectionPath, err := resolveOverridePath(override)
+		writerRoot, err := resolveOverridePath(override)
 		if err != nil {
 			return "", "", err
 		}
-		if filepath.Base(collectionPath) == "runs" {
-			return domain.HostPath(collectionPath), domain.HostPath(filepath.Dir(collectionPath)), nil
-		}
-		return domain.HostPath(filepath.Join(collectionPath, "runs")), domain.HostPath(collectionPath), nil
+		return domain.HostPath(writerRoot), domain.HostPath(writerRoot), nil
 	}
 
 	writerRoot := filepath.Join(manifestDir, "artifacts")
-	collectionPath := filepath.Join(writerRoot, "runs")
-	return domain.HostPath(collectionPath), domain.HostPath(writerRoot), nil
+	return domain.HostPath(writerRoot), domain.HostPath(writerRoot), nil
 }
 
 func resolveExistingManifestPath(baseDir string, path string) (string, error) {
@@ -321,7 +329,7 @@ func defaultReportID(bundleID string) domain.ReportID {
 func sanitizeBundleID(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
-		return "experiment"
+		return "round"
 	}
 	var b strings.Builder
 	for _, r := range value {

@@ -1,10 +1,10 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package generated
 
 type Artifacts struct {
-	CandidatePolicyRound001 *PolicyArtifact `pkl:"candidatePolicyRound001"`
+	ChallengerPolicyRound001 *PolicyArtifact `pkl:"challengerPolicyRound001"`
 
-	CandidatePolicyRound002 *PolicyProposalArtifact `pkl:"candidatePolicyRound002"`
+	NextChallengerRound002 *NextChallengerArtifact `pkl:"nextChallengerRound002"`
 
-	ParentEvaluationRound001 *CompletedEvaluationBundleArtifact `pkl:"parentEvaluationRound001"`
+	ParentRound001Bundle *CompletedRoundBundleArtifact `pkl:"parentRound001Bundle"`
 }

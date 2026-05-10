@@ -45,48 +45,50 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error
 	}
 	defer cancel()
 
-	candidateReport, evaluatorExecutions, err := runComparison(runCtx, plan, request)
+	roundReport, evaluatorExecutions, err := runComparison(runCtx, plan, request)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseComparisonFailed, Err: err}
 	}
 
-	scoreEvidence, err := report.ProjectScoreEvidence(candidateReport)
+	roundEvidence, err := report.BuildRoundEvidence(roundReport)
 	if err != nil {
-		return Result{}, &Error{Phase: PhaseScoreEvidenceFailed, Err: err}
+		return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
 	}
-	if err := scoreEvidence.Validate(); err != nil {
-		return Result{}, &Error{Phase: PhaseScoreEvidenceFailed, Err: err}
+	roundEvidence.GameID = plan.Game.ID
+	roundEvidence.RoundID = plan.Round.ID
+	if err := roundEvidence.Validate(); err != nil {
+		return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
 	}
 
-	evidenceInput, err := materializeScoreEvidence(plan, scoreEvidence)
+	evidenceInput, err := materializeRoundEvidence(plan, roundEvidence)
 	if err != nil {
-		return Result{}, &Error{Phase: PhaseScorePKLFailed, Err: err}
+		return Result{}, &Error{Phase: PhaseEvidencePKLFailed, Err: err}
 	}
 	defer evidenceInput.Cleanup()
 
 	objectiveResult, err := scoring.Evaluate(ctx, scoring.Request{
-		ScoringPath:      plan.Scoring.ObjectivePath,
-		CurrentRef:       evidenceInput.CurrentRef,
-		CurrentScorePath: evidenceInput.CurrentScorePath,
-		ParentRef:        evidenceInput.ParentRef,
-		ParentScorePath:  evidenceInput.ParentScorePath,
-		PklCommand:       request.PklCommand,
+		ScoringPath:         plan.Scoring.ObjectivePath,
+		CurrentRef:          evidenceInput.CurrentRef,
+		CurrentEvidencePath: evidenceInput.CurrentEvidencePath,
+		ParentRef:           evidenceInput.ParentRef,
+		ParentEvidencePath:  evidenceInput.ParentEvidencePath,
+		PklCommand:          request.PklCommand,
 	})
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseObjectiveFailed, Err: err}
 	}
 
-	renderedReport, err := renderReport(plan, request, candidateReport)
+	renderedReport, err := renderReport(plan, request, roundReport)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseRenderReportFailed, Err: err}
 	}
 
-	bundleRef, err := bundlefs.WriteBundle(ctx, bundlefs.BundleRequest{
+	bundleRef, err := bundlefs.WriteBundle(ctx, bundlefs.RoundBundleInput{
 		RootPath:        plan.Output.BundleWriterRoot,
 		BundleID:        plan.Bundle.ID,
 		ResolvedInput:   plan,
-		CandidateReport: candidateReport,
-		ScoreEvidence:   scoreEvidence,
+		RoundReport:     roundReport,
+		RoundEvidence:   roundEvidence,
 		ObjectiveResult: &objectiveResult,
 		RenderedReport:  renderedReport,
 		CreatedAt:       plan.CreatedAt,
@@ -98,24 +100,24 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error
 	return Result{
 		ManifestPath:        plan.ManifestPath,
 		Bundle:              bundleRef,
-		ReportID:            candidateReport.ID,
-		CandidateReport:     candidateReport,
-		ScoreEvidence:       scoreEvidence,
+		ReportID:            roundReport.ID,
+		RoundReport:         roundReport,
+		RoundEvidence:       roundEvidence,
 		ObjectiveResult:     &objectiveResult,
 		EvaluatorExecutions: evaluatorExecutions,
 	}, nil
 }
 
-func renderReport(plan Plan, request Request, candidateReport report.CandidateReport) (*bundlefs.RenderedReport, error) {
+func renderReport(plan Plan, request Request, roundReport report.RoundReport) (*bundlefs.RenderedReport, error) {
 	if !plan.Output.RenderHumanReport || request.DisableRenderReport {
 		return nil, nil
 	}
-	content := console.RenderCandidateReport(candidateReport, console.Options{
+	content := console.RenderRoundReport(roundReport, console.Options{
 		Color: false,
 		Width: 100,
 	})
 	return &bundlefs.RenderedReport{
-		FileName: "report.txt",
+		FileName: "round-report.txt",
 		Content:  content + "\n",
 	}, nil
 }

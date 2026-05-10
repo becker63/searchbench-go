@@ -30,7 +30,7 @@ type Input struct {
 	InputPolicyID       string
 	InputPolicySource   string
 	ReportSummaryJSON   string
-	ScoreEvidenceJSON   string
+	RoundEvidenceJSON   string
 	ObjectiveResultJSON string
 	Constraints         []string
 	RetryFeedback       []string
@@ -49,7 +49,7 @@ func InputFromSpec(spec pureoptimizer.Spec) (Input, error) {
 		TargetArtifactID:   spec.Target.OutputArtifactID.String(),
 		TargetArtifactName: spec.Target.OutputName,
 		TargetInterfaceID:  spec.Target.InterfaceID,
-		ParentBundleID:     spec.Evidence.ParentRun.BundleID,
+		ParentBundleID:     spec.Evidence.ParentRound.BundleID,
 		IncludedEvidence:   include,
 		DeniedEvidence:     deny,
 		InputPolicyID:      spec.Evidence.InputPolicy.ArtifactID.String(),
@@ -65,12 +65,12 @@ func InputFromSpec(spec pureoptimizer.Spec) (Input, error) {
 		}
 		input.ReportSummaryJSON = data
 	}
-	if spec.Evidence.ScoreEvidence != nil {
-		data, err := marshalPretty(spec.Evidence.ScoreEvidence)
+	if spec.Evidence.RoundEvidence != nil {
+		data, err := marshalPretty(spec.Evidence.RoundEvidence)
 		if err != nil {
 			return Input{}, err
 		}
-		input.ScoreEvidenceJSON = data
+		input.RoundEvidenceJSON = data
 	}
 	if spec.Evidence.ObjectiveResult != nil {
 		data, err := marshalPretty(spec.Evidence.ObjectiveResult)

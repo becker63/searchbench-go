@@ -26,12 +26,12 @@ func TestLocalManifestCanBeLoadedAndValidated(t *testing.T) {
 
 	requirePkl(t)
 
-	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
-	experiment, err := config.ResolveFromPath(context.Background(), manifestPath)
+	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl")
+	roundSpec, err := config.ResolveFromPath(context.Background(), manifestPath)
 	if err != nil {
 		t.Fatalf("ResolveFromPath() error = %v", err)
 	}
-	if err := config.Validate(experiment); err != nil {
+	if err := config.Validate(roundSpec); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
@@ -40,7 +40,7 @@ func TestRunRejectsUnsupportedMode(t *testing.T) {
 	t.Parallel()
 
 	_, err := Resolve(context.Background(), ResolveRequest{
-		ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
 		BundleID:           "localrun-unsupported-mode",
 	})
@@ -49,10 +49,10 @@ func TestRunRejectsUnsupportedMode(t *testing.T) {
 	}
 }
 
-func TestFakeComparisonProducesCandidateReport(t *testing.T) {
+func TestRoundComparesIncumbentAndChallenger(t *testing.T) {
 	t.Parallel()
 
-	fixtureDir := createExperimentFixture(t, "")
+	fixtureDir := createRoundFixture(t, "")
 	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -65,11 +65,11 @@ func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 	if out.ID != plan.ReportID {
 		t.Fatalf("report ID = %q, want %q", out.ID, plan.ReportID)
 	}
-	if len(out.Runs.Baseline) != 1 || len(out.Runs.Candidate) != 1 {
-		t.Fatalf("run counts = baseline:%d candidate:%d, want 1/1", len(out.Runs.Baseline), len(out.Runs.Candidate))
+	if len(out.Runs.Incumbent) != 1 || len(out.Runs.Challenger) != 1 {
+		t.Fatalf("execution counts = incumbent:%d challenger:%d, want 1/1", len(out.Runs.Incumbent), len(out.Runs.Challenger))
 	}
-	if out.Decision.Decision != report.DecisionPromote {
-		t.Fatalf("decision = %q, want %q", out.Decision.Decision, report.DecisionPromote)
+	if out.Decision.Decision != report.DecisionPromoteChallenger {
+		t.Fatalf("decision = %q, want %q", out.Decision.Decision, report.DecisionPromoteChallenger)
 	}
 	if len(executions) != 2 {
 		t.Fatalf("len(executions) = %d, want 2", len(executions))
@@ -81,10 +81,10 @@ func TestFakeComparisonProducesCandidateReport(t *testing.T) {
 	}
 }
 
-func TestFakeComparisonProjectsScoreEvidence(t *testing.T) {
+func TestRoundEvidenceUsesMatchExecutions(t *testing.T) {
 	t.Parallel()
 
-	fixtureDir := createExperimentFixture(t, "")
+	fixtureDir := createRoundFixture(t, "")
 	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -94,9 +94,9 @@ func TestFakeComparisonProjectsScoreEvidence(t *testing.T) {
 		t.Fatalf("runComparison() error = %v", err)
 	}
 
-	evidence, err := report.ProjectScoreEvidence(out)
+	evidence, err := report.BuildRoundEvidence(out)
 	if err != nil {
-		t.Fatalf("ProjectScoreEvidence() error = %v", err)
+		t.Fatalf("BuildRoundEvidence() error = %v", err)
 	}
 	if err := evidence.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
@@ -104,20 +104,20 @@ func TestFakeComparisonProjectsScoreEvidence(t *testing.T) {
 	if evidence.LocalizationDistance.GoldHop == nil {
 		t.Fatalf("LocalizationDistance = %#v, want gold hop evidence", evidence.LocalizationDistance)
 	}
-	if evidence.Usage.TotalTokens == 0 {
-		t.Fatalf("Usage = %#v, want measured total tokens", evidence.Usage)
+	if evidence.ChallengerUsage.TotalTokens == 0 {
+		t.Fatalf("ChallengerUsage = %#v, want measured total tokens", evidence.ChallengerUsage)
 	}
 }
 
-func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
+func TestRoundWritesDurableBundle(t *testing.T) {
 	t.Parallel()
 
 	requirePkl(t)
 
-	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
+	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
 	result, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
-			ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
+			ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-success",
 			ReportID:           domain.ReportID("report-localrun-success"),
@@ -143,9 +143,10 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 		t.Fatalf("len(EvaluatorExecutions) = %d, want 2", len(result.EvaluatorExecutions))
 	}
 
-	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "resolved.json"))
-	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "report.json"))
-	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "score.pkl"))
+	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "resolved-round.json"))
+	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "round-report.json"))
+	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "evidence.pkl"))
+	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "decision.json"))
 	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "objective.json"))
 	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "metadata.json"))
 	assertFileExists(t, filepath.Join(string(result.Bundle.Path), "COMPLETE"))
@@ -156,7 +157,7 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 	for _, file := range metadata.Files {
 		gotPaths = append(gotPaths, file.Path)
 	}
-	wantPaths := []string{"resolved.json", "report.json", "score.pkl", "objective.json", "metadata.json", "COMPLETE", "report.txt"}
+	wantPaths := []string{"resolved-round.json", "round-report.json", "evidence.pkl", "decision.json", "objective.json", "metadata.json", "COMPLETE", "round-report.txt"}
 	slices.Sort(gotPaths)
 	slices.Sort(wantPaths)
 	if !slices.Equal(gotPaths, wantPaths) {
@@ -164,12 +165,12 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 	}
 
 	var resolved Plan
-	decodeJSONFile(t, filepath.Join(string(result.Bundle.Path), "resolved.json"), &resolved)
-	if got, want := resolved.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
+	decodeJSONFile(t, filepath.Join(string(result.Bundle.Path), "resolved-round.json"), &resolved)
+	if got, want := resolved.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("resolved objective path = %q, want %q", got, want)
 	}
-	if got := resolved.Output.ResolvedPolicyPaths.Candidate; got == "" {
-		t.Fatal("resolved candidate policy path is empty")
+	if got := resolved.Output.ResolvedPolicyPaths.Challenger; got == "" {
+		t.Fatal("resolved challenger policy path is empty")
 	}
 	if resolved.Scoring.ParentEvidence != nil {
 		t.Fatalf("resolved parent evidence = %#v, want nil for no-parent run", resolved.Scoring.ParentEvidence)
@@ -178,12 +179,12 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 		t.Fatalf("metadata files = %#v, want objective.json present", metadata.Files)
 	}
 
-	policySourceBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py"))
+	policySourceBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py"))
 	if err != nil {
 		t.Fatalf("ReadFile(policy) error = %v", err)
 	}
 	rawPolicySource := string(policySourceBytes)
-	for _, name := range []string{"report.json", "score.pkl", "metadata.json", "report.txt", "objective.json"} {
+	for _, name := range []string{"round-report.json", "evidence.pkl", "metadata.json", "round-report.txt", "objective.json", "decision.json"} {
 		content := string(mustReadFile(t, filepath.Join(string(result.Bundle.Path), name)))
 		if strings.Contains(content, rawPolicySource) {
 			t.Fatalf("%s leaked raw policy source", name)
@@ -191,57 +192,57 @@ func TestRunSuccessfulLocalExperimentWritesBundle(t *testing.T) {
 	}
 }
 
-func TestMaterializeScoreEvidenceCreatesCurrentTempModule(t *testing.T) {
+func TestMaterializeRoundEvidenceCreatesCurrentTempModule(t *testing.T) {
 	t.Parallel()
 
-	fixtureDir := createExperimentFixture(t, "")
+	fixtureDir := createRoundFixture(t, "")
 	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	current := sampleScoreEvidence(t, domain.ReportID("report-materialized-current"))
+	current := sampleRoundEvidence(t, domain.ReportID("report-materialized-current"))
 
-	materialized, err := materializeScoreEvidence(plan, current)
+	materialized, err := materializeRoundEvidence(plan, current)
 	if err != nil {
-		t.Fatalf("materializeScoreEvidence() error = %v", err)
+		t.Fatalf("materializeRoundEvidence() error = %v", err)
 	}
 	defer materialized.Cleanup()
 
 	if got, want := materialized.CurrentRef.Name, "current"; got != want {
 		t.Fatalf("CurrentRef.Name = %q, want %q", got, want)
 	}
-	if got, want := materialized.CurrentRef.ScorePath, filepath.Join(string(plan.Output.ExpectedBundlePath), "score.pkl"); got != want {
-		t.Fatalf("CurrentRef.ScorePath = %q, want %q", got, want)
+	if got, want := materialized.CurrentRef.EvidencePath, filepath.Join(string(plan.Output.ExpectedBundlePath), "evidence.pkl"); got != want {
+		t.Fatalf("CurrentRef.EvidencePath = %q, want %q", got, want)
 	}
-	content := string(mustReadFile(t, materialized.CurrentScorePath))
+	content := string(mustReadFile(t, materialized.CurrentEvidencePath))
 	if !strings.Contains(content, `reportId = "report-materialized-current"`) {
 		t.Fatalf("materialized current score missing report id:\n%s", content)
 	}
 }
 
-func TestMaterializeScoreEvidenceAcceptsExplicitParent(t *testing.T) {
+func TestMaterializeRoundEvidenceAcceptsExplicitParent(t *testing.T) {
 	t.Parallel()
 
-	fixtureDir := createExperimentFixture(t, "")
-	parentScorePath := writeScoreModuleForTest(t, fixtureDir, "parent-score.pkl", sampleScoreEvidence(t, domain.ReportID("report-parent")))
+	fixtureDir := createRoundFixture(t, "")
+	parentEvidencePath := writeScoreModuleForTest(t, fixtureDir, "parent-evidence.pkl", sampleRoundEvidence(t, domain.ReportID("report-parent")))
 	request := sampleRequest(fixtureDir)
 	request.Resolve.ParentRef = &score.ObjectiveEvidenceRef{
-		Name:       "parent",
-		BundlePath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run"),
-		ScorePath:  filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"),
-		ReportPath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "report.json"),
+		Name:         "parent",
+		BundlePath:   filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run"),
+		EvidencePath: filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run", "evidence.pkl"),
+		ReportPath:   filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run", "round-report.json"),
 	}
-	request.Resolve.ParentScorePath = parentScorePath
+	request.Resolve.ParentEvidencePath = parentEvidencePath
 
 	plan, err := Resolve(context.Background(), request.Resolve)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	current := sampleScoreEvidence(t, domain.ReportID("report-current"))
+	current := sampleRoundEvidence(t, domain.ReportID("report-current"))
 
-	materialized, err := materializeScoreEvidence(plan, current)
+	materialized, err := materializeRoundEvidence(plan, current)
 	if err != nil {
-		t.Fatalf("materializeScoreEvidence() error = %v", err)
+		t.Fatalf("materializeRoundEvidence() error = %v", err)
 	}
 	defer materialized.Cleanup()
 
@@ -251,11 +252,11 @@ func TestMaterializeScoreEvidenceAcceptsExplicitParent(t *testing.T) {
 	if got, want := materialized.ParentRef.Name, "parent"; got != want {
 		t.Fatalf("ParentRef.Name = %q, want %q", got, want)
 	}
-	if got, want := materialized.ParentScorePath, parentScorePath; got != want {
-		t.Fatalf("ParentScorePath = %q, want %q", got, want)
+	if got, want := materialized.ParentEvidencePath, parentEvidencePath; got != want {
+		t.Fatalf("ParentEvidencePath = %q, want %q", got, want)
 	}
-	if got, want := materialized.ParentRef.ScorePath, filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"); got != want {
-		t.Fatalf("ParentRef.ScorePath = %q, want %q", got, want)
+	if got, want := materialized.ParentRef.EvidencePath, filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run", "evidence.pkl"); got != want {
+		t.Fatalf("ParentRef.EvidencePath = %q, want %q", got, want)
 	}
 }
 
@@ -264,23 +265,23 @@ func TestRunWithParentEvidenceThreadsObjectiveRefs(t *testing.T) {
 
 	requirePkl(t)
 
-	fixtureDir := createExperimentFixture(t, "")
-	parentScorePath := writeScoreModuleForTest(t, fixtureDir, "parent-score.pkl", sampleScoreEvidence(t, domain.ReportID("parent-report")))
+	fixtureDir := createRoundFixture(t, "")
+	parentEvidencePath := writeScoreModuleForTest(t, fixtureDir, "parent-evidence.pkl", sampleRoundEvidence(t, domain.ReportID("parent-report")))
 	parentRef := &score.ObjectiveEvidenceRef{
-		Name:       "parent",
-		BundlePath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run"),
-		ScorePath:  filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"),
-		ReportPath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "report.json"),
+		Name:         "parent",
+		BundlePath:   filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run"),
+		EvidencePath: filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run", "evidence.pkl"),
+		ReportPath:   filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run", "round-report.json"),
 	}
 
-	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
+	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
 	result, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
-			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-parent",
 			ParentRef:          parentRef,
-			ParentScorePath:    parentScorePath,
+			ParentEvidencePath: parentEvidencePath,
 			Now: func() time.Time {
 				return time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
 			},
@@ -301,12 +302,12 @@ func TestRunWithParentEvidenceThreadsObjectiveRefs(t *testing.T) {
 	}
 
 	var resolved Plan
-	decodeJSONFile(t, filepath.Join(string(result.Bundle.Path), "resolved.json"), &resolved)
+	decodeJSONFile(t, filepath.Join(string(result.Bundle.Path), "resolved-round.json"), &resolved)
 	if resolved.Scoring.ParentEvidence == nil {
 		t.Fatal("resolved parent evidence is nil")
 	}
-	if got, want := resolved.Scoring.ParentEvidence.ScorePath, filepath.Join(fixtureDir, "artifacts", "runs", "parent-run", "score.pkl"); got != want {
-		t.Fatalf("resolved parent score path = %q, want %q", got, want)
+	if got, want := resolved.Scoring.ParentEvidence.EvidencePath, filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run", "evidence.pkl"); got != want {
+		t.Fatalf("resolved parent evidence path = %q, want %q", got, want)
 	}
 }
 
@@ -315,11 +316,11 @@ func TestRunObjectiveFailurePreventsCompletedBundle(t *testing.T) {
 
 	requirePkl(t)
 
-	fixtureDir := createExperimentFixture(t, `final = ""`)
-	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
+	fixtureDir := createRoundFixture(t, `final = ""`)
+	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
 	_, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
-			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-objective-failure",
 			ReportID:           domain.ReportID("report-localrun-objective-failure"),
@@ -338,7 +339,7 @@ func TestRunObjectiveFailurePreventsCompletedBundle(t *testing.T) {
 	if localErr.Phase != PhaseObjectiveFailed {
 		t.Fatalf("phase = %q, want %q", localErr.Phase, PhaseObjectiveFailed)
 	}
-	finalDir := filepath.Join(bundleCollection, "localrun-objective-failure")
+	finalDir := filepath.Join(bundleCollection, "games", "code-localization", "rounds", "localrun-objective-failure")
 	if _, statErr := os.Stat(filepath.Join(finalDir, "COMPLETE")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("COMPLETE stat error = %v, want not-exist", statErr)
 	}
@@ -349,15 +350,15 @@ func TestRunMissingObjectiveFailsBeforeFinalization(t *testing.T) {
 
 	requirePkl(t)
 
-	fixtureDir := createExperimentFixture(t, "")
+	fixtureDir := createRoundFixture(t, "")
 	if err := os.Remove(filepath.Join(fixtureDir, "scoring", "localization-objective.pkl")); err != nil {
 		t.Fatalf("Remove(objective) error = %v", err)
 	}
 
-	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
+	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
 	_, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
-			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-missing-objective",
 		},
@@ -372,7 +373,7 @@ func TestRunMissingObjectiveFailsBeforeFinalization(t *testing.T) {
 	if localErr.Phase != PhaseResolvePlanFailed {
 		t.Fatalf("phase = %q, want %q", localErr.Phase, PhaseResolvePlanFailed)
 	}
-	finalDir := filepath.Join(bundleCollection, "localrun-missing-objective")
+	finalDir := filepath.Join(bundleCollection, "games", "code-localization", "rounds", "localrun-missing-objective")
 	if _, statErr := os.Stat(filepath.Join(finalDir, "COMPLETE")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("COMPLETE stat error = %v, want not-exist", statErr)
 	}
@@ -383,17 +384,17 @@ func TestRunMissingParentScoreFailsCleanly(t *testing.T) {
 
 	requirePkl(t)
 
-	fixtureDir := createExperimentFixture(t, "")
-	bundleCollection := filepath.Join(t.TempDir(), "artifacts", "runs")
+	fixtureDir := createRoundFixture(t, "")
+	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
 	_, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
-			ManifestPath:       filepath.Join(fixtureDir, "experiment.pkl"),
+			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-missing-parent-score",
 			ParentRef: &score.ObjectiveEvidenceRef{
-				Name:       "parent",
-				BundlePath: filepath.Join(fixtureDir, "artifacts", "runs", "parent-run"),
-				ScorePath:  filepath.Join(fixtureDir, "missing-parent-score.pkl"),
+				Name:         "parent",
+				BundlePath:   filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run"),
+				EvidencePath: filepath.Join(fixtureDir, "missing-parent-evidence.pkl"),
 			},
 		},
 	})
@@ -404,8 +405,8 @@ func TestRunMissingParentScoreFailsCleanly(t *testing.T) {
 	if !errors.As(err, &localErr) {
 		t.Fatalf("error = %T, want *Error", err)
 	}
-	if localErr.Phase != PhaseScorePKLFailed {
-		t.Fatalf("phase = %q, want %q", localErr.Phase, PhaseScorePKLFailed)
+	if localErr.Phase != PhaseEvidencePKLFailed {
+		t.Fatalf("phase = %q, want %q", localErr.Phase, PhaseEvidencePKLFailed)
 	}
 }
 
@@ -420,7 +421,7 @@ func TestPurePackagesStillAvoidPklImports(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
 	dirs := []string{
 		filepath.Join(repoRoot, "internal", "pure", "domain"),
-		filepath.Join(repoRoot, "internal", "pure", "run"),
+		filepath.Join(repoRoot, "internal", "pure", "execution"),
 		filepath.Join(repoRoot, "internal", "pure", "score"),
 		filepath.Join(repoRoot, "internal", "pure", "report"),
 		filepath.Join(repoRoot, "internal", "pure", "codegraph"),
@@ -494,8 +495,8 @@ func TestLocalRunPackageAvoidsRealRuntimeImports(t *testing.T) {
 func sampleRequest(tempDir string) Request {
 	return Request{
 		Resolve: ResolveRequest{
-			ManifestPath:       filepath.Join(tempDir, "experiment.pkl"),
-			BundleRootOverride: filepath.Join(tempDir, "artifacts", "runs"),
+			ManifestPath:       filepath.Join(tempDir, "round.pkl"),
+			BundleRootOverride: filepath.Join(tempDir, "artifacts"),
 			BundleID:           "localrun-test",
 			ReportID:           domain.ReportID("report-localrun-test"),
 			Now: func() time.Time {
@@ -505,7 +506,7 @@ func sampleRequest(tempDir string) Request {
 	}
 }
 
-func createExperimentFixture(t *testing.T, objectiveMutation string) string {
+func createRoundFixture(t *testing.T, objectiveMutation string) string {
 	t.Helper()
 
 	root := t.TempDir()
@@ -519,24 +520,24 @@ func createExperimentFixture(t *testing.T, objectiveMutation string) string {
 		t.Fatalf("MkdirAll(schema) error = %v", err)
 	}
 
-	manifestBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"))
+	manifestBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl"))
 	if err != nil {
-		t.Fatalf("ReadFile(experiment) error = %v", err)
+		t.Fatalf("ReadFile(round) error = %v", err)
 	}
-	manifestContent := strings.ReplaceAll(string(manifestBytes), `amends "../../schema/SearchBenchExperiment.pkl"`, `amends "schema/SearchBenchExperiment.pkl"`)
-	if err := os.WriteFile(filepath.Join(root, "experiment.pkl"), []byte(manifestContent), 0o644); err != nil {
-		t.Fatalf("WriteFile(experiment) error = %v", err)
+	manifestContent := strings.ReplaceAll(string(manifestBytes), `amends "../../schema/SearchBenchRound.pkl"`, `amends "schema/SearchBenchRound.pkl"`)
+	if err := os.WriteFile(filepath.Join(root, "round.pkl"), []byte(manifestContent), 0o644); err != nil {
+		t.Fatalf("WriteFile(round) error = %v", err)
 	}
 
-	policyBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "candidate_policy.py"))
+	policyBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py"))
 	if err != nil {
 		t.Fatalf("ReadFile(policy) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "policies", "candidate_policy.py"), policyBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "policies", "challenger_policy.py"), policyBytes, 0o644); err != nil {
 		t.Fatalf("WriteFile(policy) error = %v", err)
 	}
 
-	objectiveBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"))
+	objectiveBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"))
 	if err != nil {
 		t.Fatalf("ReadFile(objective) error = %v", err)
 	}
@@ -550,7 +551,7 @@ func createExperimentFixture(t *testing.T, objectiveMutation string) string {
 		t.Fatalf("WriteFile(objective) error = %v", err)
 	}
 
-	for _, name := range []string{"SearchBenchExperiment.pkl", "SearchBenchObjective.pkl", "SearchBenchObjectiveHelpers.pkl"} {
+	for _, name := range []string{"SearchBenchRound.pkl", "SearchBenchObjective.pkl", "SearchBenchObjectiveHelpers.pkl"} {
 		schemaBytes, err := os.ReadFile(filepath.Join(repoRoot(t), "configs", "schema", name))
 		if err != nil {
 			t.Fatalf("ReadFile(%s) error = %v", name, err)
@@ -594,19 +595,21 @@ func metadataHasPath(metadata bundlefs.BundleMetadata, path string) bool {
 	return false
 }
 
-func sampleScoreEvidence(t *testing.T, reportID domain.ReportID) score.ScoreEvidenceDocument {
+func sampleRoundEvidence(t *testing.T, reportID domain.ReportID) score.RoundEvidenceDocument {
 	t.Helper()
 	goldHop, err := score.NewMetricEvidence(score.MetricGoldHop, 6, 4)
 	if err != nil {
 		t.Fatalf("NewMetricEvidence() error = %v", err)
 	}
-	return score.ScoreEvidenceDocument{
+	return score.RoundEvidenceDocument{
 		SchemaVersion: score.EvidenceSchemaVersion,
+		GameID:        "code-localization",
+		RoundID:       "round-test",
 		ReportID:      reportID,
 		LocalizationDistance: score.LocalizationDistanceEvidence{
 			GoldHop: &goldHop,
 		},
-		Usage: score.UsageEvidence{
+		ChallengerUsage: score.UsageEvidence{
 			Available:    true,
 			MeasuredRuns: 1,
 			TotalTokens:  42,
@@ -621,11 +624,11 @@ func sampleScoreEvidence(t *testing.T, reportID domain.ReportID) score.ScoreEvid
 	}
 }
 
-func writeScoreModuleForTest(t *testing.T, root string, name string, evidence score.ScoreEvidenceDocument) string {
+func writeScoreModuleForTest(t *testing.T, root string, name string, evidence score.RoundEvidenceDocument) string {
 	t.Helper()
-	data, err := bundlefs.MarshalScoreEvidencePKL(evidence)
+	data, err := bundlefs.MarshalRoundEvidencePKL(evidence)
 	if err != nil {
-		t.Fatalf("MarshalScoreEvidencePKL() error = %v", err)
+		t.Fatalf("MarshalRoundEvidencePKL() error = %v", err)
 	}
 	path := filepath.Join(root, name)
 	if err := os.WriteFile(path, data, 0o644); err != nil {

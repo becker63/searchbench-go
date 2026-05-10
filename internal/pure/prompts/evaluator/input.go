@@ -18,7 +18,7 @@ var DefaultConstraints = []string{
 
 // Input is the typed prompt contract for the minimal evaluator prompt.
 type Input struct {
-	TaskID           string
+	MatchID          string
 	RepoName         string
 	RepoSHA          string
 	IssueTitle       string
@@ -29,16 +29,16 @@ type Input struct {
 	OutputSchemaJSON string
 }
 
-// InputFromTask projects the prompt-safe task data used by the evaluator
+// InputFromMatch projects the prompt-safe match data used by the evaluator
 // prompt.
-func InputFromTask(task domain.TaskSpec, allowedTools []string) Input {
+func InputFromMatch(task domain.MatchSpec, allowedTools []string) Input {
 	tools := append([]string(nil), allowedTools...)
 	sort.Strings(tools)
 
 	constraints := append([]string(nil), DefaultConstraints...)
 
 	return Input{
-		TaskID:           task.ID.String(),
+		MatchID:          task.ID.String(),
 		RepoName:         string(task.Repo.Name),
 		RepoSHA:          string(task.Repo.SHA),
 		IssueTitle:       task.Input.Title,

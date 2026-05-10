@@ -403,8 +403,8 @@ These names should appear in:
 
 Avoid centering older language like:
 
-- baseline
-- candidate
+- incumbent
+- challenger
 - projection
 
 Those terms can still exist internally where useful, but the public/explanatory product language should be temporal and story-shaped.
@@ -440,13 +440,13 @@ The visualization should be built from the round bundle.
 Expected inputs:
 
 - metadata.json
-- resolved.json
-- report.json
-- report.txt
+- resolved-round.json
+- round-report.json
+- round-report.txt
 - objective.json
-- score.pkl
+- evidence.pkl
 - optional trace-events.json
-- optional representative-task trace
+- optional representative-match trace
 - optional per-side graph replay events for incumbent and challenger
 
 Important rule:

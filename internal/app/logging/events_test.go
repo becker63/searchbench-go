@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -20,12 +20,12 @@ func TestEventHelpersDoNotPanicWithNop(t *testing.T) {
 	spec, executed, scores, failure, report := sampleLogArtifacts(t)
 
 	logger.ComparisonStarted("", spec.System.Ref(), spec.System.Ref(), 1, "sequential", 1)
-	logger.TaskStarted(spec.Task)
-	logger.RunStarted(domain.RoleCandidate, spec)
-	logger.RunExecuted(domain.RoleCandidate, executed)
-	logger.RunScored(domain.RoleCandidate, executed, scores)
-	logger.RunFailed(domain.RoleCandidate, failure)
-	logger.TaskCompleted(spec.Task, true, false, 1)
+	logger.TaskStarted(spec.Match)
+	logger.RunStarted(domain.RoleChallenger, spec)
+	logger.RunExecuted(domain.RoleChallenger, executed)
+	logger.RunScored(domain.RoleChallenger, executed, scores)
+	logger.RunFailed(domain.RoleChallenger, failure)
+	logger.TaskCompleted(spec.Match, true, false, 1)
 	logger.ReportCreated(report)
 	logger.ComparisonCompleted(report)
 }
@@ -46,7 +46,7 @@ func TestDevelopmentLoggerPrettyOutput(t *testing.T) {
 
 	logger = logger.Named("demo")
 	logger.ComparisonStarted("", spec.System.Ref(), spec.System.Ref(), 2, "sequential", 1)
-	logger.RunScored(domain.RoleCandidate, executed, scores)
+	logger.RunScored(domain.RoleChallenger, executed, scores)
 	logger.ReportCreated(report)
 
 	out := buf.String()
@@ -83,8 +83,8 @@ func TestProductionLoggerJSONOutput(t *testing.T) {
 		_ = cleanup()
 	}()
 
-	logger.RunScored(domain.RoleCandidate, executed, scores)
-	logger.RunStarted(domain.RoleCandidate, spec)
+	logger.RunScored(domain.RoleChallenger, executed, scores)
+	logger.RunStarted(domain.RoleChallenger, spec)
 
 	out := buf.String()
 	for _, want := range []string{
@@ -107,14 +107,14 @@ func TestProductionLoggerJSONOutput(t *testing.T) {
 	}
 }
 
-func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet, run.RunFailure, report.CandidateReport) {
+func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet, run.RunFailure, report.RoundReport) {
 	t.Helper()
 
-	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'candidate'", "score")
+	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'challenger'", "score")
 	spec := run.NewSpec(
 		domain.RunID("run-1"),
-		domain.TaskSpec{
-			ID:        domain.TaskID("task-1"),
+		domain.MatchSpec{
+			ID:        domain.MatchID("task-1"),
 			Benchmark: domain.BenchmarkLCA,
 			Repo: domain.RepoSnapshot{
 				Name: domain.RepoName("repo/example"),
@@ -124,11 +124,11 @@ func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet
 		},
 		domain.SystemSpec{
 			ID:      domain.SystemID("system-1"),
-			Name:    "Candidate",
+			Name:    "Challenger",
 			Backend: domain.BackendIterativeContext,
 			Model: domain.ModelSpec{
 				Provider: "openai",
-				Name:     "gpt-candidate",
+				Name:     "gpt-challenger",
 			},
 			PromptBundle: domain.PromptBundleRef{Name: "bundle"},
 			Policy:       &policy,
@@ -155,14 +155,14 @@ func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet
 		t.Fatalf("NewScoreSet() error = %v", err)
 	}
 	failure := run.NewFailure(spec, run.FailureScore, "boom")
-	report := report.NewCandidateReport(
+	report := report.NewRoundReport(
 		domain.ReportID("report-1"),
 		report.ComparisonSpec{},
 		domain.NewPair([]score.ScoredRun{}, []score.ScoredRun{}),
 		domain.NewPair([]run.RunFailure{}, []run.RunFailure{failure}),
 		nil,
 		nil,
-		report.PromotionDecision{Decision: report.DecisionPromote},
+		report.Decision{Decision: report.DecisionPromoteChallenger},
 	)
 	return spec, executed, scores, failure, report
 }

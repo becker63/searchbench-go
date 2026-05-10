@@ -58,7 +58,7 @@ func TestSystemSpecFingerprintDeterminism(t *testing.T) {
 	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
 	base := SystemSpec{
 		ID:      SystemID("system-1"),
-		Name:    "Baseline Name",
+		Name:    "Incumbent Name",
 		Backend: BackendIterativeContext,
 		Model: ModelSpec{
 			Provider: "openai",
@@ -81,7 +81,7 @@ func TestSystemSpecFingerprintDeterminism(t *testing.T) {
 	}
 
 	renamed := base
-	renamed.Name = "Candidate Display Name"
+	renamed.Name = "Challenger Display Name"
 	if got, want := base.Fingerprint(), renamed.Fingerprint(); got != want {
 		t.Fatalf("fingerprint should ignore cosmetic name: got %q want %q", got, want)
 	}
@@ -107,7 +107,7 @@ func TestSystemSpecRefOmitsPolicySource(t *testing.T) {
 	policy := NewPythonPolicy(PolicyID("policy-1"), "def choose():\n    return 'ok'\n", "choose")
 	spec := SystemSpec{
 		ID:      SystemID("system-1"),
-		Name:    "Candidate",
+		Name:    "Challenger",
 		Backend: BackendIterativeContext,
 		Model: ModelSpec{
 			Provider: "openai",

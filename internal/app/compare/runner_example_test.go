@@ -16,17 +16,17 @@ import (
 func TestRunnerExampleComparison(t *testing.T) {
 	t.Parallel()
 
-	policySource := "def score(task):\n    return 'candidate'\n"
+	policySource := "def score(task):\n    return 'challenger'\n"
 
-	// Define the systems being compared and the benchmark tasks.
+	// Define the policies being compared and the benchmark tasks.
 	plan := NewPlan(
 		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem(policySource),
+			exampleIncumbentPolicy(),
+			exampleChallengerPolicy(policySource),
 		),
 		domain.NewNonEmpty(
-			exampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
-			exampleTask(domain.TaskID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
+			exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
+			exampleTask(domain.MatchID("task-2"), domain.RepoRelPath("pkg/bug2.go")),
 		),
 	)
 
@@ -37,33 +37,33 @@ func TestRunnerExampleComparison(t *testing.T) {
 	}
 
 	// Inspect the resulting report at a high level.
-	if got.Decision.Decision != report.DecisionPromote {
-		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromote)
+	if got.Decision.Decision != report.DecisionPromoteChallenger {
+		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromoteChallenger)
 	}
-	if len(got.Runs.Baseline) != 2 || len(got.Runs.Candidate) != 2 {
-		t.Fatalf("unexpected run counts: baseline=%d candidate=%d", len(got.Runs.Baseline), len(got.Runs.Candidate))
+	if len(got.Runs.Incumbent) != 2 || len(got.Runs.Challenger) != 2 {
+		t.Fatalf("unexpected run counts: incumbent=%d challenger=%d", len(got.Runs.Incumbent), len(got.Runs.Challenger))
 	}
-	if len(got.Failures.Baseline) != 0 || len(got.Failures.Candidate) != 0 {
+	if len(got.Failures.Incumbent) != 0 || len(got.Failures.Challenger) != 0 {
 		t.Fatal("expected no failures")
 	}
 	if len(got.Regressions) != 0 {
 		t.Fatal("expected no regressions")
 	}
-	if got.Spec.Systems.Candidate.Policy == nil {
-		t.Fatal("expected report-safe candidate policy ref")
+	if got.Spec.Policies.Challenger.Policy == nil {
+		t.Fatal("expected report-safe challenger policy ref")
 	}
 
 	assertReportDoesNotLeakPolicySource(t, got, policySource)
 }
 
-func exampleBaselineSystem() domain.SystemSpec {
+func exampleIncumbentPolicy() domain.SystemSpec {
 	return domain.SystemSpec{
-		ID:      domain.SystemID("baseline-system"),
-		Name:    "Baseline",
+		ID:      domain.SystemID("incumbent-system"),
+		Name:    "Incumbent",
 		Backend: domain.BackendJCodeMunch,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-baseline",
+			Name:     "gpt-incumbent",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -75,15 +75,15 @@ func exampleBaselineSystem() domain.SystemSpec {
 	}
 }
 
-func exampleCandidateSystem(policySource string) domain.SystemSpec {
+func exampleChallengerPolicy(policySource string) domain.SystemSpec {
 	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
 	return domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
+		ID:      domain.SystemID("challenger-system"),
+		Name:    "Challenger",
 		Backend: domain.BackendIterativeContext,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-candidate",
+			Name:     "gpt-challenger",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -96,8 +96,8 @@ func exampleCandidateSystem(policySource string) domain.SystemSpec {
 	}
 }
 
-func exampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
-	return domain.TaskSpec{
+func exampleTask(id domain.MatchID, gold domain.RepoRelPath) domain.MatchSpec {
+	return domain.MatchSpec{
 		ID:        id,
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
@@ -105,11 +105,11 @@ func exampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("/tmp/repo"),
 		},
-		Input: domain.TaskInput{
+		Input: domain.MatchInput{
 			Title: "Find issue " + id.String(),
 			Body:  "Locate bug for " + id.String(),
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{gold},
 		},
 	}
@@ -121,7 +121,7 @@ func exampleRunner(now time.Time) Runner {
 		GraphProvider: fakeGraphProvider{},
 		Scorer:        fakeScorer{},
 		Decider:       fakeDecider{},
-		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+		NewRunID: func(role domain.Role, task domain.MatchSpec, system domain.SystemRef) domain.RunID {
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},
 		NewReportID: func() domain.ReportID {
@@ -138,7 +138,7 @@ func fixedTestTime() time.Time {
 	return time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 }
 
-func assertReportDoesNotLeakPolicySource(t *testing.T, got report.CandidateReport, policySource string) {
+func assertReportDoesNotLeakPolicySource(t *testing.T, got report.RoundReport, policySource string) {
 	t.Helper()
 
 	data, err := json.Marshal(got)

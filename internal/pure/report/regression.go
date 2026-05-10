@@ -5,7 +5,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-// RegressionSeverity describes how serious a candidate regression is.
+// RegressionSeverity describes how serious a challenger regression is.
 type RegressionSeverity string
 
 const (
@@ -13,14 +13,14 @@ const (
 	RegressionBlocking RegressionSeverity = "blocking"
 )
 
-// Regression records a metric/task-level reason the candidate got worse.
+// Regression records a metric/match-level reason the challenger regressed.
 type Regression struct {
-	TaskID domain.TaskID    `json:"task_id"`
-	Metric score.MetricName `json:"metric"`
+	MatchID domain.MatchID   `json:"match_id"`
+	Metric  score.MetricName `json:"metric"`
 
-	Baseline  float64 `json:"baseline"`
-	Candidate float64 `json:"candidate"`
-	Delta     float64 `json:"delta"`
+	Incumbent  float64 `json:"incumbent"`
+	Challenger float64 `json:"challenger"`
+	Delta      float64 `json:"delta"`
 
 	Severity RegressionSeverity `json:"severity"`
 	Reason   string             `json:"reason"`
@@ -29,35 +29,35 @@ type Regression struct {
 // NewRegressionFromMetricComparison converts a score-level regression into a
 // report-facing regression record.
 func NewRegressionFromMetricComparison(
-	taskID domain.TaskID,
+	matchID domain.MatchID,
 	comparison score.MetricComparison,
 	severity RegressionSeverity,
 	reason string,
 ) Regression {
 	return Regression{
-		TaskID:    taskID,
-		Metric:    comparison.Metric,
-		Baseline:  comparison.Baseline,
-		Candidate: comparison.Candidate,
-		Delta:     comparison.Delta,
-		Severity:  severity,
-		Reason:    reason,
+		MatchID:    matchID,
+		Metric:     comparison.Metric,
+		Incumbent:  comparison.Incumbent,
+		Challenger: comparison.Challenger,
+		Delta:      comparison.Delta,
+		Severity:   severity,
+		Reason:     reason,
 	}
 }
 
-// RegressionsForTask converts metric comparisons into report-level regressions
-// for one task.
-func RegressionsForTask(taskID domain.TaskID, comparisons []score.MetricComparison) []Regression {
+// RegressionsForMatch converts metric comparisons into report-level regressions
+// for one match.
+func RegressionsForMatch(matchID domain.MatchID, comparisons []score.MetricComparison) []Regression {
 	out := make([]Regression, 0)
 	for _, comparison := range comparisons {
 		if !comparison.Regressed {
 			continue
 		}
 		out = append(out, NewRegressionFromMetricComparison(
-			taskID,
+			matchID,
 			comparison,
 			RegressionMinor,
-			"candidate score is worse than baseline",
+			"challenger score is worse than incumbent",
 		))
 	}
 	return out

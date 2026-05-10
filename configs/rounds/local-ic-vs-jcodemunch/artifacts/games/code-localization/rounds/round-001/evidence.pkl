@@ -1,0 +1,178 @@
+schemaVersion = "searchbench.round_evidence.v1"
+gameId = "code-localization"
+roundId = "round-001"
+reportId = "report-round-001"
+
+policies {
+  incumbent {
+    id = "jcodemunch"
+    name = "jCodeMunch"
+    backend = "jcodemunch"
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+    }
+    promptBundle {
+      name = "default"
+      version = "dev"
+    }
+    policy = null
+    runtime {
+      maxSteps = 8
+      maxToolCalls = 24
+      maxInputTokens = 0
+      maxOutputTokens = 2000
+      maxContextTokens = 0
+      toolResultMaxBytes = 0
+    }
+    fingerprint = "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
+  }
+  challenger {
+    id = "iterative-context"
+    name = "Iterative Context"
+    backend = "iterative-context"
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+    }
+    promptBundle {
+      name = "default"
+      version = "dev"
+    }
+    policy {
+      id = "challenger-policy-round-001"
+      language = "python"
+      sha256 = "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054"
+      entrypoint = "score"
+    }
+    runtime {
+      maxSteps = 8
+      maxToolCalls = 24
+      maxInputTokens = 0
+      maxOutputTokens = 2000
+      maxContextTokens = 0
+      toolResultMaxBytes = 0
+    }
+    fingerprint = "eba3813ecd13a659b216f366c49ce262a39f5dc2b5f431d9bcef78e8e73dcbd8"
+  }
+}
+
+matchCounts {
+  total = 1
+}
+
+executionCounts {
+  incumbent = 1
+  challenger = 1
+}
+
+failureCounts {
+  incumbent = 0
+  challenger = 0
+}
+
+localizationDistance {
+  goldHop {
+    metric = "gold_hop"
+    direction = "lower_is_better"
+    incumbent = 6
+    challenger = 2
+    delta = -4
+    improved = true
+    regressed = false
+  }
+  issueHop {
+    metric = "issue_hop"
+    direction = "lower_is_better"
+    incumbent = 7
+    challenger = 3
+    delta = -4
+    improved = true
+    regressed = false
+  }
+}
+
+challengerUsage {
+  available = true
+  measuredRuns = 1
+  inputTokens = 169
+  outputTokens = 16
+  totalTokens = 185
+  costUsd = 0
+}
+
+incumbentUsage {
+  available = true
+  measuredRuns = 1
+  inputTokens = 169
+  outputTokens = 12
+  totalTokens = 181
+  costUsd = 0
+}
+
+regressions {
+  count = 0
+  minorCount = 0
+  severeCount = 0
+}
+
+regressionDetails = new {
+}
+
+invalidPredictions {
+  known = false
+  count = 0
+}
+
+metrics = new {
+  new {
+    metric = "gold_hop"
+    direction = "lower_is_better"
+    incumbent = 6
+    challenger = 2
+    delta = -4
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "issue_hop"
+    direction = "lower_is_better"
+    incumbent = 7
+    challenger = 3
+    delta = -4
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "token_efficiency"
+    direction = "higher_is_better"
+    incumbent = 0.35
+    challenger = 0.85
+    delta = 0.5
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "cost"
+    direction = "lower_is_better"
+    incumbent = 0.6
+    challenger = 0.15
+    delta = -0.44999999999999996
+    improved = true
+    regressed = false
+  }
+  new {
+    metric = "composite"
+    direction = "higher_is_better"
+    incumbent = 0.3
+    challenger = 0.9
+    delta = 0.6000000000000001
+    improved = true
+    regressed = false
+  }
+}
+
+decision {
+  decision = "PROMOTE_CHALLENGER"
+  reason = "challenger improves the composite score in local fake comparison"
+}

@@ -6,21 +6,21 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func TestRenderCandidateReportIncludesHighLevelSections(t *testing.T) {
+func TestRenderRoundReportIncludesHighLevelSections(t *testing.T) {
 	t.Parallel()
 
-	out := RenderCandidateReport(sampleCandidateReport(t), DefaultOptions())
+	out := RenderRoundReport(sampleRoundReport(t), DefaultOptions())
 
 	for _, want := range []string{
-		"Searchbench Candidate Report",
+		"SearchBench Round Report",
 		"Decision",
 		"Systems",
-		"Run Summary",
+		"Execution Summary",
 		"Metrics",
 		"Regressions",
 		"Failures",
@@ -31,13 +31,13 @@ func TestRenderCandidateReportIncludesHighLevelSections(t *testing.T) {
 	}
 }
 
-func TestRenderCandidateReportDoesNotLeakPolicySource(t *testing.T) {
+func TestRenderRoundReportDoesNotLeakPolicySource(t *testing.T) {
 	t.Parallel()
 
-	policySource := "def score(task):\n    return 'candidate'\n"
-	report := sampleCandidateReportWithPolicySource(t, policySource)
+	policySource := "def score(task):\n    return 'challenger'\n"
+	report := sampleRoundReportWithPolicySource(t, policySource)
 
-	out := RenderCandidateReport(report, DefaultOptions())
+	out := RenderRoundReport(report, DefaultOptions())
 	if strings.Contains(out, policySource) {
 		t.Fatalf("output leaked policy source\n%s", out)
 	}
@@ -46,45 +46,45 @@ func TestRenderCandidateReportDoesNotLeakPolicySource(t *testing.T) {
 	}
 }
 
-func TestRenderCandidateReportShowsFailures(t *testing.T) {
+func TestRenderRoundReportShowsFailures(t *testing.T) {
 	t.Parallel()
 
-	report := sampleCandidateReport(t)
-	report.Failures.Candidate = []run.RunFailure{
+	report := sampleRoundReport(t)
+	report.Failures.Challenger = []run.RunFailure{
 		{
-			RunID:   domain.RunID("candidate-run-1"),
-			TaskID:  domain.TaskID("task-1"),
-			System:  domain.SystemID("candidate-system"),
+			RunID:   domain.RunID("challenger-run-1"),
+			MatchID: domain.MatchID("task-1"),
+			System:  domain.SystemID("challenger-system"),
 			Stage:   run.FailureExecute,
-			Message: "candidate execute failed",
+			Message: "challenger execute failed",
 		},
 	}
 
-	out := RenderCandidateReport(report, DefaultOptions())
-	for _, want := range []string{"Failures", "candidate", "execute", "candidate execute failed"} {
+	out := RenderRoundReport(report, DefaultOptions())
+	for _, want := range []string{"Failures", "challenger", "execute", "challenger execute failed"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q\n%s", want, out)
 		}
 	}
 }
 
-func sampleCandidateReport(t *testing.T) report.CandidateReport {
+func sampleRoundReport(t *testing.T) report.RoundReport {
 	t.Helper()
 
-	return sampleCandidateReportWithPolicySource(t, "def score(task):\n    return 'candidate'\n")
+	return sampleRoundReportWithPolicySource(t, "def score(task):\n    return 'challenger'\n")
 }
 
-func sampleCandidateReportWithPolicySource(t *testing.T, policySource string) report.CandidateReport {
+func sampleRoundReportWithPolicySource(t *testing.T, policySource string) report.RoundReport {
 	t.Helper()
 
 	spec := report.NewComparisonSpec(
-		domain.NewPair(sampleBaselineSystem(), sampleCandidateSystem(policySource)),
-		domain.NewNonEmpty(sampleTask(domain.TaskID("task-1"), domain.RepoRelPath("pkg/bug1.go"))),
+		domain.NewPair(sampleIncumbentPolicy(), sampleChallengerPolicy(policySource)),
+		domain.NewNonEmpty(sampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go"))),
 	)
 
 	runs := domain.NewPair(
-		[]score.ScoredRun{sampleScoredRun(t, domain.RoleBaseline, sampleBaselineSystem(), domain.TaskID("task-1"))},
-		[]score.ScoredRun{sampleScoredRun(t, domain.RoleCandidate, sampleCandidateSystem(policySource), domain.TaskID("task-1"))},
+		[]score.ScoredRun{sampleScoredRun(t, domain.RoleIncumbent, sampleIncumbentPolicy(), domain.MatchID("task-1"))},
+		[]score.ScoredRun{sampleScoredRun(t, domain.RoleChallenger, sampleChallengerPolicy(policySource), domain.MatchID("task-1"))},
 	)
 	comparisons := []report.ScoreComparison{
 		report.NewScoreComparison(score.MetricGoldHop, 4, 1),
@@ -94,30 +94,30 @@ func sampleCandidateReportWithPolicySource(t *testing.T, policySource string) re
 		report.NewScoreComparison(score.MetricComposite, 0.3, 0.95),
 	}
 
-	out := report.NewCandidateReport(
+	out := report.NewRoundReport(
 		domain.ReportID("report-1"),
 		spec,
 		runs,
 		domain.NewPair([]run.RunFailure{}, []run.RunFailure{}),
 		comparisons,
 		nil,
-		report.PromotionDecision{
-			Decision: report.DecisionPromote,
-			Reason:   "candidate improved every required metric",
+		report.Decision{
+			Decision: report.DecisionPromoteChallenger,
+			Reason:   "challenger improved every required metric",
 		},
 	)
 	out.CreatedAt = time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 	return out
 }
 
-func sampleBaselineSystem() domain.SystemSpec {
+func sampleIncumbentPolicy() domain.SystemSpec {
 	return domain.SystemSpec{
-		ID:      domain.SystemID("baseline-system"),
-		Name:    "Baseline",
+		ID:      domain.SystemID("incumbent-system"),
+		Name:    "Incumbent",
 		Backend: domain.BackendJCodeMunch,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-baseline",
+			Name:     "gpt-incumbent",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -126,15 +126,15 @@ func sampleBaselineSystem() domain.SystemSpec {
 	}
 }
 
-func sampleCandidateSystem(policySource string) domain.SystemSpec {
+func sampleChallengerPolicy(policySource string) domain.SystemSpec {
 	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
 	return domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
+		ID:      domain.SystemID("challenger-system"),
+		Name:    "Challenger",
 		Backend: domain.BackendIterativeContext,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-candidate",
+			Name:     "gpt-challenger",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -144,8 +144,8 @@ func sampleCandidateSystem(policySource string) domain.SystemSpec {
 	}
 }
 
-func sampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
-	return domain.TaskSpec{
+func sampleTask(id domain.MatchID, gold domain.RepoRelPath) domain.MatchSpec {
+	return domain.MatchSpec{
 		ID:        id,
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
@@ -153,13 +153,13 @@ func sampleTask(id domain.TaskID, gold domain.RepoRelPath) domain.TaskSpec {
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("/tmp/repo"),
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{gold},
 		},
 	}
 }
 
-func sampleScoredRun(t *testing.T, role domain.Role, system domain.SystemSpec, taskID domain.TaskID) score.ScoredRun {
+func sampleScoredRun(t *testing.T, role domain.Role, system domain.SystemSpec, taskID domain.MatchID) score.ScoredRun {
 	t.Helper()
 
 	task := sampleTask(taskID, domain.RepoRelPath("pkg/bug1.go"))

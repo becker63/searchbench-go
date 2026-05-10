@@ -12,20 +12,20 @@ import (
 type Phase string
 
 const (
-	PhaseResolveOptimizerPlan  Phase = "resolve_optimizer_plan"
-	PhaseLoadParentEvidence    Phase = "load_parent_evidence"
-	PhasePrepareOptimizer      Phase = "prepare_optimizer"
-	PhaseRenderOptimizerPrompt Phase = "render_optimizer_prompt"
-	PhaseRunOptimizer          Phase = "run_optimizer"
-	PhaseFinalizeProposal      Phase = "finalize_policy_proposal"
-	PhaseWriteCandidateStage   Phase = "write_candidate_stage"
-	PhaseRunPolicyPipeline     Phase = "run_policy_pipeline"
-	PhaseClassifyPipeline      Phase = "classify_policy_pipeline"
-	PhasePrepareRetry          Phase = "prepare_retry"
-	PhaseAcceptProposal        Phase = "accept_proposal"
-	PhaseWriteOptimizerBundle  Phase = "write_optimizer_bundle"
-	PhaseComplete              Phase = "complete"
-	PhaseExhausted             Phase = "exhausted"
+	PhaseResolveOptimizerPlan     Phase = "resolve_optimizer_plan"
+	PhaseLoadParentEvidence       Phase = "load_parent_evidence"
+	PhasePrepareOptimizer         Phase = "prepare_optimizer"
+	PhaseRenderOptimizerPrompt    Phase = "render_optimizer_prompt"
+	PhaseRunOptimizer             Phase = "run_optimizer"
+	PhaseFinalizeNextChallenger   Phase = "finalize_next_challenger"
+	PhaseWriteNextChallengerStage Phase = "write_next_challenger_stage"
+	PhaseRunPolicyPipeline        Phase = "run_policy_pipeline"
+	PhaseClassifyPipeline         Phase = "classify_policy_pipeline"
+	PhasePrepareRetry             Phase = "prepare_retry"
+	PhaseAcceptNextChallenger     Phase = "accept_next_challenger"
+	PhaseWriteOptimizerBundle     Phase = "write_optimizer_bundle"
+	PhaseComplete                 Phase = "complete"
+	PhaseExhausted                Phase = "exhausted"
 )
 
 // FailureKind is one stable optimizer failure category.
@@ -38,11 +38,11 @@ const (
 	FailureKindOptimizerPromptFailed        FailureKind = "optimizer_prompt_failed"
 	FailureKindOptimizerFailed              FailureKind = "optimizer_failed"
 	FailureKindOptimizerToolFailed          FailureKind = "optimizer_tool_failed"
-	FailureKindPolicyProposalFailed         FailureKind = "policy_proposal_failed"
+	FailureKindNextChallengerFailed         FailureKind = "next_challenger_failed"
 	FailureKindPolicyStageWriteFailed       FailureKind = "policy_stage_write_failed"
 	FailureKindPolicyPipelineFailed         FailureKind = "policy_pipeline_failed"
 	FailureKindPolicyPipelineInfrastructure FailureKind = "policy_pipeline_infrastructure_failed"
-	FailureKindAcceptProposalFailed         FailureKind = "accept_proposal_failed"
+	FailureKindAcceptNextChallengerFailed   FailureKind = "accept_next_challenger_failed"
 	FailureKindOptimizerRetriesExhausted    FailureKind = "optimizer_retries_exhausted"
 	FailureKindContextCancelled             FailureKind = "context_cancelled"
 )
@@ -51,12 +51,12 @@ const (
 type AttemptState string
 
 const (
-	AttemptStatePending           AttemptState = "pending"
-	AttemptStatePromptRendered    AttemptState = "prompt_rendered"
-	AttemptStateProposalFinalized AttemptState = "proposal_finalized"
-	AttemptStatePipelineFailed    AttemptState = "pipeline_failed"
-	AttemptStateAccepted          AttemptState = "accepted"
-	AttemptStateFailed            AttemptState = "failed"
+	AttemptStatePending                 AttemptState = "pending"
+	AttemptStatePromptRendered          AttemptState = "prompt_rendered"
+	AttemptStateNextChallengerFinalized AttemptState = "next_challenger_finalized"
+	AttemptStatePipelineFailed          AttemptState = "pipeline_failed"
+	AttemptStateAccepted                AttemptState = "accepted"
+	AttemptStateFailed                  AttemptState = "failed"
 )
 
 // RetryPolicy controls bounded optimizer retries across attempts.
@@ -88,7 +88,7 @@ type ModelConfig struct {
 	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
 }
 
-// Bounds records optimizer runtime bounds from the manifest.
+// Bounds records next-challenger runtime bounds from the manifest.
 type Bounds struct {
 	MaxModelTurns  int `json:"max_model_turns,omitempty"`
 	MaxToolCalls   int `json:"max_tool_calls,omitempty"`
@@ -109,39 +109,40 @@ type AgentConfig struct {
 	SystemPrompt string      `json:"system_prompt,omitempty"`
 }
 
-// Target identifies the policy artifact being optimized.
-type Target struct {
+// NextChallengerTarget identifies the policy artifact used to propose a future
+// challenger.
+type NextChallengerTarget struct {
 	InputArtifactID  domain.ArtifactID `json:"input_artifact_id"`
 	OutputArtifactID domain.ArtifactID `json:"output_artifact_id"`
 	OutputName       string            `json:"output_name"`
 	InterfaceID      string            `json:"interface_id"`
 }
 
-// ParentRunRef identifies the completed evaluation bundle used as evidence.
-type ParentRunRef struct {
+// ParentRoundRef identifies the completed round bundle used as evidence.
+type ParentRoundRef struct {
 	ArtifactID domain.ArtifactID `json:"artifact_id"`
 	BundleID   string            `json:"bundle_id,omitempty"`
 	BundlePath domain.HostPath   `json:"bundle_path,omitempty"`
 }
 
-// ReportSummary is the prompt-safe parent-run report projection.
+// ReportSummary is the prompt-safe parent-round report projection.
 type ReportSummary struct {
-	ReportID          domain.ReportID     `json:"report_id"`
-	Decision          string              `json:"decision,omitempty"`
-	DecisionReason    string              `json:"decision_reason,omitempty"`
-	CandidateSystemID domain.SystemID     `json:"candidate_system_id,omitempty"`
-	CandidatePolicyID domain.PolicyID     `json:"candidate_policy_id,omitempty"`
-	BaselineUsage     score.UsageEvidence `json:"baseline_usage,omitempty"`
-	CandidateUsage    score.UsageEvidence `json:"candidate_usage,omitempty"`
-	Comparisons       []MetricSummary     `json:"comparisons,omitempty"`
+	ReportID           domain.ReportID     `json:"report_id"`
+	Decision           string              `json:"decision,omitempty"`
+	DecisionReason     string              `json:"decision_reason,omitempty"`
+	ChallengerSystemID domain.SystemID     `json:"challenger_system_id,omitempty"`
+	ChallengerPolicyID domain.PolicyID     `json:"challenger_policy_id,omitempty"`
+	IncumbentUsage     score.UsageEvidence `json:"incumbent_usage,omitempty"`
+	ChallengerUsage    score.UsageEvidence `json:"challenger_usage,omitempty"`
+	Comparisons        []MetricSummary     `json:"comparisons,omitempty"`
 }
 
 // MetricSummary is one report-safe metric delta summary.
 type MetricSummary struct {
-	Metric    string  `json:"metric"`
-	Baseline  float64 `json:"baseline"`
-	Candidate float64 `json:"candidate"`
-	Delta     float64 `json:"delta"`
+	Metric     string  `json:"metric"`
+	Incumbent  float64 `json:"incumbent"`
+	Challenger float64 `json:"challenger"`
+	Delta      float64 `json:"delta"`
 }
 
 // PolicySource is one concrete policy artifact source.
@@ -152,26 +153,27 @@ type PolicySource struct {
 	Source      string            `json:"source"`
 }
 
-// Evidence is the prompt-safe optimizer evidence payload.
-type Evidence struct {
-	ParentRun       ParentRunRef                 `json:"parent_run"`
+// NextChallengerEvidence is the prompt-safe evidence payload for proposing a
+// possible future challenger.
+type NextChallengerEvidence struct {
+	ParentRound     ParentRoundRef               `json:"parent_round"`
 	IncludedKinds   []string                     `json:"included_kinds,omitempty"`
 	DeniedKinds     []string                     `json:"denied_kinds,omitempty"`
 	ReportSummary   *ReportSummary               `json:"report_summary,omitempty"`
-	ScoreEvidence   *score.ScoreEvidenceDocument `json:"score_evidence,omitempty"`
+	RoundEvidence   *score.RoundEvidenceDocument `json:"round_evidence,omitempty"`
 	ObjectiveResult *score.ObjectiveResult       `json:"objective_result,omitempty"`
 	InputPolicy     PolicySource                 `json:"input_policy"`
 }
 
-// Spec is one resolved optimizer execution request.
+// Spec is one resolved next-challenger execution request.
 type Spec struct {
-	Target   Target      `json:"target"`
-	Agent    AgentConfig `json:"agent"`
-	Evidence Evidence    `json:"evidence"`
+	Target   NextChallengerTarget   `json:"target"`
+	Agent    AgentConfig            `json:"agent"`
+	Evidence NextChallengerEvidence `json:"evidence"`
 }
 
-// Proposal is one finalized replacement policy artifact proposal.
-type Proposal struct {
+// NextChallengerProposal is one finalized future challenger artifact proposal.
+type NextChallengerProposal struct {
 	ArtifactID   domain.ArtifactID `json:"artifact_id"`
 	ArtifactName string            `json:"artifact_name"`
 	InterfaceID  string            `json:"interface_id"`
@@ -216,20 +218,21 @@ type Attempt struct {
 	State                  AttemptState             `json:"state"`
 	RenderedPrompt         string                   `json:"rendered_prompt,omitempty"`
 	RawOutput              string                   `json:"raw_output,omitempty"`
-	Proposal               *Proposal                `json:"proposal,omitempty"`
+	Proposal               *NextChallengerProposal  `json:"proposal,omitempty"`
 	Failure                *Failure                 `json:"failure,omitempty"`
 	PipelineResults        []pipeline.StepResult    `json:"-"`
 	PipelineClassification *pipeline.Classification `json:"-"`
 	RetryFeedback          string                   `json:"retry_feedback,omitempty"`
 }
 
-// Result is the typed outcome for one optimizer run.
-type Result struct {
-	Success        bool      `json:"success"`
-	Proposal       *Proposal `json:"proposal,omitempty"`
-	Failure        *Failure  `json:"failure,omitempty"`
-	Attempts       []Attempt `json:"attempts,omitempty"`
-	Phases         []Phase   `json:"phases,omitempty"`
-	RenderedPrompt string    `json:"rendered_prompt,omitempty"`
-	RawOutput      string    `json:"raw_output,omitempty"`
+// NextChallengerRecord is the typed outcome for one next-challenger proposal
+// run.
+type NextChallengerRecord struct {
+	Success        bool                    `json:"success"`
+	Proposal       *NextChallengerProposal `json:"proposal,omitempty"`
+	Failure        *Failure                `json:"failure,omitempty"`
+	Attempts       []Attempt               `json:"attempts,omitempty"`
+	Phases         []Phase                 `json:"phases,omitempty"`
+	RenderedPrompt string                  `json:"rendered_prompt,omitempty"`
+	RawOutput      string                  `json:"raw_output,omitempty"`
 }

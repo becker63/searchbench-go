@@ -9,36 +9,36 @@ import (
 	"github.com/becker63/searchbench-go/internal/app/logging"
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-const demoPolicySource = "def score(task):\n    return \"candidate\"\n"
+const demoPolicySource = "def score(task):\n    return \"challenger\"\n"
 
 func demoPlan(taskCount int) compare.Plan {
-	tasks := make([]domain.TaskSpec, 0, taskCount)
+	tasks := make([]domain.MatchSpec, 0, taskCount)
 	for i := 1; i <= taskCount; i++ {
 		tasks = append(tasks, demoTask(i))
 	}
 
 	return compare.NewPlan(
 		domain.NewPair(
-			demoBaselineSystem(),
-			demoCandidateSystem(demoPolicySource),
+			demoIncumbentPolicy(),
+			demoChallengerPolicy(demoPolicySource),
 		),
 		domain.NewNonEmpty(tasks[0], tasks[1:]...),
 	)
 }
 
-func demoBaselineSystem() domain.SystemSpec {
+func demoIncumbentPolicy() domain.SystemSpec {
 	return domain.SystemSpec{
-		ID:      domain.SystemID("baseline-system"),
-		Name:    "Baseline",
+		ID:      domain.SystemID("incumbent-system"),
+		Name:    "Incumbent",
 		Backend: domain.BackendJCodeMunch,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-baseline",
+			Name:     "gpt-incumbent",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -50,15 +50,15 @@ func demoBaselineSystem() domain.SystemSpec {
 	}
 }
 
-func demoCandidateSystem(policySource string) domain.SystemSpec {
+func demoChallengerPolicy(policySource string) domain.SystemSpec {
 	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
 	return domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
+		ID:      domain.SystemID("challenger-system"),
+		Name:    "Challenger",
 		Backend: domain.BackendIterativeContext,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-candidate",
+			Name:     "gpt-challenger",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -71,11 +71,11 @@ func demoCandidateSystem(policySource string) domain.SystemSpec {
 	}
 }
 
-func demoTask(index int) domain.TaskSpec {
-	taskID := domain.TaskID(fmt.Sprintf("task-%d", index))
+func demoTask(index int) domain.MatchSpec {
+	taskID := domain.MatchID(fmt.Sprintf("task-%d", index))
 	gold := domain.RepoRelPath(fmt.Sprintf("pkg/bug%d.go", index))
 
-	return domain.TaskSpec{
+	return domain.MatchSpec{
 		ID:        taskID,
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
@@ -83,11 +83,11 @@ func demoTask(index int) domain.TaskSpec {
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("/tmp/repo"),
 		},
-		Input: domain.TaskInput{
+		Input: domain.MatchInput{
 			Title: "Find issue " + taskID.String(),
 			Body:  "Locate bug for " + taskID.String(),
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{gold},
 		},
 	}
@@ -99,7 +99,7 @@ func demoRunner(now time.Time, logger logging.Logger, maxWorkers int) compare.Ru
 		GraphProvider: demoGraphProvider{},
 		Scorer:        demoScorer{},
 		Decider:       demoDecider{},
-		NewRunID: func(role domain.Role, task domain.TaskSpec, system domain.SystemRef) domain.RunID {
+		NewRunID: func(role domain.Role, task domain.MatchSpec, system domain.SystemRef) domain.RunID {
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},
 		NewReportID: func() domain.ReportID {
@@ -124,11 +124,11 @@ func (d demoExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun
 	planned := run.NewPlanned(spec)
 	prepared := run.NewPrepared(planned, domain.SessionID("session-"+spec.ID.String()))
 
-	predictionFile := domain.RepoRelPath("pkg/baseline.go")
-	reasoning := "baseline path"
+	predictionFile := domain.RepoRelPath("pkg/incumbent.go")
+	reasoning := "incumbent path"
 	if spec.System.Backend == domain.BackendIterativeContext {
-		predictionFile = domain.RepoRelPath("pkg/candidate.go")
-		reasoning = "candidate path"
+		predictionFile = domain.RepoRelPath("pkg/challenger.go")
+		reasoning = "challenger path"
 	}
 
 	return run.NewExecuted(
@@ -151,7 +151,7 @@ func (d demoExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun
 
 type demoGraphProvider struct{}
 
-func (demoGraphProvider) GraphForTask(_ context.Context, task domain.TaskSpec) (codegraph.Graph, error) {
+func (demoGraphProvider) GraphForTask(_ context.Context, task domain.MatchSpec) (codegraph.Graph, error) {
 	store := codegraph.NewStore()
 	fileID := codegraph.NodeID("file-" + task.ID.String())
 	fnID := codegraph.NodeID("fn-" + task.ID.String())
@@ -192,16 +192,16 @@ func (demoScorer) Score(_ context.Context, input score.Input) (score.ScoreSet, e
 
 type demoDecider struct{}
 
-func (demoDecider) Decide(_ []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision {
+func (demoDecider) Decide(_ []report.ScoreComparison, regressions []report.Regression) report.Decision {
 	if len(regressions) == 0 {
-		return report.PromotionDecision{
-			Decision: report.DecisionPromote,
-			Reason:   "candidate improved every required metric",
+		return report.Decision{
+			Decision: report.DecisionPromoteChallenger,
+			Reason:   "challenger improved every required metric",
 		}
 	}
 
-	return report.PromotionDecision{
+	return report.Decision{
 		Decision: report.DecisionReview,
-		Reason:   "candidate has regressions",
+		Reason:   "challenger has regressions",
 	}
 }

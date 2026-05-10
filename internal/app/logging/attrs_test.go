@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -13,35 +13,35 @@ func TestSystemSpecKVOmitsPolicySource(t *testing.T) {
 	t.Parallel()
 
 	system := domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
+		ID:      domain.SystemID("challenger-system"),
+		Name:    "Challenger",
 		Backend: domain.BackendIterativeContext,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-candidate",
+			Name:     "gpt-challenger",
 		},
 		PromptBundle: domain.PromptBundleRef{Name: "bundle"},
-		Policy:       ptr(domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'candidate'", "score")),
+		Policy:       ptr(domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'challenger'", "score")),
 	}
 
 	kv := SystemSpecKV(system)
 	assertNoKey(t, kv, "source")
-	assertNoValue(t, kv, "def score(task): return 'candidate'")
+	assertNoValue(t, kv, "def score(task): return 'challenger'")
 	assertHasKey(t, kv, "policy_sha256")
 }
 
 func TestTaskKVOmitsOracleFields(t *testing.T) {
 	t.Parallel()
 
-	task := domain.TaskSpec{
-		ID:        domain.TaskID("task-1"),
+	task := domain.MatchSpec{
+		ID:        domain.MatchID("task-1"),
 		Benchmark: domain.BenchmarkLCA,
 		Repo: domain.RepoSnapshot{
 			Name: domain.RepoName("repo/example"),
 			SHA:  domain.RepoSHA("abc123"),
 			Path: domain.HostPath("/tmp/repo"),
 		},
-		Oracle: domain.TaskOracle{
+		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{"pkg/bug.go"},
 		},
 	}
@@ -50,7 +50,7 @@ func TestTaskKVOmitsOracleFields(t *testing.T) {
 	assertNoKey(t, kv, "oracle")
 	assertNoKey(t, kv, "gold_files")
 	assertNoValue(t, kv, domain.RepoRelPath("pkg/bug.go"))
-	assertHasKey(t, kv, "task_id")
+	assertHasKey(t, kv, "match_id")
 }
 
 func TestScoreSetKVIncludesRequiredMetrics(t *testing.T) {
@@ -82,20 +82,20 @@ func TestScoreSetKVIncludesRequiredMetrics(t *testing.T) {
 func TestReportSummaryKVIsCompact(t *testing.T) {
 	t.Parallel()
 
-	report := report.NewCandidateReport(
+	report := report.NewRoundReport(
 		domain.ReportID("report-1"),
 		report.ComparisonSpec{},
 		domain.NewPair([]score.ScoredRun{{}}, []score.ScoredRun{{}, {}}),
 		domain.NewPair([]run.RunFailure{{}}, []run.RunFailure{}),
 		[]report.ScoreComparison{{}, {}},
 		[]report.Regression{{}},
-		report.PromotionDecision{Decision: report.DecisionPromote},
+		report.Decision{Decision: report.DecisionPromoteChallenger},
 	)
 
 	kv := ReportSummaryKV(report)
 	assertHasKey(t, kv, "report_id")
-	assertHasKey(t, kv, "baseline_runs")
-	assertHasKey(t, kv, "candidate_runs")
+	assertHasKey(t, kv, "incumbent_runs")
+	assertHasKey(t, kv, "challenger_runs")
 	assertNoKey(t, kv, "runs")
 }
 

@@ -171,7 +171,7 @@ The current policy being defended.
 This may be:
 
 * a production policy
-* a fixed baseline/control
+* a fixed incumbent/control
 * the previous winning challenger
 * a known external reference system such as jCodeMunch
 
@@ -452,7 +452,7 @@ Workflow Agent Game
 
 These terms may remain in low-level code temporarily during migration, but they should not define the project model.
 
-### `baseline`
+### `incumbent`
 
 Replace with:
 
@@ -460,9 +460,9 @@ Replace with:
 incumbent
 ```
 
-`baseline` sounds static. `incumbent` implies a policy defending its position.
+`incumbent` sounds static. `incumbent` implies a policy defending its position.
 
-### `candidate`
+### `challenger`
 
 Replace with:
 
@@ -470,7 +470,7 @@ Replace with:
 challenger
 ```
 
-`candidate` sounds generic. `challenger` implies motion and competition.
+`challenger` sounds generic. `challenger` implies motion and competition.
 
 ### `task`
 
@@ -484,7 +484,7 @@ match
 
 In core architecture, reports, and visualization, use `Match`.
 
-### `promotion decision`
+### `decision decision`
 
 Replace with:
 
@@ -502,7 +502,7 @@ Replace with:
 round
 ```
 
-The current local E2E flow is not test scaffolding. It is the main system shape.
+The current round flow is not test scaffolding. It is the main system shape.
 
 ### `projection`
 
@@ -855,7 +855,7 @@ internal/
 
 ### Package decisions
 
-#### `internal/app/locale2e`
+#### `internal/app/round`
 
 Rename to:
 
@@ -865,11 +865,11 @@ internal/app/round
 
 Reason:
 
-`locale2e` describes a local composition mechanism.
+`round` describes a local composition mechanism.
 
 `round` names the primary contest unit.
 
-The current fake local E2E tests should become round tests.
+The current fake round tests should become round tests.
 
 Example test rename:
 
@@ -918,8 +918,8 @@ Dataset adapters may still map external “tasks” into SearchBench matches.
 Preferred target names:
 
 ```text
-TaskSpec → MatchSpec
-TaskID → MatchID
+MatchSpec → MatchSpec
+MatchID → MatchID
 TaskInput → MatchInput
 TaskOracle → MatchOracle
 TaskSlice → MatchSlice
@@ -930,28 +930,28 @@ TaskSlice → MatchSlice
 Keep package name, but rename exported concepts.
 
 ```text
-CandidateReport → RoundReport
-PromotionDecision → Decision
+RoundReport → RoundReport
+Decision → Decision
 DecisionPromote → DecisionPromote
 DecisionReview → DecisionReview
 DecisionReject → DecisionReject
 ```
 
-A report belongs to a round, not to a candidate.
+A report belongs to a round, not to a challenger.
 
 #### `internal/pure/score`
 
 Keep package name.
 
-Rename role fields from baseline/candidate to incumbent/challenger.
+Rename role fields from incumbent/challenger to incumbent/challenger.
 
 ```text
-RoleBaseline → RoleIncumbent
-RoleCandidate → RoleChallenger
-RoleCounts.Baseline → RoleCounts.Incumbent
-RoleCounts.Candidate → RoleCounts.Challenger
-MetricEvidence.Baseline → MetricEvidence.Incumbent
-MetricEvidence.Candidate → MetricEvidence.Challenger
+RoleIncumbent → RoleIncumbent
+RoleChallenger → RoleChallenger
+RoleCounts.Incumbent → RoleCounts.Incumbent
+RoleCounts.Challenger → RoleCounts.Challenger
+MetricEvidence.Incumbent → MetricEvidence.Incumbent
+MetricEvidence.Challenger → MetricEvidence.Challenger
 ```
 
 #### `internal/pure/optimizer`
@@ -959,10 +959,10 @@ MetricEvidence.Candidate → MetricEvidence.Challenger
 Keep the package `optimizer` for now because the external role is understandable, but rename the core exported artifact types:
 
 ```text
-PolicyProposal → NextChallengerProposal
-PolicyProposalArtifact → NextChallengerArtifact
-OptimizerResult → NextChallengerRecord
-OptimizationEvidence → NextChallengerEvidence
+NextChallengerProposal → NextChallengerProposal
+NextChallengerArtifact → NextChallengerArtifact
+NextChallengerResult → NextChallengerRecord
+NextChallengerEvidence → NextChallengerEvidence
 ```
 
 Reason:
@@ -973,7 +973,7 @@ The artifact it produces is a next challenger.
 
 #### `internal/pure/domain/pair.go`
 
-Replace generic baseline/candidate pair usage with named incumbent/challenger pair types where used in round/report/score contexts.
+Replace generic incumbent/challenger pair usage with named incumbent/challenger pair types where used in round/report/score contexts.
 
 Preferred type:
 
@@ -1139,12 +1139,12 @@ NextChallengerArtifact
 ### Avoid these names in new high-level code
 
 ```text
-Baseline
-Candidate
+Incumbent
+Challenger
 Task
-CandidateReport
-PromotionDecision
-LocalE2E
+RoundReport
+Decision
+Round
 Projection
 Request
 Response
@@ -1156,8 +1156,8 @@ Plan
 The following can remain temporarily during migration:
 
 ```text
-baseline
-candidate
+incumbent
+challenger
 task
 run
 request
@@ -1179,19 +1179,19 @@ New docs, reports, CLI output, and visualization output should not introduce the
 
 ## Pkl schema migration
 
-The Pkl configuration should move from experiment/baseline/candidate vocabulary to game/round/incumbent/challenger/match vocabulary.
+The Pkl configuration should move from round/incumbent/challenger vocabulary to game/round/incumbent/challenger/match vocabulary.
 
 ### Current conceptual shape
 
 ```pkl
-systems {
-  baseline { ... }
-  candidate { ... }
+policies {
+  incumbent { ... }
+  challenger { ... }
 }
 
 evaluation {
-  baseline { ... }
-  candidate { ... }
+  incumbent { ... }
+  challenger { ... }
 }
 ```
 
@@ -1223,7 +1223,7 @@ round {
     }
 
     policy {
-      id = "challenger-policy-round-002"
+      id = "next-challenger-round-002"
       path = "policies/challenger_policy.py"
     }
   }
@@ -1255,8 +1255,8 @@ Current:
 
 ```pkl
 artifacts {
-  candidatePolicyRound001
-  candidatePolicyRound002
+  challengerPolicyRound001
+  challengerPolicyRound002
   parentEvaluationRound001
 }
 ```
@@ -1277,16 +1277,16 @@ artifacts {
 Rename generated concepts after the schema changes:
 
 ```text
-Experiment → Round
-CandidateEvaluationBinding → ChallengerEvaluationBinding
-CandidateUses → ChallengerUses
-PolicyProposalArtifact → NextChallengerArtifact
+Round manifest concept is `Round`
+ChallengerEvaluationBinding → ChallengerEvaluationBinding
+ChallengerUses → ChallengerUses
+NextChallengerArtifact → NextChallengerArtifact
 CompletedEvaluationBundleArtifact → CompletedRoundBundleArtifact
 ParentRun → ParentRound
-OptimizationTarget → NextChallengerTarget
-OptimizationEvidence → NextChallengerEvidence
+NextChallengerTarget → NextChallengerTarget
+NextChallengerEvidence → NextChallengerEvidence
 Dataset.Task → Match
-TaskSpec → MatchSpec
+MatchSpec → MatchSpec
 ```
 
 ---
@@ -1298,7 +1298,7 @@ Bundles should become game-scoped round bundles.
 ### Current bundle path
 
 ```text
-artifacts/runs/example-round-001/
+artifacts/games/code-localization/rounds/round-001/
 ```
 
 ### Target bundle path
@@ -1326,22 +1326,13 @@ artifacts/games/code-localization/rounds/round-001/
   visualization.json?         # optional derived view
 ```
 
-### File rename decisions
+### Canonical file decisions
 
-```text
-resolved.json → resolved-round.json
-report.json   → round-report.json
-report.txt    → round-report.txt
-score.pkl     → evidence.pkl
-objective.json stays objective.json
-metadata.json stays metadata.json
-```
+The round bundle uses `resolved-round.json`, `round-report.json`, `round-report.txt`, `evidence.pkl`, `objective.json`, `decision.json`, and `metadata.json`.
 
-### Why `evidence.pkl` instead of `score.pkl`
+### Why `evidence.pkl`
 
-`score.pkl` sounds like a single numeric result.
-
-The artifact is more than a score.
+The artifact is more than a single numeric result.
 
 It contains the structured evidence that objective Pkl evaluates.
 
@@ -1372,12 +1363,12 @@ Reports should be round reports.
 ### Rename
 
 ```text
-CandidateReport → RoundReport
-CandidateReport.Spec → RoundReport.Spec
-CandidateReport.CreatedAt → RoundReport.CreatedAt
-CandidateReport.Comparisons → RoundReport.Comparisons
-CandidateReport.Regressions → RoundReport.Regressions
-CandidateReport.PromotionDecision → RoundReport.Decision
+RoundReport → RoundReport
+RoundReport.Spec → RoundReport.Spec
+RoundReport.CreatedAt → RoundReport.CreatedAt
+RoundReport.Comparisons → RoundReport.Comparisons
+RoundReport.Regressions → RoundReport.Regressions
+RoundReport.Decision → RoundReport.Decision
 ```
 
 ### Report top-level shape
@@ -1415,7 +1406,7 @@ Decision: PROMOTE CHALLENGER
 Avoid:
 
 ```text
-candidate improved over baseline
+challenger improved over incumbent
 ```
 
 Prefer:
@@ -1435,31 +1426,31 @@ challenger used fewer tokens than incumbent
 ### Rename
 
 ```text
-ScoreEvidenceDocument → RoundEvidenceDocument
+RoundEvidenceDocument → RoundEvidenceDocument
 ScoreEvidence → RoundEvidence
-ProjectScoreEvidence → BuildRoundEvidence
+BuildRoundEvidence → BuildRoundEvidence
 ```
 
 ### Field rename decisions
 
 ```text
-systems.baseline → policies.incumbent
-systems.candidate → policies.challenger
+policies.incumbent → policies.incumbent
+policies.challenger → policies.challenger
 
 tasks → matches
 taskId → matchId
 taskRuns → matchExecutions
 
-runCounts.baseline → executionCounts.incumbent
-runCounts.candidate → executionCounts.challenger
+runCounts.incumbent → executionCounts.incumbent
+runCounts.challenger → executionCounts.challenger
 
-failureCounts.baseline → failureCounts.incumbent
-failureCounts.candidate → failureCounts.challenger
+failureCounts.incumbent → failureCounts.incumbent
+failureCounts.challenger → failureCounts.challenger
 
-metrics[].baseline → metrics[].incumbent
-metrics[].candidate → metrics[].challenger
+metrics[].incumbent → metrics[].incumbent
+metrics[].challenger → metrics[].challenger
 
-promotionDecision → decision
+decisionDecision → decision
 ```
 
 ### Pkl evidence target
@@ -1597,7 +1588,7 @@ The optimizer does not:
 * mutate the current round
 * inspect denied evidence
 * become the source of truth
-* decide promotion
+* decide decision
 * define the game
 
 The optimizer does:
@@ -1611,11 +1602,11 @@ The optimizer does:
 ### Rename
 
 ```text
-OptimizerResult → NextChallengerRecord
-PolicyProposal → NextChallengerProposal
-PolicyProposalArtifact → NextChallengerArtifact
-OptimizationTarget → NextChallengerTarget
-OptimizationEvidence → NextChallengerEvidence
+NextChallengerResult → NextChallengerRecord
+NextChallengerProposal → NextChallengerProposal
+NextChallengerArtifact → NextChallengerArtifact
+NextChallengerTarget → NextChallengerTarget
+NextChallengerEvidence → NextChallengerEvidence
 ```
 
 ### Target flow
@@ -1868,37 +1859,37 @@ GameContract
 ### Concept rename map
 
 ```text
-Experiment                    → Round
-Baseline                      → Incumbent
-Candidate                     → Challenger
-BaselineSystem                → IncumbentPolicy or IncumbentSystem
-CandidateSystem               → ChallengerPolicy or ChallengerSystem
+Round manifest               → Round
+Incumbent                      → Incumbent
+Challenger                     → Challenger
+IncumbentPolicy                → IncumbentPolicy or IncumbentPolicy
+ChallengerPolicy               → ChallengerPolicy or ChallengerPolicy
 Task                          → Match
-TaskSpec                      → MatchSpec
-TaskID                        → MatchID
-TaskRun                       → MatchExecution
-CandidateReport               → RoundReport
-PromotionDecision             → Decision
-PolicyProposal                → NextChallengerProposal
-PolicyProposalArtifact        → NextChallengerArtifact
+MatchSpec                      → MatchSpec
+MatchID                        → MatchID
+MatchExecution                       → MatchExecution
+RoundReport               → RoundReport
+Decision             → Decision
+NextChallengerProposal                → NextChallengerProposal
+NextChallengerArtifact        → NextChallengerArtifact
 OptimizationResult            → NextChallengerRecord
-OptimizationEvidence          → NextChallengerEvidence
-OptimizationTarget            → NextChallengerTarget
+NextChallengerEvidence          → NextChallengerEvidence
+NextChallengerTarget            → NextChallengerTarget
 ParentRun                     → ParentRound
 CompletedEvaluationBundle     → CompletedRoundBundle
 local e2e                     → round
-run bundle                    → round bundle
-score evidence                → round evidence
-score.pkl                     → evidence.pkl
-resolved.json                 → resolved-round.json
-report.json                   → round-report.json
-report.txt                    → round-report.txt
+round bundle                    → round bundle
+round evidence                → round evidence
+round evidence artifact       → evidence.pkl
+resolved round artifact        → resolved-round.json
+round report JSON artifact     → round-report.json
+round report text artifact     → round-report.txt
 ```
 
 ### Package rename map
 
 ```text
-internal/app/locale2e         → internal/app/round
+internal/app/round         → internal/app/round
 internal/pure/run             → internal/pure/execution
 internal/pure/domain/task.go  → internal/pure/match
 internal/pure/report          → keep, but rename exported types
@@ -1910,22 +1901,22 @@ internal/games/codelocalization → add for first game-specific evidence/review 
 ### Pkl rename map
 
 ```text
-SearchBenchExperiment.pkl     → SearchBenchRound.pkl
-Experiment                    → Round
+SearchBench round schema       → SearchBenchRound.pkl
+Round manifest               → Round
 dataset/task slice            → matches
-systems.baseline              → policies.incumbent
-systems.candidate             → policies.challenger
-evaluation.baseline           → evaluation.incumbent
-evaluation.candidate          → evaluation.challenger
-candidatePolicyRound001       → challengerPolicyRound001
-candidatePolicyRound002       → nextChallengerRound002
+policies.incumbent              → policies.incumbent
+policies.challenger             → policies.challenger
+evaluation.incumbent           → evaluation.incumbent
+evaluation.challenger          → evaluation.challenger
+challengerPolicyRound001       → challengerPolicyRound001
+challengerPolicyRound002       → nextChallengerRound002
 parentEvaluationRound001      → parentRound001Bundle
 ```
 
 ### Artifact path map
 
 ```text
-artifacts/runs/               → artifacts/games/<game-id>/rounds/
+artifacts/games/code-localization/rounds/               → artifacts/games/<game-id>/rounds/
 example-round-001/            → round-001/
 ```
 
@@ -2131,7 +2122,7 @@ Game
 
 ### Phase 2: App-level rename
 
-* Rename `internal/app/locale2e` to `internal/app/round`.
+* Rename `internal/app/round` to `internal/app/round`.
 * Rename app-level `Request`/`Result` to `Input`/`Record`.
 * Rename `Plan` to `ResolvedRound` where applicable.
 * Update fake E2E tests to round tests.
@@ -2153,24 +2144,24 @@ Game
 ### Phase 5: Pure model rename
 
 * Introduce/complete `internal/pure/round`.
-* Rename `CandidateReport` to `RoundReport`.
-* Rename `PromotionDecision` to `Decision`.
+* Rename `RoundReport` to `RoundReport`.
+* Rename `Decision` to `Decision`.
 * Rename role constants to incumbent/challenger.
 * Add compatibility aliases only if needed to keep migration manageable.
 
 ### Phase 6: Bundle/schema rename
 
 * Rename bundle request/report fields.
-* Move output from `artifacts/runs` to `artifacts/games/<game-id>/rounds`.
-* Rename `score.pkl` to `evidence.pkl`.
+* Move output from `artifacts/games/code-localization/rounds` to `artifacts/games/<game-id>/rounds`.
+* Rename `evidence.pkl` to `evidence.pkl`.
 * Add `decision.json`.
 * Update generated fixtures.
 
 ### Phase 7: Pkl schema migration
 
-* Rename `SearchBenchExperiment.pkl` to `SearchBenchRound.pkl`.
+* Use `SearchBenchRound.pkl` as the round schema.
 * Add top-level `game`.
-* Replace baseline/candidate schema fields with incumbent/challenger.
+* Replace incumbent/challenger schema fields with incumbent/challenger.
 * Replace task slice language with match slice language.
 * Regenerate Pkl bindings.
 * Update example configs.
@@ -2258,6 +2249,6 @@ SearchBench defines a `Game`, runs an `IncumbentPolicy` against a `ChallengerPol
 
 ## Load-bearing sentence
 
-Agents generate candidate artifacts.
+Agents generate challenger artifacts.
 
 SearchBench owns the game, the rounds, and the evidence-backed judgment of whether those artifacts survive.

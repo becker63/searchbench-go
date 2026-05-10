@@ -29,20 +29,20 @@ func Prompt(in Input) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<searchbench-prompt><role>You are the SearchBench evaluator agent.</role> <task>Use the available tools to localize the bug described by the issue.</task> <task-id>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<searchbench-prompt><role>You are the SearchBench evaluator agent.</role> <task>Use the available tools to localize the bug described by the issue.</task> <match-id>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
-		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(in.TaskID)
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(in.MatchID)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/pure/prompts/evaluator/prompt.templ`, Line: 7, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/pure/prompts/evaluator/prompt.templ`, Line: 7, Col: 23}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</task-id> <repo><name>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</match-id> <repo><name>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

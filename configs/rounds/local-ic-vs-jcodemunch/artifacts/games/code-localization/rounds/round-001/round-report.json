@@ -1,0 +1,199 @@
+{
+  "id": "report-round-001",
+  "created_at": "2026-05-09T20:21:40.43525142Z",
+  "spec": {
+    "policies": {
+      "incumbent": {
+        "id": "jcodemunch",
+        "name": "jCodeMunch",
+        "backend": "jcodemunch",
+        "model": {
+          "provider": "fake",
+          "name": "fake-evaluator"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
+      },
+      "challenger": {
+        "id": "iterative-context",
+        "name": "Iterative Context",
+        "backend": "iterative-context",
+        "model": {
+          "provider": "fake",
+          "name": "fake-evaluator"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "policy": {
+          "id": "challenger-policy-round-001",
+          "language": "python",
+          "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
+          "entrypoint": "score"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "eba3813ecd13a659b216f366c49ce262a39f5dc2b5f431d9bcef78e8e73dcbd8"
+      }
+    },
+    "matches": [
+      {
+        "id": "local-fake-match-1",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "searchbench/local-fake",
+          "sha": "0000000",
+          "path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/fake-repo"
+        },
+        "input": {
+          "title": "Fake py/dev match",
+          "body": "This deterministic local match exists only to prove manifest-driven composition."
+        },
+        "oracle": {
+          "gold_files": [
+            "src/search_target.go"
+          ]
+        }
+      }
+    ]
+  },
+  "runs": {
+    "incumbent": [
+      {
+        "execution": {
+          "session_id": "eino-local",
+          "prediction": {
+            "files": [
+              "src/incumbent_guess.go"
+            ],
+            "reasoning": "incumbent stayed conservative after the fake structural lookup"
+          },
+          "usage": {
+            "input_tokens": 169,
+            "output_tokens": 12,
+            "total_tokens": 181
+          },
+          "started_at": "2026-05-09T20:21:40.435468171Z",
+          "finished_at": "2026-05-09T20:21:40.43632209Z"
+        },
+        "scores": {
+          "gold_hop": {
+            "name": "gold_hop",
+            "value": 6
+          },
+          "issue_hop": {
+            "name": "issue_hop",
+            "value": 7
+          },
+          "token_efficiency": {
+            "name": "token_efficiency",
+            "value": 0.35
+          },
+          "cost": {
+            "name": "cost",
+            "value": 0.6
+          },
+          "composite": {
+            "name": "composite",
+            "value": 0.3
+          }
+        }
+      }
+    ],
+    "challenger": [
+      {
+        "execution": {
+          "session_id": "eino-local",
+          "prediction": {
+            "files": [
+              "src/search_target.go"
+            ],
+            "reasoning": "challenger used the fake structural lookup to narrow onto the search target"
+          },
+          "usage": {
+            "input_tokens": 169,
+            "output_tokens": 16,
+            "total_tokens": 185
+          },
+          "started_at": "2026-05-09T20:21:40.436358715Z",
+          "finished_at": "2026-05-09T20:21:40.436691632Z"
+        },
+        "scores": {
+          "gold_hop": {
+            "name": "gold_hop",
+            "value": 2
+          },
+          "issue_hop": {
+            "name": "issue_hop",
+            "value": 3
+          },
+          "token_efficiency": {
+            "name": "token_efficiency",
+            "value": 0.85
+          },
+          "cost": {
+            "name": "cost",
+            "value": 0.15
+          },
+          "composite": {
+            "name": "composite",
+            "value": 0.9
+          }
+        }
+      }
+    ]
+  },
+  "failures": {
+    "incumbent": [],
+    "challenger": []
+  },
+  "comparisons": [
+    {
+      "metric": "gold_hop",
+      "incumbent": 6,
+      "challenger": 2,
+      "delta": -4
+    },
+    {
+      "metric": "issue_hop",
+      "incumbent": 7,
+      "challenger": 3,
+      "delta": -4
+    },
+    {
+      "metric": "token_efficiency",
+      "incumbent": 0.35,
+      "challenger": 0.85,
+      "delta": 0.5
+    },
+    {
+      "metric": "cost",
+      "incumbent": 0.6,
+      "challenger": 0.15,
+      "delta": -0.44999999999999996
+    },
+    {
+      "metric": "composite",
+      "incumbent": 0.3,
+      "challenger": 0.9,
+      "delta": 0.6000000000000001
+    }
+  ],
+  "regressions": null,
+  "decision": {
+    "decision": "PROMOTE_CHALLENGER",
+    "reason": "challenger improves the composite score in local fake comparison"
+  }
+}

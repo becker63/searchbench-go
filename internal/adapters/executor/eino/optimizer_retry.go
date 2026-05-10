@@ -29,7 +29,7 @@ func retryFeedbackForOptimizerFailure(failure *pureoptimizer.Failure) string {
 	switch failure.Kind {
 	case pureoptimizer.FailureKindOptimizerFailed:
 		return fmt.Sprintf("Previous attempt failed during optimizer execution: %s.", detail)
-	case pureoptimizer.FailureKindPolicyProposalFailed:
+	case pureoptimizer.FailureKindNextChallengerFailed:
 		return fmt.Sprintf("Previous attempt returned an invalid proposal: %s.", detail)
 	case pureoptimizer.FailureKindPolicyPipelineFailed, pureoptimizer.FailureKindPolicyPipelineInfrastructure:
 		if failure.PipelineFeedback != "" {

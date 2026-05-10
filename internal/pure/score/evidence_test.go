@@ -37,10 +37,10 @@ func TestAggregateUsageIsHonestAboutAvailability(t *testing.T) {
 	}
 }
 
-func TestScoreEvidenceValidateRejectsMissingIdentity(t *testing.T) {
+func TestRoundEvidenceValidateRejectsMissingIdentity(t *testing.T) {
 	t.Parallel()
 
-	doc := ScoreEvidenceDocument{}
+	doc := RoundEvidenceDocument{}
 	if err := doc.Validate(); err == nil || !strings.Contains(err.Error(), ErrMissingEvidenceSchemaVersion.Error()) {
 		t.Fatalf("Validate() error = %v, want missing schema version error", err)
 	}
@@ -65,7 +65,7 @@ func TestExtractLocalizationDistanceProjectsNamedMetrics(t *testing.T) {
 	}
 }
 
-func TestScoreEvidencePackageAvoidsForbiddenImports(t *testing.T) {
+func TestRoundEvidencePackageAvoidsForbiddenImports(t *testing.T) {
 	t.Parallel()
 
 	_, currentFile, _, ok := runtime.Caller(0)

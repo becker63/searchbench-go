@@ -1,12 +1,12 @@
-// Code generated from Pkl module `searchbench.config.Experiment`. DO NOT EDIT.
+// Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package generated
 
 type Optimization struct {
 	Agent Optimizer `pkl:"agent"`
 
-	ParentRun ParentRun `pkl:"parentRun"`
+	ParentRound ParentRound `pkl:"parentRound"`
 
-	Target OptimizationTarget `pkl:"target"`
+	Target NextChallengerTarget `pkl:"target"`
 
-	Evidence OptimizationEvidence `pkl:"evidence"`
+	Evidence NextChallengerEvidence `pkl:"evidence"`
 }

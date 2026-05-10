@@ -1,0 +1,140 @@
+{
+  "manifest_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/round.pkl",
+  "round_name": "local-ic-vs-jcodemunch-round-001",
+  "mode": "evaluation",
+  "game": {
+    "id": "code-localization",
+    "kind": "code_localization"
+  },
+  "round": {
+    "id": "round-001"
+  },
+  "dataset": {
+    "kind": "lca",
+    "name": "JetBrains-Research/lca-bug-localization",
+    "config": "py",
+    "split": "dev",
+    "max_items": 5
+  },
+  "policies": {
+    "incumbent": {
+      "id": "jcodemunch",
+      "name": "jCodeMunch",
+      "backend": "jcodemunch",
+      "model": {
+        "provider": "fake",
+        "name": "fake-evaluator"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      },
+      "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
+    },
+    "challenger": {
+      "id": "iterative-context",
+      "name": "Iterative Context",
+      "backend": "iterative-context",
+      "model": {
+        "provider": "fake",
+        "name": "fake-evaluator"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "policy": {
+        "id": "challenger-policy-round-001",
+        "language": "python",
+        "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
+        "entrypoint": "score"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      },
+      "fingerprint": "eba3813ecd13a659b216f366c49ce262a39f5dc2b5f431d9bcef78e8e73dcbd8"
+    }
+  },
+  "matches": [
+    {
+      "id": "local-fake-match-1",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "searchbench/local-fake",
+        "sha": "0000000",
+        "path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/fake-repo"
+      },
+      "input": {
+        "title": "Fake py/dev match",
+        "body": "This deterministic local match exists only to prove manifest-driven composition."
+      },
+      "oracle": {
+        "gold_files": [
+          "src/search_target.go"
+        ]
+      }
+    }
+  ],
+  "parallelism": {
+    "mode": "sequential",
+    "max_workers": 1,
+    "fail_fast": false
+  },
+  "evaluator": {
+    "model": {
+      "provider": "fake",
+      "name": "fake-evaluator",
+      "max_output_tokens": 2000
+    },
+    "bounds": {
+      "max_model_turns": 8,
+      "max_tool_calls": 24,
+      "timeout_seconds": 300
+    },
+    "retry": {
+      "max_attempts": 2,
+      "retry_on_model_error": true,
+      "retry_on_finalization_failure": true,
+      "retry_on_invalid_prediction": true
+    }
+  },
+  "scoring": {
+    "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",
+    "current_evidence": {
+      "name": "current",
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
+      "evidence_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
+    }
+  },
+  "output": {
+    "bundle_root": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds",
+    "bundle_writer_root": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts",
+    "report_formats": [
+      "json",
+      "text"
+    ],
+    "render_human_report": true,
+    "resolved_policy_path": {
+      "challenger": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py"
+    }
+  },
+  "report_options": {
+    "formats": [
+      "json",
+      "text"
+    ]
+  },
+  "bundle": {
+    "id": "round-001"
+  },
+  "report_id": "report-round-001",
+  "created_at": "2026-05-09T20:21:40Z"
+}

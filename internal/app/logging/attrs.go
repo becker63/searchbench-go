@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/run"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -28,12 +28,12 @@ func RoleKV(role domain.Role) []any {
 	return []any{"role", role}
 }
 
-// TaskKV returns the safe task identity fields for structured logging.
+// TaskKV returns the safe match identity fields for structured logging.
 //
-// It intentionally omits TaskOracle and other scorer-only task details.
-func TaskKV(task domain.TaskSpec) []any {
+// It intentionally omits MatchOracle and other scorer-only match details.
+func TaskKV(task domain.MatchSpec) []any {
 	return []any{
-		"task_id", task.ID,
+		"match_id", task.ID,
 		"benchmark", task.Benchmark,
 		"repo_name", task.Repo.Name,
 		"repo_sha", task.Repo.SHA,
@@ -94,7 +94,7 @@ func RunSpecKV(spec run.Spec) []any {
 	return AppendKV(
 		[]any{
 			"run_id", spec.ID,
-			"task_id", spec.Task.ID,
+			"match_id", spec.Match.ID,
 		},
 		SystemRefKV(ref),
 	)
@@ -104,7 +104,7 @@ func RunSpecKV(spec run.Spec) []any {
 func FailureKV(failure run.RunFailure) []any {
 	return []any{
 		"run_id", failure.RunID,
-		"task_id", failure.TaskID,
+		"match_id", failure.MatchID,
 		"system_id", failure.System,
 		"stage", failure.Stage,
 		"message", failure.Message,
@@ -121,14 +121,14 @@ func ScoreSetKV(scores score.ScoreSet) []any {
 }
 
 // ReportSummaryKV returns a compact report summary suitable for structured logs.
-func ReportSummaryKV(report report.CandidateReport) []any {
+func ReportSummaryKV(report report.RoundReport) []any {
 	out := []any{
 		"report_id", report.ID,
 		"decision", report.Decision.Decision,
-		"baseline_runs", len(report.Runs.Baseline),
-		"candidate_runs", len(report.Runs.Candidate),
-		"baseline_failures", len(report.Failures.Baseline),
-		"candidate_failures", len(report.Failures.Candidate),
+		"incumbent_runs", len(report.Runs.Incumbent),
+		"challenger_runs", len(report.Runs.Challenger),
+		"incumbent_failures", len(report.Failures.Incumbent),
+		"challenger_failures", len(report.Failures.Challenger),
 		"regressions", len(report.Regressions),
 		"comparisons", len(report.Comparisons),
 	}

@@ -45,16 +45,16 @@ var CompositeDefinition = MetricDefinition[CompositeScore]{
 	Direction: HigherIsBetter,
 }
 
-// Improved reports whether the candidate value is better than the baseline
+// Improved reports whether the challenger value is better than the incumbent
 // under the given metric direction.
 //
 // Positive delta is not universally good; direction determines the meaning.
-func Improved(def Direction, baseline, candidate float64) bool {
+func Improved(def Direction, incumbent, challenger float64) bool {
 	switch def {
 	case HigherIsBetter:
-		return candidate > baseline
+		return challenger > incumbent
 	case LowerIsBetter:
-		return candidate < baseline
+		return challenger < incumbent
 	default:
 		return false
 	}
