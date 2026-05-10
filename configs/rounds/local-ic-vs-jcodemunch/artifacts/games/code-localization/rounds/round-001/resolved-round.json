@@ -1,5 +1,5 @@
 {
-  "manifest_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/experiment.pkl",
+  "manifest_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/round.pkl",
   "round_name": "local-ic-vs-jcodemunch-round-001",
   "mode": "evaluation",
   "game": {
@@ -69,7 +69,7 @@
       "repo": {
         "name": "searchbench/local-fake",
         "sha": "0000000",
-        "path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/fake-repo"
+        "path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/fake-repo"
       },
       "input": {
         "title": "Fake py/dev match",
@@ -106,24 +106,24 @@
     }
   },
   "scoring": {
-    "objective_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",
+    "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",
     "current_evidence": {
       "name": "current",
-      "bundle_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
-      "score_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
-      "report_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
+      "evidence_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
     }
   },
   "output": {
-    "bundle_root": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds",
-    "bundle_writer_root": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts",
+    "bundle_root": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds",
+    "bundle_writer_root": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts",
     "report_formats": [
       "json",
       "text"
     ],
     "render_human_report": true,
     "resolved_policy_path": {
-      "challenger": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/policies/challenger_policy.py"
+      "challenger": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py"
     }
   },
   "report_options": {

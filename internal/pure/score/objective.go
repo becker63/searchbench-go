@@ -57,11 +57,11 @@ const (
 // ObjectiveEvidenceRef is a typed reference to evidence used by a future
 // objective calculation.
 type ObjectiveEvidenceRef struct {
-	Name       string `json:"name" pkl:"name"`
-	BundlePath string `json:"bundle_path,omitempty" pkl:"bundlePath"`
-	ScorePath  string `json:"score_path,omitempty" pkl:"scorePath"`
-	ReportPath string `json:"report_path,omitempty" pkl:"reportPath"`
-	SHA256     string `json:"sha256,omitempty" pkl:"sha256"`
+	Name         string `json:"name" pkl:"name"`
+	BundlePath   string `json:"bundle_path,omitempty" pkl:"bundlePath"`
+	EvidencePath string `json:"evidence_path,omitempty" pkl:"evidencePath"`
+	ReportPath   string `json:"report_path,omitempty" pkl:"reportPath"`
+	SHA256       string `json:"sha256,omitempty" pkl:"sha256"`
 }
 
 // ObjectiveBounds optionally constrains the final objective value.
@@ -145,7 +145,7 @@ func validateObjectiveEvidenceRefs(refs []ObjectiveEvidenceRef) error {
 		seen[name] = struct{}{}
 
 		hasLocator := false
-		for _, locator := range []string{ref.BundlePath, ref.ScorePath, ref.ReportPath, ref.SHA256} {
+		for _, locator := range []string{ref.BundlePath, ref.EvidencePath, ref.ReportPath, ref.SHA256} {
 			if strings.TrimSpace(locator) != "" {
 				hasLocator = true
 				break

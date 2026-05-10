@@ -2,7 +2,7 @@
   "id": "report-round-001",
   "created_at": "2026-05-09T20:21:40.43525142Z",
   "spec": {
-    "systems": {
+    "policies": {
       "incumbent": {
         "id": "jcodemunch",
         "name": "jCodeMunch",
@@ -55,7 +55,7 @@
         "repo": {
           "name": "searchbench/local-fake",
           "sha": "0000000",
-          "path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/fake-repo"
+          "path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/fake-repo"
         },
         "input": {
           "title": "Fake py/dev match",
@@ -76,9 +76,9 @@
           "session_id": "eino-local",
           "prediction": {
             "files": [
-              "src/baseline_guess.go"
+              "src/incumbent_guess.go"
             ],
-            "reasoning": "baseline stayed conservative after the fake structural lookup"
+            "reasoning": "incumbent stayed conservative after the fake structural lookup"
           },
           "usage": {
             "input_tokens": 169,
@@ -120,7 +120,7 @@
             "files": [
               "src/search_target.go"
             ],
-            "reasoning": "candidate used the fake structural lookup to narrow onto the search target"
+            "reasoning": "challenger used the fake structural lookup to narrow onto the search target"
           },
           "usage": {
             "input_tokens": 169,
@@ -162,32 +162,32 @@
   "comparisons": [
     {
       "metric": "gold_hop",
-      "baseline": 6,
-      "candidate": 2,
+      "incumbent": 6,
+      "challenger": 2,
       "delta": -4
     },
     {
       "metric": "issue_hop",
-      "baseline": 7,
-      "candidate": 3,
+      "incumbent": 7,
+      "challenger": 3,
       "delta": -4
     },
     {
       "metric": "token_efficiency",
-      "baseline": 0.35,
-      "candidate": 0.85,
+      "incumbent": 0.35,
+      "challenger": 0.85,
       "delta": 0.5
     },
     {
       "metric": "cost",
-      "baseline": 0.6,
-      "candidate": 0.15,
+      "incumbent": 0.6,
+      "challenger": 0.15,
       "delta": -0.44999999999999996
     },
     {
       "metric": "composite",
-      "baseline": 0.3,
-      "candidate": 0.9,
+      "incumbent": 0.3,
+      "challenger": 0.9,
       "delta": 0.6000000000000001
     }
   ],

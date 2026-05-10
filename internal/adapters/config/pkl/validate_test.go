@@ -14,8 +14,8 @@ import (
 func TestValidEvaluationConfigValidates(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	if err := Validate(experiment); err != nil {
+	roundSpec := sampleEvaluationRound()
+	if err := Validate(roundSpec); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
@@ -23,11 +23,11 @@ func TestValidEvaluationConfigValidates(t *testing.T) {
 func TestValidOptimizationConfigValidates(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleOptimizationExperiment()
-	if experiment.Evaluation != nil {
-		t.Fatalf("sampleOptimizationExperiment().Evaluation = %#v, want nil", experiment.Evaluation)
+	roundSpec := sampleOptimizationRound()
+	if roundSpec.Evaluation != nil {
+		t.Fatalf("sampleOptimizationRound().Evaluation = %#v, want nil", roundSpec.Evaluation)
 	}
-	if err := Validate(experiment); err != nil {
+	if err := Validate(roundSpec); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
@@ -35,10 +35,10 @@ func TestValidOptimizationConfigValidates(t *testing.T) {
 func TestOptimizationModeDoesNotRequireEvaluationOrScoring(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleOptimizationExperiment()
-	experiment.Evaluation = nil
+	roundSpec := sampleOptimizationRound()
+	roundSpec.Evaluation = nil
 
-	if err := Validate(experiment); err != nil {
+	if err := Validate(roundSpec); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
@@ -46,10 +46,10 @@ func TestOptimizationModeDoesNotRequireEvaluationOrScoring(t *testing.T) {
 func TestEvaluationModeRequiresEvaluation(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Evaluation = nil
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Evaluation = nil
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingEvaluation.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingEvaluation.Error()) {
 		t.Fatalf("Validate() error = %v, want missing evaluation error", err)
 	}
 }
@@ -57,10 +57,10 @@ func TestEvaluationModeRequiresEvaluation(t *testing.T) {
 func TestEvaluationModeRequiresEvaluator(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Agents.Evaluator = nil
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Agents.Evaluator = nil
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingEvaluator.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingEvaluator.Error()) {
 		t.Fatalf("Validate() error = %v, want missing evaluator error", err)
 	}
 }
@@ -68,10 +68,10 @@ func TestEvaluationModeRequiresEvaluator(t *testing.T) {
 func TestOptimizationModeRequiresOptimization(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleOptimizationExperiment()
-	experiment.Optimization = nil
+	roundSpec := sampleOptimizationRound()
+	roundSpec.Optimization = nil
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingOptimization.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingOptimization.Error()) {
 		t.Fatalf("Validate() error = %v, want missing optimization error", err)
 	}
 }
@@ -79,15 +79,15 @@ func TestOptimizationModeRequiresOptimization(t *testing.T) {
 func TestOptimizationModeRequiresOptimizer(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleOptimizationExperiment()
-	experiment.Agents.Optimizer = nil
+	roundSpec := sampleOptimizationRound()
+	roundSpec.Agents.Optimizer = nil
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingOptimizer.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingOptimizer.Error()) {
 		t.Fatalf("Validate() error = %v, want missing optimizer error", err)
 	}
 }
 
-func TestExperimentConfigNoLongerHasWriterOrOutputConfig(t *testing.T) {
+func TestRoundConfigNoLongerHasWriterOrOutputConfig(t *testing.T) {
 	t.Parallel()
 
 	typ := reflect.TypeOf(RoundSpec{})
@@ -102,10 +102,10 @@ func TestExperimentConfigNoLongerHasWriterOrOutputConfig(t *testing.T) {
 func TestRejectsMissingDatasetConfig(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Dataset.Config = ""
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Dataset.Config = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingDatasetConfig.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingDatasetConfig.Error()) {
 		t.Fatalf("Validate() error = %v, want missing dataset config error", err)
 	}
 }
@@ -113,32 +113,32 @@ func TestRejectsMissingDatasetConfig(t *testing.T) {
 func TestRejectsMissingDatasetSplit(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Dataset.Split = ""
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Dataset.Split = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingDatasetSplit.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingDatasetSplit.Error()) {
 		t.Fatalf("Validate() error = %v, want missing dataset split error", err)
 	}
 }
 
-func TestRejectsMissingBaselineSystemID(t *testing.T) {
+func TestRejectsMissingIncumbentPolicyID(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Systems.Incumbent.Id = ""
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Policies.Incumbent.Id = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingIncumbentSystemID.Error()) {
-		t.Fatalf("Validate() error = %v, want missing baseline id error", err)
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingIncumbentPolicyID.Error()) {
+		t.Fatalf("Validate() error = %v, want missing incumbent id error", err)
 	}
 }
 
 func TestRejectsMissingIterativeContextSystemID(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Systems.Challenger.Id = ""
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Policies.Challenger.Id = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingChallengerSystemID.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingChallengerPolicyID.Error()) {
 		t.Fatalf("Validate() error = %v, want missing iterative context id error", err)
 	}
 }
@@ -146,10 +146,10 @@ func TestRejectsMissingIterativeContextSystemID(t *testing.T) {
 func TestRejectsMissingAgentModelProvider(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Agents.Evaluator.Model.Provider = ""
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Agents.Evaluator.Model.Provider = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingAgentModelProvider.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingAgentModelProvider.Error()) {
 		t.Fatalf("Validate() error = %v, want missing provider error", err)
 	}
 }
@@ -157,10 +157,10 @@ func TestRejectsMissingAgentModelProvider(t *testing.T) {
 func TestRejectsMissingAgentModelName(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Agents.Evaluator.Model.Name = ""
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Agents.Evaluator.Model.Name = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingAgentModelName.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingAgentModelName.Error()) {
 		t.Fatalf("Validate() error = %v, want missing model name error", err)
 	}
 }
@@ -168,10 +168,10 @@ func TestRejectsMissingAgentModelName(t *testing.T) {
 func TestRejectsMissingScoringObjectivePath(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Evaluation.Scoring.Objective = ""
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Evaluation.Scoring.Objective = ""
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrMissingScoringObjectivePath.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrMissingScoringObjectivePath.Error()) {
 		t.Fatalf("Validate() error = %v, want missing scoring objective error", err)
 	}
 }
@@ -179,32 +179,32 @@ func TestRejectsMissingScoringObjectivePath(t *testing.T) {
 func TestRejectsEvaluationAgentMismatch(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Evaluation.Agent.Model.Name = "other"
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Evaluation.Agent.Model.Name = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrEvaluationAgentMismatch.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrEvaluationAgentMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want evaluation agent mismatch", err)
 	}
 }
 
-func TestRejectsEvaluationCandidateSystemMismatch(t *testing.T) {
+func TestRejectsEvaluationChallengerPolicyMismatch(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Evaluation.Challenger.System.Id = "other"
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Evaluation.Challenger.System.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrEvaluationChallengerSystemMismatch.Error()) {
-		t.Fatalf("Validate() error = %v, want candidate system mismatch", err)
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrEvaluationChallengerPolicyMismatch.Error()) {
+		t.Fatalf("Validate() error = %v, want challenger policy mismatch", err)
 	}
 }
 
 func TestRejectsSelectionPolicyArtifactMismatch(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Evaluation.Challenger.Uses.SelectionPolicy.Id = "other"
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Evaluation.Challenger.Uses.SelectionPolicy.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrChallengerSelectionPolicyArtifactMismatch.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrChallengerSelectionPolicyArtifactMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want selection policy mismatch", err)
 	}
 }
@@ -212,11 +212,11 @@ func TestRejectsSelectionPolicyArtifactMismatch(t *testing.T) {
 func TestRejectsSelectionPolicyInterfaceMismatch(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Artifacts.ChallengerPolicyRound001.Implements.Id = "other"
-	experiment.Evaluation.Challenger.Uses.SelectionPolicy.Implements.Id = "other"
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Artifacts.ChallengerPolicyRound001.Implements.Id = "other"
+	roundSpec.Evaluation.Challenger.Uses.SelectionPolicy.Implements.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrChallengerSelectionPolicyInterfaceMismatch.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrChallengerSelectionPolicyInterfaceMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want selection policy interface mismatch", err)
 	}
 }
@@ -224,10 +224,10 @@ func TestRejectsSelectionPolicyInterfaceMismatch(t *testing.T) {
 func TestRejectsAbsolutePolicyArtifactPath(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Artifacts.ChallengerPolicyRound001.Path = "/tmp/policy.py"
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Artifacts.ChallengerPolicyRound001.Path = "/tmp/policy.py"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrPolicyArtifactPathMustBeRelative.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrPolicyArtifactPathMustBeRelative.Error()) {
 		t.Fatalf("Validate() error = %v, want relative policy path error", err)
 	}
 }
@@ -235,21 +235,21 @@ func TestRejectsAbsolutePolicyArtifactPath(t *testing.T) {
 func TestRejectsProposalArtifactNameWithParentTraversal(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleOptimizationExperiment()
-	experiment.Artifacts.NextChallengerRound002.ArtifactName = "../candidate.py"
+	roundSpec := sampleOptimizationRound()
+	roundSpec.Artifacts.NextChallengerRound002.ArtifactName = "../challenger.py"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrPolicyProposalArtifactNameInvalid.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrNextChallengerArtifactNameInvalid.Error()) {
 		t.Fatalf("Validate() error = %v, want invalid artifact name error", err)
 	}
 }
 
-func TestRejectsOptimizationTargetOutputMismatch(t *testing.T) {
+func TestRejectsNextChallengerTargetOutputMismatch(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleOptimizationExperiment()
-	experiment.Optimization.Target.Output.Id = "other"
+	roundSpec := sampleOptimizationRound()
+	roundSpec.Optimization.Target.Output.Id = "other"
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrOptimizationNextChallengerOutputMismatch.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrOptimizationNextChallengerOutputMismatch.Error()) {
 		t.Fatalf("Validate() error = %v, want optimization target output mismatch", err)
 	}
 }
@@ -257,10 +257,10 @@ func TestRejectsOptimizationTargetOutputMismatch(t *testing.T) {
 func TestRejectsEmptyToolAllowEntry(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Agents.Evaluator.Tools.Allow = append(experiment.Agents.Evaluator.Tools.Allow, " ")
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Agents.Evaluator.Tools.Allow = append(roundSpec.Agents.Evaluator.Tools.Allow, " ")
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrToolAllowEntryEmpty.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrToolAllowEntryEmpty.Error()) {
 		t.Fatalf("Validate() error = %v, want empty allow entry error", err)
 	}
 }
@@ -268,10 +268,10 @@ func TestRejectsEmptyToolAllowEntry(t *testing.T) {
 func TestRejectsDuplicateToolAllowEntry(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Agents.Evaluator.Tools.Allow = append(experiment.Agents.Evaluator.Tools.Allow, experiment.Agents.Evaluator.Tools.Allow[0])
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Agents.Evaluator.Tools.Allow = append(roundSpec.Agents.Evaluator.Tools.Allow, roundSpec.Agents.Evaluator.Tools.Allow[0])
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrToolAllowDuplicate.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrToolAllowDuplicate.Error()) {
 		t.Fatalf("Validate() error = %v, want duplicate allow entry error", err)
 	}
 }
@@ -279,10 +279,10 @@ func TestRejectsDuplicateToolAllowEntry(t *testing.T) {
 func TestRejectsToolAllowDenyOverlap(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Agents.Evaluator.Tools.Deny = append(experiment.Agents.Evaluator.Tools.Deny, experiment.Agents.Evaluator.Tools.Allow[0])
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Agents.Evaluator.Tools.Deny = append(roundSpec.Agents.Evaluator.Tools.Deny, roundSpec.Agents.Evaluator.Tools.Allow[0])
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrToolPolicyOverlap.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrToolPolicyOverlap.Error()) {
 		t.Fatalf("Validate() error = %v, want tool overlap error", err)
 	}
 }
@@ -290,12 +290,12 @@ func TestRejectsToolAllowDenyOverlap(t *testing.T) {
 func TestRejectsOversizedSystemPrompt(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
+	roundSpec := sampleEvaluationRound()
 	oversized := strings.Repeat("x", maxSystemPromptBytes+1)
-	experiment.Agents.Evaluator.SystemPrompt = &oversized
-	experiment.Evaluation.Agent.SystemPrompt = &oversized
+	roundSpec.Agents.Evaluator.SystemPrompt = &oversized
+	roundSpec.Evaluation.Agent.SystemPrompt = &oversized
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrSystemPromptTooLarge.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrSystemPromptTooLarge.Error()) {
 		t.Fatalf("Validate() error = %v, want oversized prompt error", err)
 	}
 }
@@ -303,10 +303,10 @@ func TestRejectsOversizedSystemPrompt(t *testing.T) {
 func TestRejectsUnsupportedMode(t *testing.T) {
 	t.Parallel()
 
-	experiment := sampleEvaluationExperiment()
-	experiment.Mode = RunMode("mystery_mode")
+	roundSpec := sampleEvaluationRound()
+	roundSpec.Mode = RunMode("mystery_mode")
 
-	if err := Validate(experiment); err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
 		t.Fatalf("Validate() error = %v, want unsupported mode error", err)
 	}
 }
@@ -352,7 +352,7 @@ func TestPurePackagesDoNotImportPkl(t *testing.T) {
 	}
 }
 
-func sampleEvaluationExperiment() RoundSpec {
+func sampleEvaluationRound() RoundSpec {
 	prompt := "Use structural code evidence before guessing."
 	evaluator := &Evaluator{
 		Model: sampleModel("fake-evaluator"),
@@ -375,7 +375,7 @@ func sampleEvaluationExperiment() RoundSpec {
 		},
 	}
 
-	experiment := RoundSpec{
+	roundSpec := RoundSpec{
 		Name: "local-ic-vs-jcodemunch-round-001",
 		Mode: ModeEvaluation,
 		Dataset: Dataset{
@@ -388,7 +388,7 @@ func sampleEvaluationExperiment() RoundSpec {
 		Interfaces: Interfaces{
 			IterativeContextSelectionPolicyV1: Interface{Id: "iterative_context.selection_policy.v1"},
 		},
-		Systems: Systems{
+		Policies: Policies{
 			Incumbent: System{
 				Id:      "jcodemunch",
 				Name:    "jCodeMunch",
@@ -431,15 +431,15 @@ func sampleEvaluationExperiment() RoundSpec {
 		},
 	}
 
-	experiment.Evaluation = &Evaluation{
+	roundSpec.Evaluation = &Evaluation{
 		Agent: *evaluator,
 		Incumbent: EvaluationSystemBinding{
-			System: experiment.Systems.Incumbent,
+			System: roundSpec.Policies.Incumbent,
 		},
 		Challenger: ChallengerEvaluationBinding{
-			System: experiment.Systems.Challenger,
+			System: roundSpec.Policies.Challenger,
 			Uses: ChallengerUses{
-				SelectionPolicy: *experiment.Artifacts.ChallengerPolicyRound001,
+				SelectionPolicy: *roundSpec.Artifacts.ChallengerPolicyRound001,
 			},
 		},
 		Scoring: Scoring{
@@ -450,11 +450,11 @@ func sampleEvaluationExperiment() RoundSpec {
 		},
 	}
 
-	return experiment
+	return roundSpec
 }
 
-func sampleOptimizationExperiment() RoundSpec {
-	experiment := sampleEvaluationExperiment()
+func sampleOptimizationRound() RoundSpec {
+	roundSpec := sampleEvaluationRound()
 	prompt := "Improve the Iterative Context selection policy using only the provided parent-run evidence."
 	optimizer := &Optimizer{
 		Model: sampleModel("fake-optimizer"),
@@ -466,7 +466,7 @@ func sampleOptimizationExperiment() RoundSpec {
 		Tools: AgentToolPolicy{
 			Allow: []string{
 				"read_parent_bundle",
-				"read_score_evidence",
+				"read_round_evidence",
 				"read_objective_result",
 				"read_report_summary",
 				"read_artifact",
@@ -477,39 +477,39 @@ func sampleOptimizationExperiment() RoundSpec {
 		SystemPrompt: &prompt,
 	}
 
-	experiment.Name = "optimize-ic-round-002"
-	experiment.Mode = ModeOptimization
-	experiment.Evaluation = nil
-	experiment.Artifacts.ParentRound001Bundle = &CompletedRoundBundleArtifact{
+	roundSpec.Name = "optimize-ic-round-002"
+	roundSpec.Mode = ModeOptimization
+	roundSpec.Evaluation = nil
+	roundSpec.Artifacts.ParentRound001Bundle = &CompletedRoundBundleArtifact{
 		Id:   "local-ic-vs-jcodemunch-round-001",
 		Kind: "completed_round_bundle",
-		Path: "../local-ic-vs-jcodemunch/artifacts/runs/example-round-001",
+		Path: "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
 	}
-	experiment.Artifacts.NextChallengerRound002 = &PolicyProposalArtifact{
-		Id:           "candidate-policy-round-002",
-		Kind:         "policy_proposal",
-		ArtifactName: "candidate_policy.round-002.py",
+	roundSpec.Artifacts.NextChallengerRound002 = &NextChallengerArtifact{
+		Id:           "next-challenger-round-002",
+		Kind:         "next_challenger",
+		ArtifactName: "next_next_challenger_policy.round-002.py",
 		Implements: Interface{
 			Id: "iterative_context.selection_policy.v1",
 		},
 	}
-	experiment.Agents.Optimizer = optimizer
-	experiment.Optimization = &Optimization{
+	roundSpec.Agents.Optimizer = optimizer
+	roundSpec.Optimization = &Optimization{
 		Agent: *optimizer,
 		ParentRound: ParentRound{
-			Bundle: *experiment.Artifacts.ParentRound001Bundle,
+			Bundle: *roundSpec.Artifacts.ParentRound001Bundle,
 		},
-		Target: OptimizationTarget{
-			Input:  *experiment.Artifacts.ChallengerPolicyRound001,
-			Output: *experiment.Artifacts.NextChallengerRound002,
+		Target: NextChallengerTarget{
+			Input:  *roundSpec.Artifacts.ChallengerPolicyRound001,
+			Output: *roundSpec.Artifacts.NextChallengerRound002,
 		},
-		Evidence: OptimizationEvidence{
-			From: *experiment.Artifacts.ParentRound001Bundle,
-			Include: []OptimizerEvidenceKind{
-				OptimizerEvidenceReportSummary,
-				OptimizerEvidenceRoundEvidence,
-				OptimizerEvidenceObjectiveResult,
-				OptimizerEvidenceChallengerPolicy,
+		Evidence: NextChallengerEvidence{
+			From: *roundSpec.Artifacts.ParentRound001Bundle,
+			Include: []NextChallengerEvidenceKind{
+				NextChallengerEvidenceReportSummary,
+				NextChallengerEvidenceRoundEvidence,
+				NextChallengerEvidenceObjectiveResult,
+				NextChallengerEvidenceChallengerPolicy,
 			},
 			Deny: []OptimizerDeniedEvidenceKind{
 				OptimizerDeniedGoldLabels,
@@ -519,7 +519,7 @@ func sampleOptimizationExperiment() RoundSpec {
 		},
 	}
 
-	return experiment
+	return roundSpec
 }
 
 func sampleModel(name string) Model {

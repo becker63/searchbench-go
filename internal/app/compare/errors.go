@@ -53,7 +53,7 @@ func (e StageError) Unwrap() error {
 
 func failureFromError(spec run.Spec, stage run.FailureStage, err error) run.RunFailure {
 	// StageError is the internal classification shape; RunFailure is the
-	// report-facing artifact stored in CandidateReport.
+	// report-facing artifact stored in RoundReport.
 	var stageErr StageError
 	if errors.As(err, &stageErr) {
 		return run.RunFailure{

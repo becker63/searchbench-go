@@ -50,24 +50,3 @@ func NewRoundReport(
 		Decision:    decision,
 	}
 }
-
-// CandidateReport is a transitional alias for code still migrating to
-// RoundReport vocabulary.
-//
-// TODO(issue-32): remove after public callers use RoundReport directly.
-type CandidateReport = RoundReport
-
-// NewCandidateReport is a transitional wrapper for NewRoundReport.
-//
-// TODO(issue-32): remove after public callers use NewRoundReport directly.
-func NewCandidateReport(
-	id domain.ReportID,
-	spec ComparisonSpec,
-	runs domain.Pair[[]score.ScoredRun],
-	failures domain.Pair[[]run.RunFailure],
-	comparisons []ScoreComparison,
-	regressions []Regression,
-	decision Decision,
-) RoundReport {
-	return NewRoundReport(id, spec, runs, failures, comparisons, regressions, decision)
-}

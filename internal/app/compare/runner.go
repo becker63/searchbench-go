@@ -8,8 +8,8 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -44,9 +44,9 @@ type Scorer interface {
 }
 
 // Decider is the orchestration seam for reducing comparisons and regressions
-// into a final promotion decision.
+// into a final decision.
 type Decider interface {
-	Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision
+	Decide(comparisons []report.ScoreComparison, regressions []report.Regression) report.Decision
 }
 
 // RunIDFunc derives a run identifier for one role/task/system combination.
@@ -58,11 +58,11 @@ type ReportIDFunc func() domain.ReportID
 // ClockFunc provides the current time for emitted report timestamps.
 type ClockFunc func() time.Time
 
-// Runner coordinates a full baseline/candidate comparison.
+// Runner coordinates a full incumbent/challenger comparison.
 //
 // Its flow is:
 //
-//	Plan -> RunTasks -> CompareTask -> ExecuteAndScore -> Results -> CandidateReport
+//	Plan -> RunTasks -> CompareTask -> ExecuteAndScore -> Results -> RoundReport
 //
 // Runner owns orchestration policy only. Concrete execution, graph loading,
 // scoring, and final release decisions enter through injected interfaces.
@@ -88,27 +88,27 @@ type TaskComparisonResult struct {
 	Regressions []report.Regression
 }
 
-// Run executes a complete baseline/candidate comparison and returns the
-// candidate report.
+// Run executes a complete incumbent/challenger comparison and returns the
+// round report.
 //
 // It validates the executable plan, runs task comparisons according to the
 // configured Parallelism policy, accumulates successful runs and failures,
-// summarizes metric comparisons, asks the Decider for a promotion decision,
-// and emits a report-safe CandidateReport.
-func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, error) {
+// summarizes metric comparisons, asks the Decider for a decision,
+// and emits a report-safe RoundReport.
+func (r Runner) Run(ctx context.Context, plan Plan) (report.RoundReport, error) {
 	if err := plan.Validate(); err != nil {
-		return report.CandidateReport{}, err
+		return report.RoundReport{}, err
 	}
 	if err := r.Validate(); err != nil {
-		return report.CandidateReport{}, err
+		return report.RoundReport{}, err
 	}
 
 	parallelism := r.normalizedParallelism()
 	logger := r.logger()
 	logger.ComparisonStarted(
 		"",
-		plan.Systems.Incumbent.Ref(),
-		plan.Systems.Challenger.Ref(),
+		plan.Policies.Incumbent.Ref(),
+		plan.Policies.Challenger.Ref(),
 		plan.Matches.Len(),
 		string(parallelism.Mode),
 		parallelism.MaxWorkers,
@@ -116,7 +116,7 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 
 	taskResults, err := r.RunTasks(ctx, plan)
 	if err != nil {
-		return report.CandidateReport{}, err
+		return report.RoundReport{}, err
 	}
 
 	results := NewResults(plan.Matches.Len())
@@ -126,7 +126,7 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.CandidateReport, err
 
 	summary := results.Summary()
 	decision := r.Decider.Decide(summary.Comparisons, summary.Regressions)
-	out := report.NewCandidateReport(
+	out := report.NewRoundReport(
 		r.NewReportID(),
 		plan.ReportSpec(),
 		summary.Runs,
@@ -184,7 +184,7 @@ func (r Runner) logger() Logger {
 // RunTasks executes task comparisons according to the configured task-level
 // parallelism policy.
 //
-// Parallelism is over tasks only. Baseline and candidate work for one task are
+// Parallelism is over tasks only. Incumbent and challenger work for one task are
 // still coordinated inside CompareTask. Results are always returned in original
 // plan order, and the shared Results accumulator is intentionally not mutated
 // from worker goroutines.
@@ -203,15 +203,15 @@ func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, erro
 				return nil, err
 			}
 
-			result := r.CompareTask(ctx, plan.Systems, task)
+			result := r.CompareTask(ctx, plan.Policies, task)
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 
 			results = append(results, TaskWorkResult{
-				Index:  index,
-				TaskID: task.ID,
-				Result: result,
+				Index:   index,
+				MatchID: task.ID,
+				Result:  result,
 			})
 		}
 		return results, nil
@@ -249,7 +249,7 @@ func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, erro
 					return
 				}
 
-				result := r.CompareTask(ctx, plan.Systems, job.task)
+				result := r.CompareTask(ctx, plan.Policies, job.task)
 				if err := ctx.Err(); err != nil {
 					resultsCh <- workerResult{err: err}
 					return
@@ -257,9 +257,9 @@ func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, erro
 
 				resultsCh <- workerResult{
 					work: TaskWorkResult{
-						Index:  job.index,
-						TaskID: job.task.ID,
-						Result: result,
+						Index:   job.index,
+						MatchID: job.task.ID,
+						Result:  result,
 					},
 				}
 			}
@@ -298,7 +298,7 @@ func (r Runner) RunTasks(ctx context.Context, plan Plan) ([]TaskWorkResult, erro
 	return ordered, nil
 }
 
-// CompareTask runs both systems against one task and interprets any resulting
+// CompareTask runs both policies against one task and interprets any resulting
 // score regressions at the report level.
 func (r Runner) CompareTask(
 	ctx context.Context,

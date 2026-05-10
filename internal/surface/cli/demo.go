@@ -15,10 +15,10 @@ import (
 type DemoReportCmd struct {
 	Tasks      int    `default:"2" help:"Number of fake tasks to compare."`
 	MaxWorkers int    `default:"1" help:"Maximum task-level workers for the fake comparison."`
-	Output     string `enum:"pretty,json,both" default:"pretty" help:"Output format for the candidate report."`
+	Output     string `enum:"pretty,json,both" default:"pretty" help:"Output format for the round report."`
 }
 
-// Run executes the demo comparison and prints the resulting candidate report.
+// Run executes the demo comparison and prints the resulting round report.
 func (c *DemoReportCmd) Run(ctx context.Context, app *App) error {
 	if c.Tasks <= 0 {
 		return errors.New("tasks must be greater than zero")
@@ -53,7 +53,7 @@ func (c *DemoReportCmd) Run(ctx context.Context, app *App) error {
 
 	switch c.Output {
 	case "pretty":
-		_, err = fmt.Fprintln(app.stdout(), console.RenderCandidateReport(out, opts))
+		_, err = fmt.Fprintln(app.stdout(), console.RenderRoundReport(out, opts))
 		return err
 	case "json":
 		data, err := json.MarshalIndent(out, "", "  ")
@@ -63,7 +63,7 @@ func (c *DemoReportCmd) Run(ctx context.Context, app *App) error {
 		_, err = fmt.Fprintln(app.stdout(), string(data))
 		return err
 	case "both":
-		if _, err := fmt.Fprintln(app.stdout(), console.RenderCandidateReport(out, opts)); err != nil {
+		if _, err := fmt.Fprintln(app.stdout(), console.RenderRoundReport(out, opts)); err != nil {
 			return err
 		}
 		data, err := json.MarshalIndent(out, "", "  ")

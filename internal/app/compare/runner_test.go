@@ -9,8 +9,8 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -24,7 +24,7 @@ func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
 
 	runner := Runner{
 		Executor: failingExecutor{
-			err: errors.New("candidate execute failed"),
+			err: errors.New("challenger execute failed"),
 		},
 		GraphProvider: fakeGraphProvider{},
 		Scorer:        fakeScorer{},
@@ -37,8 +37,8 @@ func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
 
 	got, err := runner.Run(context.Background(), NewPlan(
 		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+			exampleIncumbentPolicy(),
+			exampleChallengerPolicy("def score(task):\n    return 'challenger'\n"),
 		),
 		domain.NewNonEmpty(exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug.go"))),
 	))
@@ -55,7 +55,7 @@ func TestRunnerConvertsExecuteErrorToRunFailure(t *testing.T) {
 		t.Fatalf("len(got.Failures.Challenger) = %d, want 1", len(got.Failures.Challenger))
 	}
 	if got.Failures.Challenger[0].Stage != run.FailureExecute {
-		t.Fatalf("candidate failure stage = %q, want %q", got.Failures.Challenger[0].Stage, run.FailureExecute)
+		t.Fatalf("challenger failure stage = %q, want %q", got.Failures.Challenger[0].Stage, run.FailureExecute)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestRunnerParallelTasksPreservesPlanOrder(t *testing.T) {
 
 	plan := NewPlan(
 		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+			exampleIncumbentPolicy(),
+			exampleChallengerPolicy("def score(task):\n    return 'challenger'\n"),
 		),
 		domain.NewNonEmpty(
 			exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
@@ -116,8 +116,8 @@ func TestRunnerParallelTasksRespectsContextCancellation(t *testing.T) {
 
 	_, err := runner.Run(ctx, NewPlan(
 		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem("def score(task):\n    return 'candidate'\n"),
+			exampleIncumbentPolicy(),
+			exampleChallengerPolicy("def score(task):\n    return 'challenger'\n"),
 		),
 		domain.NewNonEmpty(
 			exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
@@ -137,11 +137,11 @@ func (f fakeExecutor) Execute(_ context.Context, spec run.Spec) (run.ExecutedRun
 	planned := run.NewPlanned(spec)
 	prepared := run.NewPrepared(planned, domain.SessionID("session-"+spec.ID.String()))
 
-	predictionFile := domain.RepoRelPath("pkg/baseline.go")
-	reasoning := "baseline path"
+	predictionFile := domain.RepoRelPath("pkg/incumbent.go")
+	reasoning := "incumbent path"
 	if spec.System.Backend == domain.BackendIterativeContext {
-		predictionFile = domain.RepoRelPath("pkg/candidate.go")
-		reasoning = "candidate path"
+		predictionFile = domain.RepoRelPath("pkg/challenger.go")
+		reasoning = "challenger path"
 	}
 
 	return run.NewExecuted(
@@ -243,16 +243,16 @@ func (fakeScorer) Score(_ context.Context, input score.Input) (score.ScoreSet, e
 
 type fakeDecider struct{}
 
-func (fakeDecider) Decide(_ []report.ScoreComparison, regressions []report.Regression) report.PromotionDecision {
+func (fakeDecider) Decide(_ []report.ScoreComparison, regressions []report.Regression) report.Decision {
 	if len(regressions) == 0 {
-		return report.PromotionDecision{
-			Decision: report.DecisionPromote,
-			Reason:   "candidate improved every required metric",
+		return report.Decision{
+			Decision: report.DecisionPromoteChallenger,
+			Reason:   "challenger improved every required metric",
 		}
 	}
-	return report.PromotionDecision{
+	return report.Decision{
 		Decision: report.DecisionReview,
-		Reason:   "candidate has regressions",
+		Reason:   "challenger has regressions",
 	}
 }
 

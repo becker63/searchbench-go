@@ -9,23 +9,23 @@ import (
 )
 
 // Run executes one optimization manifest through the first optimizer loop.
-func Run(ctx context.Context, request Request) (Result, error) {
-	result := Result{ManifestPath: request.Resolve.ManifestPath}
+func Run(ctx context.Context, request Request) (Record, error) {
+	record := Record{ManifestPath: request.Resolve.ManifestPath}
 
 	plan, err := Resolve(ctx, request.Resolve)
 	if err != nil {
-		return result, err
+		return record, err
 	}
 	return RunResolved(ctx, plan, request)
 }
 
 // RunResolved executes one already-resolved optimization plan.
-func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error) {
-	result := Result{ManifestPath: plan.ManifestPath}
+func RunResolved(ctx context.Context, plan Plan, request Request) (Record, error) {
+	record := Record{ManifestPath: plan.ManifestPath}
 
 	evidence, evidenceErr := loadEvidence(plan)
 	if evidenceErr != nil {
-		optimizerResult := pureoptimizer.Result{
+		nextChallengerRecord := pureoptimizer.NextChallengerRecord{
 			Failure: &pureoptimizer.Failure{
 				Phase:   pureoptimizer.PhaseLoadParentEvidence,
 				Kind:    pureoptimizer.FailureKindParentEvidenceFailed,
@@ -37,11 +37,11 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error
 				pureoptimizer.PhaseLoadParentEvidence,
 			},
 		}
-		if bundlePath, bundleErr := writeBundle(ctx, plan, optimizerResult); bundleErr == nil {
-			result.BundlePath = bundlePath
+		if bundlePath, bundleErr := writeBundle(ctx, plan, nextChallengerRecord); bundleErr == nil {
+			record.BundlePath = bundlePath
 		}
-		result.Optimizer = optimizerResult
-		return result, optimizerResult.Failure
+		record.Optimizer = nextChallengerRecord
+		return record, nextChallengerRecord.Failure
 	}
 
 	spec := pureoptimizer.Spec{
@@ -62,7 +62,7 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error
 		RetryPolicy:      request.RetryPolicy,
 	})
 	if err != nil {
-		optimizerResult := pureoptimizer.Result{
+		nextChallengerRecord := pureoptimizer.NextChallengerRecord{
 			Failure: &pureoptimizer.Failure{
 				Phase:   pureoptimizer.PhasePrepareOptimizer,
 				Kind:    pureoptimizer.FailureKindPrepareOptimizerFailed,
@@ -75,33 +75,33 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error
 				pureoptimizer.PhasePrepareOptimizer,
 			},
 		}
-		if bundlePath, bundleErr := writeBundle(ctx, plan, optimizerResult); bundleErr == nil {
-			result.BundlePath = bundlePath
+		if bundlePath, bundleErr := writeBundle(ctx, plan, nextChallengerRecord); bundleErr == nil {
+			record.BundlePath = bundlePath
 		}
-		result.Optimizer = optimizerResult
-		return result, optimizerResult.Failure
+		record.Optimizer = nextChallengerRecord
+		return record, nextChallengerRecord.Failure
 	}
 
-	optimizerResult := optimizerExecutor.Run(ctx, spec)
-	optimizerResult.Phases = append(
+	nextChallengerRecord := optimizerExecutor.Run(ctx, spec)
+	nextChallengerRecord.Phases = append(
 		[]pureoptimizer.Phase{
 			pureoptimizer.PhaseResolveOptimizerPlan,
 			pureoptimizer.PhaseLoadParentEvidence,
 			pureoptimizer.PhasePrepareOptimizer,
 		},
-		optimizerResult.Phases...,
+		nextChallengerRecord.Phases...,
 	)
 
-	bundlePath, bundleErr := writeBundle(ctx, plan, optimizerResult)
-	result.BundlePath = bundlePath
-	result.Optimizer = optimizerResult
+	bundlePath, bundleErr := writeBundle(ctx, plan, nextChallengerRecord)
+	record.BundlePath = bundlePath
+	record.Optimizer = nextChallengerRecord
 	if bundleErr != nil {
-		return result, bundleErr
+		return record, bundleErr
 	}
-	if optimizerResult.Failure != nil {
-		return result, optimizerResult.Failure
+	if nextChallengerRecord.Failure != nil {
+		return record, nextChallengerRecord.Failure
 	}
-	return result, nil
+	return record, nil
 }
 
 func normalizeManifestPathError(manifestPath string, err error) error {

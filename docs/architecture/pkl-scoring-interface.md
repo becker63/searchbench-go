@@ -6,19 +6,19 @@ This document defines the visible Pkl-based objective scoring interface in Searc
 
 SearchBench-Go now has a narrow executable scoring seam in `internal/adapters/scoring/pkl`:
 
-- Go supplies `score.ScoreEvidenceDocument` inputs
+- Go supplies `score.RoundEvidenceDocument` inputs
 - a Pkl objective file is evaluated with `pkl-go`
 - Go validates the returned `score.ObjectiveResult`
 
-This still does not add parent-run discovery, experiment execution, or optimizer/runtime configuration ownership to Pkl.
+This still does not add parent-round discovery, round execution, or optimizer/runtime configuration ownership to Pkl.
 
 ## Goals
 
 SearchBench-Go already has the pure Go types needed to support a visible scoring layer:
 
-- raw score evidence in `internal/pure/score.ScoreEvidenceDocument`
+- raw round evidence in `internal/pure/score.RoundEvidenceDocument`
 - typed objective results in `internal/pure/score.ObjectiveResult`
-- immutable bundle persistence for `score.pkl` and optional `objective.json`
+- immutable bundle persistence for `evidence.pkl` and optional `objective.json`
 
 The missing piece is the contract between those two layers. That contract must make scoring math durable, reviewable, and file-native instead of hiding it behind Go reducer names or transform enums.
 
@@ -33,9 +33,9 @@ The intended flow is:
 
 This interface does not define:
 
-- experiment manifests
+- round manifests
 - dataset configuration
-- evaluator, backend, writer, or optimizer configuration in Pkl
+- evaluator, backend, optimizer, or next-challenger configuration in Pkl
 - parent bundle discovery or lineage loading
 - content-addressed references
 - graph-distance or token-efficiency reducer changes
@@ -46,14 +46,14 @@ This interface does not define:
 The current pure Go boundary is:
 
 - `internal/pure/score/evidence.go`
-  - `ScoreEvidenceDocument`
+  - `RoundEvidenceDocument`
 - `internal/pure/score/objective.go`
   - `ObjectiveResult`
   - `ObjectiveValue`
   - `ObjectiveEvidenceRef`
   - `ObjectiveBounds`
 - `internal/pure/report/evidence.go`
-  - `ProjectScoreEvidence(report.CandidateReport)`
+  - `BuildRoundEvidence(report.RoundReport)`
 
 Those types stay authoritative. Pkl is a future producer of objective values, not a replacement for Go-owned evidence or validation.
 
@@ -61,52 +61,53 @@ Those types stay authoritative. Pkl is a future producer of objective values, no
 
 The scoring lifecycle is:
 
-1. `report.CandidateReport` is projected into `score.ScoreEvidenceDocument`.
-2. Artifact writing persists that evidence as `score.pkl`.
+1. `report.RoundReport` is projected into `score.RoundEvidenceDocument`.
+2. Artifact writing persists that evidence as `evidence.pkl`.
 3. A scoring runner resolves explicit evidence references for:
-   - the current run
-   - an optional parent run
+   - the current round
+   - an optional parent round
 4. Pkl evaluates pure scoring math over those resolved evidence documents.
 5. Pkl returns named values plus explicit final selection.
 6. Go validates the result with `ObjectiveResult.Validate()`.
 7. Artifact writing persists `objective.json` when validation succeeds.
 
-In the current manifest-driven local run, this happens immediately after the
-comparison report is projected into score evidence and before bundle
-finalization. Invalid objective output or a missing objective file fails the run
+In the current manifest-driven local round, this happens immediately after the
+comparison report is projected into round evidence and before bundle
+finalization. Invalid objective output or a missing objective file fails the round
 before a completed bundle is produced.
 
-The canonical resolved experiment semantics that supply objective path,
+The canonical resolved round semantics that supply objective path,
 current-parent evidence refs, and output settings now live in
-`internal/app/experiment`. The scorer still remains a narrow adapter-edge seam.
+`internal/app/evaluation`. The scorer still remains a narrow adapter-edge seam.
 
 The scoring runner is intentionally narrow. It evaluates formulas over evidence. It does not own execution orchestration, bundle mutation, or system configuration.
 
-The current implementation imports explicit `score.pkl` evidence modules directly, converts them to `Dynamic`, and evaluates the objective file against that Pkl-native shape.
+The current implementation imports explicit `evidence.pkl` evidence modules directly, converts them to `Dynamic`, and evaluates the objective file against that Pkl-native shape.
 
 ## Evidence Inputs
 
-Pkl should only read explicit, durable evidence inputs. The first-class source is bundled `score.pkl`, which already exposes field-addressable evidence such as:
+Pkl should only read explicit, durable evidence inputs. The first-class source is bundled `evidence.pkl`, which already exposes field-addressable evidence such as:
 
 - `current.metrics`
 - `current.localizationDistance`
-- `current.usage`
+- `current.challengerUsage`
+- `current.incumbentUsage`
 - `current.regressions`
 - `current.invalidPredictions`
-- `current.promotion_decision`
+- `current.decision`
 
 If parent-aware scoring is added later, the parent input must also be explicit. It must not be discovered implicitly from lineage or mutable global state.
 
 A future runner should resolve inputs into a shape conceptually equivalent to:
 
 - `current`
-  - current run `ScoreEvidenceDocument`
+  - current round `RoundEvidenceDocument`
 - `parent`
-  - optional parent `ScoreEvidenceDocument`
+  - optional parent `RoundEvidenceDocument`
 - `constants`
   - scorer-owned constants from the scoring file
 
-Pkl must not read `report.json` tables or Go-specific reducer internals when `score.pkl` already exposes the needed evidence.
+Pkl must not read `round-report.json` tables or Go-specific reducer internals when `evidence.pkl` already exposes the needed evidence.
 
 ## Evidence References
 
@@ -120,7 +121,7 @@ The scoring boundary should treat these refs as the reviewable declaration of wh
 Each ref should identify the durable source by path and, when available later, a digest:
 
 - `bundle_path`
-- `score_path`
+- `evidence_path`
 - `report_path`
 - `sha256`
 
@@ -198,9 +199,9 @@ authoritative final selector, which remains `final = "final"`.
 
 The visible scoring layer supports formulas of the form:
 
-`currentLocalizationQuality = 1.0 - current.localizationDistance.goldHop.candidate / maxHop`
+`currentLocalizationQuality = 1.0 - current.localizationDistance.goldHop.challenger / maxHop`
 
-`tokenEfficiency = 1.0 - current.usage.totalTokens / tokenBudget`
+`tokenEfficiency = 1.0 - current.challengerUsage.totalTokens / tokenBudget`
 
 `final = base * regressionPenalty * invalidPredictionPenalty`
 
@@ -230,28 +231,28 @@ The current executable runner wraps those validation failures at the scoring bou
 
 ## Bundle Integration
 
-Immutable run bundles already persist:
+Immutable round bundles persist:
 
-- `resolved.json`
-- `report.json`
-- `score.pkl`
+- `resolved-round.json`
+- `round-report.json`
+- `evidence.pkl`
 - optional `objective.json`
 - `metadata.json`
 - optional rendered report
 - `COMPLETE`
 
-- `score.pkl` remains the raw evidence input
+- `evidence.pkl` remains the raw evidence input
 - `objective.json` remains the validated scoring output
 
-In the executable local path, `score.pkl` and `objective.json` have distinct
+In the executable local path, `evidence.pkl` and `objective.json` have distinct
 roles:
 
-- `score.pkl`
-  - the Pkl-readable evidence document projected from `report.json`
+- `evidence.pkl`
+  - the Pkl-readable evidence document projected from `round-report.json`
 - `objective.json`
   - the evaluated and validated result of the configured `objective.pkl`
 
-The scoring source file should also be copied into the bundle as a reviewable artifact so the exact visible math used for that run is immutable. A reasonable future shape is:
+The scoring source file should also be copied into the bundle as a reviewable artifact so the exact visible math used for that round is immutable. A reasonable future shape is:
 
 - `scoring/objective.pkl`
 
@@ -286,20 +287,20 @@ Two rules are important:
 
 The manifest-driven scoring path currently supports:
 
-- current-run evidence
+- current-round evidence
 - optional parent evidence when explicitly provided to the scoring adapter or
-  manifest-driven run request seam
-- local/fake comparison execution feeding `score.pkl`
+  manifest-driven round request seam
+- local/fake comparison execution feeding `evidence.pkl`
 
-The current score evidence may be materialized temporarily before final bundle
-writing so the Pkl objective can import an explicit `score.pkl` module. That
+The current round evidence may be materialized temporarily before final bundle
+writing so the Pkl objective can import an explicit `evidence.pkl` module. That
 materialization seam is intentionally small and reviewable:
 
-- materialize current `score.pkl`
+- materialize current `evidence.pkl`
 - produce the current `ObjectiveEvidenceRef`
 - accept an optional explicit parent `ObjectiveEvidenceRef`
 - pass both into Pkl evaluation
-- clean up temporary current score files afterward
+- clean up temporary current evidence files afterward
 
 It intentionally does not yet implement:
 
@@ -321,13 +322,13 @@ before introducing any bespoke inheritance or content-addressed store.
 
 The dependency direction remains:
 
-`score/domain/run`
+`score/domain/execution`
 
 `report projection`
 
 `artifact serialization`
 
-Pkl belongs between score evidence and objective result production. It does not replace those layers and must not become a second general runtime for SearchBench-Go.
+Pkl belongs between round evidence and objective result production. It does not replace those layers and must not become a second general runtime for SearchBench-Go.
 
 ## Implementation Boundary For Future Work
 
@@ -335,7 +336,7 @@ The current implementation adds that minimum seam:
 
 1. resolve explicit evidence refs supplied by Go
 2. load the scoring source file
-3. run Pkl against score evidence inputs
+3. evaluate Pkl against round evidence inputs
 4. map the output directly into `score.ObjectiveResult`
 5. validate the result in Go
 

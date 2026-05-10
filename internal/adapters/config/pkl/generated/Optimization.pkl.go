@@ -6,7 +6,7 @@ type Optimization struct {
 
 	ParentRound ParentRound `pkl:"parentRound"`
 
-	Target OptimizationTarget `pkl:"target"`
+	Target NextChallengerTarget `pkl:"target"`
 
-	Evidence OptimizationEvidence `pkl:"evidence"`
+	Evidence NextChallengerEvidence `pkl:"evidence"`
 }

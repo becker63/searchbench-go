@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -13,20 +13,20 @@ func TestSystemSpecKVOmitsPolicySource(t *testing.T) {
 	t.Parallel()
 
 	system := domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
+		ID:      domain.SystemID("challenger-system"),
+		Name:    "Challenger",
 		Backend: domain.BackendIterativeContext,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-candidate",
+			Name:     "gpt-challenger",
 		},
 		PromptBundle: domain.PromptBundleRef{Name: "bundle"},
-		Policy:       ptr(domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'candidate'", "score")),
+		Policy:       ptr(domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'challenger'", "score")),
 	}
 
 	kv := SystemSpecKV(system)
 	assertNoKey(t, kv, "source")
-	assertNoValue(t, kv, "def score(task): return 'candidate'")
+	assertNoValue(t, kv, "def score(task): return 'challenger'")
 	assertHasKey(t, kv, "policy_sha256")
 }
 
@@ -82,14 +82,14 @@ func TestScoreSetKVIncludesRequiredMetrics(t *testing.T) {
 func TestReportSummaryKVIsCompact(t *testing.T) {
 	t.Parallel()
 
-	report := report.NewCandidateReport(
+	report := report.NewRoundReport(
 		domain.ReportID("report-1"),
 		report.ComparisonSpec{},
 		domain.NewPair([]score.ScoredRun{{}}, []score.ScoredRun{{}, {}}),
 		domain.NewPair([]run.RunFailure{{}}, []run.RunFailure{}),
 		[]report.ScoreComparison{{}, {}},
 		[]report.Regression{{}},
-		report.PromotionDecision{Decision: report.DecisionPromote},
+		report.Decision{Decision: report.DecisionPromoteChallenger},
 	)
 
 	kv := ReportSummaryKV(report)

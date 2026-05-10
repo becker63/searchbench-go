@@ -21,7 +21,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func runComparison(ctx context.Context, plan Plan, request Request) (report.CandidateReport, []EvaluatorExecution, error) {
+func runComparison(ctx context.Context, plan Plan, request Request) (report.RoundReport, []EvaluatorExecution, error) {
 	executor := &evaluatorExecutor{
 		modelFactory: request.EvaluatorModelFactory,
 		toolFactory:  request.EvaluatorToolFactory,
@@ -52,7 +52,7 @@ func runComparison(ctx context.Context, plan Plan, request Request) (report.Cand
 	}
 	out, err := runner.Run(ctx, plan.ComparePlan())
 	if err != nil {
-		return report.CandidateReport{}, nil, err
+		return report.RoundReport{}, nil, err
 	}
 	out.CreatedAt = plan.CreatedAt
 	return out, executor.executions(), nil
@@ -109,10 +109,10 @@ func (e *evaluatorExecutor) recordExecution(spec run.Spec, result executoreino.R
 	defer e.mu.Unlock()
 
 	e.records = append(e.records, EvaluatorExecution{
-		Role:   roleForSpec(spec),
-		TaskID: spec.Match.ID,
-		RunID:  spec.ID,
-		Result: result,
+		Role:    roleForSpec(spec),
+		MatchID: spec.Match.ID,
+		RunID:   spec.ID,
+		Result:  result,
 	})
 }
 
@@ -147,7 +147,7 @@ func defaultEvaluatorToolFactory(spec run.Spec) ([]tool.BaseTool, error) {
 			desc: "Return the most plausible fake repository paths for the issue.",
 			run: func(spec run.Spec, _ map[string]any) any {
 				return map[string]any{
-					"paths": []string{"src/search_target.go", "src/baseline_guess.go"},
+					"paths": []string{"src/search_target.go", "src/incumbent_guess.go"},
 					"issue": spec.Match.Input.Title,
 				}
 			},
@@ -173,15 +173,15 @@ func defaultEvaluatorToolFactory(spec run.Spec) ([]tool.BaseTool, error) {
 			desc: "Resolve the likely file set and return one fake structural snippet.",
 			run: func(spec run.Spec, _ map[string]any) any {
 				return map[string]any{
-					"paths": []string{"src/search_target.go", "src/baseline_guess.go"},
+					"paths": []string{"src/search_target.go", "src/incumbent_guess.go"},
 					"files": []map[string]string{
 						{
 							"path":    "src/search_target.go",
 							"snippet": fakeSnippetForPath("src/search_target.go"),
 						},
 						{
-							"path":    "src/baseline_guess.go",
-							"snippet": fakeSnippetForPath("src/baseline_guess.go"),
+							"path":    "src/incumbent_guess.go",
+							"snippet": fakeSnippetForPath("src/incumbent_guess.go"),
 						},
 					},
 					"repo": string(spec.Match.Repo.Name),
@@ -296,11 +296,11 @@ func hasToolResponse(messages []*schema.Message) bool {
 }
 
 func finalPredictionJSON(spec run.Spec) string {
-	path := "src/baseline_guess.go"
-	reasoning := "baseline stayed conservative after the fake structural lookup"
+	path := "src/incumbent_guess.go"
+	reasoning := "incumbent stayed conservative after the fake structural lookup"
 	if spec.System.Backend == domain.BackendIterativeContext {
 		path = string(spec.Match.Oracle.GoldFiles[0])
-		reasoning = "candidate used the fake structural lookup to narrow onto the search target"
+		reasoning = "challenger used the fake structural lookup to narrow onto the search target"
 	}
 
 	payload := struct {
@@ -321,8 +321,8 @@ func fakeSnippetForPath(path string) string {
 	switch filepath := strings.TrimSpace(path); filepath {
 	case "src/search_target.go":
 		return "func locateRetryTarget() { /* deterministic fake target */ }"
-	case "src/baseline_guess.go":
-		return "func baselineGuess() { /* deterministic fake fallback */ }"
+	case "src/incumbent_guess.go":
+		return "func incumbentGuess() { /* deterministic fake fallback */ }"
 	default:
 		return "func fakeSnippet() {}"
 	}
@@ -399,7 +399,7 @@ func (fakeDecider) Decide(comparisons []report.ScoreComparison, regressions []re
 		}
 	}
 	for _, comparison := range comparisons {
-		if comparison.Metric == score.MetricComposite && comparison.Candidate > comparison.Baseline {
+		if comparison.Metric == score.MetricComposite && comparison.Challenger > comparison.Incumbent {
 			return report.Decision{
 				Decision: report.DecisionPromoteChallenger,
 				Reason:   "challenger improves the composite score in local fake comparison",

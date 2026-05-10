@@ -10,7 +10,7 @@ type ArtifactKind string
 
 const (
 	Policy               ArtifactKind = "policy"
-	PolicyProposal       ArtifactKind = "policy_proposal"
+	NextChallenger       ArtifactKind = "next_challenger"
 	CompletedRoundBundle ArtifactKind = "completed_round_bundle"
 )
 
@@ -26,8 +26,8 @@ func (rcv *ArtifactKind) UnmarshalBinary(data []byte) error {
 	switch str := string(data); str {
 	case "policy":
 		*rcv = Policy
-	case "policy_proposal":
-		*rcv = PolicyProposal
+	case "next_challenger":
+		*rcv = NextChallenger
 	case "completed_round_bundle":
 		*rcv = CompletedRoundBundle
 	default:

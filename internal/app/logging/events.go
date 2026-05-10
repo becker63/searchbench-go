@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-// ComparisonStarted logs the start of a baseline/candidate comparison.
-func (l Logger) ComparisonStarted(planID string, baseline domain.SystemRef, candidate domain.SystemRef, taskCount int, parallelismMode string, maxWorkers int) {
+// ComparisonStarted logs the start of a incumbent/challenger comparison.
+func (l Logger) ComparisonStarted(planID string, incumbent domain.SystemRef, challenger domain.SystemRef, taskCount int, parallelismMode string, maxWorkers int) {
 	if l.mode == ModeDev {
 		parallelism := parallelismMode
 		if maxWorkers > 1 {
@@ -21,8 +21,8 @@ func (l Logger) ComparisonStarted(planID string, baseline domain.SystemRef, cand
 			"comparison.started",
 			fmt.Sprintf("%d tasks", taskCount),
 			parallelism,
-			"baseline="+systemLabel(baseline),
-			"candidate="+systemLabel(candidate),
+			"incumbent="+systemLabel(incumbent),
+			"challenger="+systemLabel(challenger),
 		)
 		return
 	}
@@ -32,8 +32,8 @@ func (l Logger) ComparisonStarted(planID string, baseline domain.SystemRef, cand
 			"parallelism_mode", parallelismMode,
 			"max_workers", maxWorkers,
 		},
-		prefixedKV("baseline_", SystemRefKV(baseline)),
-		prefixedKV("candidate_", SystemRefKV(candidate)),
+		prefixedKV("incumbent_", SystemRefKV(incumbent)),
+		prefixedKV("challenger_", SystemRefKV(challenger)),
 	)
 	if planID != "" {
 		args = append([]any{"plan_id", planID}, args...)
@@ -41,8 +41,8 @@ func (l Logger) ComparisonStarted(planID string, baseline domain.SystemRef, cand
 	l.base().Infow("comparison.started", args...)
 }
 
-// ComparisonCompleted logs completion of a baseline/candidate comparison.
-func (l Logger) ComparisonCompleted(report report.CandidateReport) {
+// ComparisonCompleted logs completion of a incumbent/challenger comparison.
+func (l Logger) ComparisonCompleted(report report.RoundReport) {
 	if l.mode == ModeDev {
 		return
 	}
@@ -64,13 +64,13 @@ func (l Logger) TaskStarted(task domain.MatchSpec) {
 }
 
 // TaskCompleted logs the high-level outcome of one task comparison.
-func (l Logger) TaskCompleted(task domain.MatchSpec, baselineSucceeded bool, candidateSucceeded bool, regressionCount int) {
+func (l Logger) TaskCompleted(task domain.MatchSpec, incumbentSucceeded bool, challengerSucceeded bool, regressionCount int) {
 	if l.mode == ModeDev {
 		l.devInfo(
 			"task.completed",
 			taskLabel(task),
-			"baseline "+l.renderStatus(baselineSucceeded),
-			"candidate "+l.renderStatus(candidateSucceeded),
+			"incumbent "+l.renderStatus(incumbentSucceeded),
+			"challenger "+l.renderStatus(challengerSucceeded),
 			fmt.Sprintf("%d regressions", regressionCount),
 		)
 		return
@@ -80,8 +80,8 @@ func (l Logger) TaskCompleted(task domain.MatchSpec, baselineSucceeded bool, can
 		AppendKV(
 			TaskKV(task),
 			[]any{
-				"baseline_succeeded", baselineSucceeded,
-				"candidate_succeeded", candidateSucceeded,
+				"incumbent_succeeded", incumbentSucceeded,
+				"challenger_succeeded", challengerSucceeded,
 				"regression_count", regressionCount,
 			},
 		)...,
@@ -171,8 +171,8 @@ func (l Logger) RunFailed(role domain.Role, failure run.RunFailure) {
 	l.base().Warnw("run.failed", AppendKV(RoleKV(role), FailureKV(failure))...)
 }
 
-// ReportCreated logs the creation of the final candidate report.
-func (l Logger) ReportCreated(report report.CandidateReport) {
+// ReportCreated logs the creation of the final round report.
+func (l Logger) ReportCreated(report report.RoundReport) {
 	if l.mode == ModeDev {
 		l.devInfo(
 			"report.created",

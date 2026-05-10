@@ -55,7 +55,7 @@ func Run(ctx context.Context, input Input) (Record, error) {
 	record.RoundBundle = string(matches.Evaluation.Bundle.Path)
 	record.RoundResult = &matches.Evaluation
 	if next != nil {
-		record.OptimizerResult = next
+		record.NextChallengerResult = next
 		record.OptimizerBundle = next.BundlePath
 	}
 	return record, nil
@@ -122,7 +122,7 @@ func ProposeNextChallenger(
 	_ report.Decision,
 	matches MatchRecords,
 	input Input,
-) (*appOptimizer.Result, error) {
+) (*appOptimizer.Record, error) {
 	optimizerModelFactory := input.OptimizerModelFactory
 	if optimizerModelFactory == nil {
 		return nil, fmt.Errorf("round: optimizer model factory is required")
@@ -143,7 +143,7 @@ func ProposeNextChallenger(
 		return nil, err
 	}
 
-	optimizerResult, err := appOptimizer.RunResolved(ctx, optimizerPlan, appOptimizer.Request{
+	nextChallengerRecord, err := appOptimizer.RunResolved(ctx, optimizerPlan, appOptimizer.Request{
 		Resolve: appOptimizer.ResolveRequest{
 			ManifestPath:             input.OptimizationManifestPath,
 			BundleRootOverride:       optimizerBundleRoot(input.BundleRootOverride),
@@ -154,10 +154,10 @@ func ProposeNextChallenger(
 		Model: optimizerModel,
 	})
 	if err != nil {
-		return &optimizerResult, err
+		return &nextChallengerRecord, err
 	}
 
-	return &optimizerResult, nil
+	return &nextChallengerRecord, nil
 }
 
 // WriteBundle records the already-written durable round bundle in the round record.
@@ -166,7 +166,7 @@ func WriteBundle(
 	evidence score.RoundEvidenceDocument,
 	objective *score.ObjectiveResult,
 	decision report.Decision,
-	next *appOptimizer.Result,
+	next *appOptimizer.Record,
 	matches MatchRecords,
 ) pureround.Record {
 	return pureround.Record{

@@ -223,7 +223,7 @@ func TestSerializationFailureDoesNotCreateCompletedBundle(t *testing.T) {
 
 	request := sampleBundleRequest(t)
 	w := newWriter()
-	w.marshalScorePKL = func(score.RoundEvidenceDocument) ([]byte, error) {
+	w.marshalEvidencePKL = func(score.RoundEvidenceDocument) ([]byte, error) {
 		return nil, errors.New("fixture score serialization failed")
 	}
 
@@ -338,7 +338,7 @@ func TestReportSafeOutputsDoNotLeakPolicySource(t *testing.T) {
 		t.Fatalf("WriteBundle() error = %v", err)
 	}
 
-	rawSource := "def score(task):\n    return 'candidate'\n"
+	rawSource := "def score(task):\n    return 'challenger'\n"
 	for _, name := range []string{"round-report.json", "evidence.pkl", "metadata.json", "round-report.md", "objective.json", "decision.json"} {
 		path := filepath.Join(string(ref.Path), name)
 		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
@@ -398,7 +398,7 @@ func TestArtifactPackageAvoidsForbiddenImports(t *testing.T) {
 	}
 }
 
-func TestArtifactPackageNoLongerDefinesScoreEvidenceTypes(t *testing.T) {
+func TestArtifactPackageNoLongerDefinesRoundEvidenceTypes(t *testing.T) {
 	t.Parallel()
 
 	_, currentFile, _, ok := runtime.Caller(0)
@@ -417,7 +417,7 @@ func TestArtifactPackageNoLongerDefinesScoreEvidenceTypes(t *testing.T) {
 	}
 
 	forbiddenTypeNames := map[string]struct{}{
-		"ScoreEvidence":        {},
+		"RoundEvidence":        {},
 		"MetricEvidence":       {},
 		"RoleCounts":           {},
 		"ObjectiveResult":      {},
@@ -439,7 +439,7 @@ func TestArtifactPackageNoLongerDefinesScoreEvidenceTypes(t *testing.T) {
 						continue
 					}
 					if _, forbidden := forbiddenTypeNames[typeSpec.Name.Name]; forbidden {
-						t.Fatalf("artifact package still defines forbidden score evidence type %q", typeSpec.Name.Name)
+						t.Fatalf("artifact package still defines forbidden round evidence type %q", typeSpec.Name.Name)
 					}
 				}
 			}
@@ -450,26 +450,26 @@ func TestArtifactPackageNoLongerDefinesScoreEvidenceTypes(t *testing.T) {
 func sampleBundleRequest(t *testing.T) BundleRequest {
 	t.Helper()
 
-	policySource := "def score(task):\n    return 'candidate'\n"
-	baseline := sampleBaselineSystem()
-	candidate := sampleCandidateSystem(policySource)
+	policySource := "def score(task):\n    return 'challenger'\n"
+	incumbent := sampleIncumbentPolicy()
+	challenger := sampleChallengerPolicy(policySource)
 	taskOne := sampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go"))
 	taskTwo := sampleTask(domain.MatchID("task-2"), domain.RepoRelPath("pkg/bug2.go"))
 	tasks := domain.NewNonEmpty(taskOne, taskTwo)
-	spec := report.NewComparisonSpec(domain.NewPair(baseline, candidate), tasks)
+	spec := report.NewComparisonSpec(domain.NewPair(incumbent, challenger), tasks)
 
 	runs := domain.NewPair(
 		[]score.ScoredRun{
-			sampleScoredRun(t, domain.RoleIncumbent, baseline, taskOne.ID, 4, 5, 0.40, 0.60, 0.30),
-			sampleScoredRun(t, domain.RoleIncumbent, baseline, taskTwo.ID, 3, 4, 0.45, 0.55, 0.35),
+			sampleScoredRun(t, domain.RoleIncumbent, incumbent, taskOne.ID, 4, 5, 0.40, 0.60, 0.30),
+			sampleScoredRun(t, domain.RoleIncumbent, incumbent, taskTwo.ID, 3, 4, 0.45, 0.55, 0.35),
 		},
 		[]score.ScoredRun{
-			sampleScoredRun(t, domain.RoleChallenger, candidate, taskOne.ID, 1, 1, 0.90, 0.10, 0.95),
-			sampleScoredRun(t, domain.RoleChallenger, candidate, taskTwo.ID, 2, 2, 0.80, 0.20, 0.85),
+			sampleScoredRun(t, domain.RoleChallenger, challenger, taskOne.ID, 1, 1, 0.90, 0.10, 0.95),
+			sampleScoredRun(t, domain.RoleChallenger, challenger, taskTwo.ID, 2, 2, 0.80, 0.20, 0.85),
 		},
 	)
 	failures := domain.NewPair(
-		[]run.RunFailure{{RunID: domain.RunID("baseline-failure-1"), MatchID: taskTwo.ID, System: baseline.ID, Stage: run.FailureExecute, Message: "baseline retry exhausted"}},
+		[]run.RunFailure{{RunID: domain.RunID("incumbent-failure-1"), MatchID: taskTwo.ID, System: incumbent.ID, Stage: run.FailureExecute, Message: "incumbent retry exhausted"}},
 		[]run.RunFailure{},
 	)
 
@@ -487,18 +487,18 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 		},
 		[]report.Regression{
 			{
-				MatchID:   taskTwo.ID,
-				Metric:    score.MetricCost,
-				Baseline:  0.10,
-				Candidate: 0.20,
-				Delta:     0.10,
-				Severity:  report.RegressionMinor,
-				Reason:    "candidate cost is slightly higher on task-2",
+				MatchID:    taskTwo.ID,
+				Metric:     score.MetricCost,
+				Incumbent:  0.10,
+				Challenger: 0.20,
+				Delta:      0.10,
+				Severity:   report.RegressionMinor,
+				Reason:     "challenger cost is slightly higher on task-2",
 			},
 		},
-		report.PromotionDecision{
+		report.Decision{
 			Decision: report.DecisionReview,
-			Reason:   "candidate improves core metrics but has a minor cost regression",
+			Reason:   "challenger improves core metrics but has a minor cost regression",
 		},
 	)
 	roundReport.CreatedAt = time.Date(2026, 4, 26, 15, 4, 5, 0, time.UTC)
@@ -514,10 +514,10 @@ func sampleBundleRequest(t *testing.T) BundleRequest {
 		RootPath: domain.HostPath(filepath.Join(t.TempDir(), "artifacts")),
 		BundleID: "bundle-2026-04-26-fixed",
 		ResolvedInput: map[string]any{
-			"manifest_path": "configs/experiments/example/experiment.pkl",
+			"manifest_path": "configs/rounds/example/round.pkl",
 			"round_name":    "bundle-writer-test",
 			"mode":          "evaluation",
-			"policies":      domain.NewPair(baseline.Ref(), candidate.Ref()),
+			"policies":      domain.NewPair(incumbent.Ref(), challenger.Ref()),
 			"matches":       tasks,
 		},
 		RoundReport:   roundReport,
@@ -544,19 +544,19 @@ func sampleObjectiveResult() *score.ObjectiveResult {
 
 	return &score.ObjectiveResult{
 		SchemaVersion: score.ObjectiveSchemaVersion,
-		ObjectiveID:   "candidate_vs_parent_v1",
+		ObjectiveID:   "challenger_vs_parent_v1",
 		EvidenceRefs: []score.ObjectiveEvidenceRef{
 			{
-				Name:       "current",
-				BundlePath: "artifacts/runs/current",
-				ScorePath:  "artifacts/runs/current/score.pkl",
-				SHA256:     "abc123",
+				Name:         "current",
+				BundlePath:   "artifacts/games/code-localization/rounds/current",
+				EvidencePath: "artifacts/games/code-localization/rounds/current/evidence.pkl",
+				SHA256:       "abc123",
 			},
 			{
-				Name:       "parent",
-				BundlePath: "artifacts/runs/parent",
-				ScorePath:  "artifacts/runs/parent/score.pkl",
-				ReportPath: "artifacts/runs/parent/report.json",
+				Name:         "parent",
+				BundlePath:   "artifacts/games/code-localization/rounds/parent",
+				EvidencePath: "artifacts/games/code-localization/rounds/parent/evidence.pkl",
+				ReportPath:   "artifacts/games/code-localization/rounds/parent/round-report.json",
 			},
 		},
 		Values: []score.ObjectiveValue{
@@ -595,14 +595,14 @@ func findObjectiveValue(t *testing.T, values []score.ObjectiveValue, name string
 	return score.ObjectiveValue{}
 }
 
-func sampleBaselineSystem() domain.SystemSpec {
+func sampleIncumbentPolicy() domain.SystemSpec {
 	return domain.SystemSpec{
-		ID:      domain.SystemID("baseline-system"),
-		Name:    "Baseline",
+		ID:      domain.SystemID("incumbent-system"),
+		Name:    "Incumbent",
 		Backend: domain.BackendJCodeMunch,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-baseline",
+			Name:     "gpt-incumbent",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -611,15 +611,15 @@ func sampleBaselineSystem() domain.SystemSpec {
 	}
 }
 
-func sampleCandidateSystem(policySource string) domain.SystemSpec {
+func sampleChallengerPolicy(policySource string) domain.SystemSpec {
 	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
 	return domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
+		ID:      domain.SystemID("challenger-system"),
+		Name:    "Challenger",
 		Backend: domain.BackendIterativeContext,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-candidate",
+			Name:     "gpt-challenger",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -644,7 +644,7 @@ func sampleTask(id domain.MatchID, gold domain.RepoRelPath) domain.MatchSpec {
 		},
 		Input: domain.MatchInput{
 			Title: "Fix regression",
-			Body:  "The candidate should identify the buggy file.",
+			Body:  "The challenger should identify the buggy file.",
 		},
 		Oracle: domain.MatchOracle{
 			GoldFiles: []domain.RepoRelPath{gold},

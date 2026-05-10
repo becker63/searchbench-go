@@ -1,24 +1,24 @@
-# Pkl Experiment Manifests
+# Pkl Round Manifests
 
 ## Status
 
-SearchBench-Go uses Pkl here as a human-authored experiment surface, not as the source of truth for runtime semantics.
+SearchBench-Go uses Pkl here as a human-authored round surface, not as the source of truth for runtime semantics.
 
 The intended flow is:
 
-1. a human writes `experiment.pkl`
+1. a human writes `round.pkl`
 2. `pkl-go` resolves the manifest into typed Go config structs via `internal/adapters/config/pkl`
 3. Go validates SearchBench-specific cross-field rules
-4. `internal/app/experiment` resolves the validated manifest into the canonical app-level experiment plan
-5. an execution strategy such as `internal/app/localrun` executes that resolved plan
-6. a durable bundle is written with resolved inputs, report artifacts, score evidence, and objective output
+4. `internal/app/evaluation` resolves the validated manifest into the canonical app-level round plan
+5. an execution strategy such as `internal/app/round` executes that resolved plan
+6. a durable bundle is written with resolved inputs, report artifacts, round evidence, and objective output
 
 This now makes the current local/fake SearchBench path executable from a Pkl
 manifest. It still does not make Pkl drive full SearchBench execution semantics
 or future backend integrations.
 
-Pkl is the canonical public run interface. Generated Pkl structs remain
-adapter-edge data and are projected into an app-owned resolved experiment model
+Pkl is the canonical public round interface. Generated Pkl structs remain
+adapter-edge data and are projected into an app-owned resolved round model
 before execution starts.
 
 ## Boundary
@@ -26,8 +26,8 @@ before execution starts.
 Go owns:
 
 - pure domain models
-- task identity
-- run lifecycle
+- match identity
+- execution lifecycle
 - evaluator execution
 - report and score models
 - backend and pipeline semantics
@@ -44,8 +44,8 @@ Pkl is a surface. Go remains the source of truth.
 
 ## Manifest Immutability
 
-Experiment manifests are immutable run inputs. SearchBench-Go should not mutate
-an existing `experiment.pkl` after a run completes.
+Round manifests are immutable round inputs. SearchBench-Go should not mutate
+an existing `round.pkl` after a run completes.
 
 If a later optimization round needs different configuration or explicit prior
 evidence, that should be expressed as a new Pkl module and a new artifact
@@ -58,44 +58,40 @@ The first manifest shape is intentionally small:
 - `name`
 - `mode`
 - `dataset`
-- `systems`
+- `policies`
 - `evaluator`
-- optional `writer`
 - `scoring`
-- `outputConfig`
 
 `outputConfig` is spelled that way because `pkl-go` code generation cannot use a top-level module property literally named `output` without colliding with Pkl's built-in module `output` property.
 
 The manifest answers:
 
-- what run is this
+- what round is this
 - what dataset and split are used
-- what systems are being compared
+- what policies are being compared
 - what evaluator model and bounds apply
-- whether writer mode is enabled
-- what writer pipeline, if any, is configured
 - which scoring objective file is referenced
 - what output and tracing preferences are requested
 
-The local example is intentionally self-contained under one experiment folder:
+The local example is intentionally self-contained under one round folder:
 
-- `configs/experiments/local-ic-vs-jcodemunch/experiment.pkl`
-- `configs/experiments/local-ic-vs-jcodemunch/scoring/localization-objective.pkl`
-- `configs/experiments/local-ic-vs-jcodemunch/policies/candidate_policy.py`
-- `configs/experiments/local-ic-vs-jcodemunch/artifacts/runs/`
+- `configs/rounds/local-ic-vs-jcodemunch/round.pkl`
+- `configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl`
+- `configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py`
+- `configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/`
 
 That keeps the manifest, local scoring file, local policy artifact, and local bundle root together instead of spreading them across the repo with `../` path traversal.
 
-## Evaluator And Writer Separation
+## Evaluator And Next-Challenger Separation
 
 The evaluator owns bounded model/tool execution only.
 
-The writer owns candidate-attempt behavior and optional CLI validation pipeline configuration.
+The optimizer owns next-challenger proposal behavior.
 
 That separation is explicit in the manifest shape:
 
 - `evaluator` has model, bounds, and retry settings
-- `writer` optionally has model, attempts, and `pipeline`
+- `optimizer` has model, bounds, and tool policy
 
 There is deliberately no `pipeline` block under `evaluator`.
 
@@ -103,20 +99,20 @@ There is deliberately no `pipeline` block under `evaluator`.
 
 `scoring.objective` points to the separate visible scoring file.
 
-The experiment manifest does not define objective math.
+The round manifest does not define objective math.
 
 The scoring objective file answers:
 
-- how bundled `score.pkl` evidence is turned into named objective values
+- how bundled `evidence.pkl` evidence is turned into named objective values
 - which value is final
 
-That scoring behavior remains separate from experiment configuration.
+That scoring behavior remains separate from round configuration.
 
 ## Current Scope
 
 This first manifest surface proves:
 
-- SearchBench can carry typed Pkl experiment files
+- SearchBench can carry typed Pkl round files
 - `pkl-go` can resolve them into Go structs
 - Go can validate SearchBench-specific invariants afterward
 - the manifest surface stays in `internal/adapters/config/pkl` instead of leaking Pkl runtime concerns into pure packages
@@ -126,12 +122,12 @@ This first manifest surface proves:
 The current executable path is:
 
 ```text
-searchbench run --manifest configs/experiments/local-ic-vs-jcodemunch/experiment.pkl
+searchbench round run --manifest configs/rounds/local-ic-vs-jcodemunch/round.pkl
 ```
 
 That command currently uses the safe local/fake comparison seam in
-`internal/app/localrun`, but `localrun` is only one execution strategy. The
-canonical experiment semantics now live in `internal/app/experiment`. It does
+`internal/app/round`, but `round` is only one execution strategy. The
+canonical round semantics now live in `internal/app/evaluation`. It does
 not call real IC MCP, jCodeMunch MCP, or provider APIs in tests.
 
 ## Lineage Direction
@@ -148,7 +144,7 @@ This means a future optimizer round should more naturally look like:
 
 - a new Pkl module
 - optionally `amends` a shared schema or prior-round shape
-- explicitly references prior `score.pkl` or related artifacts
+- explicitly references prior `evidence.pkl` or related artifacts
 - produces a new immutable bundle
 
 It should not rely on hidden Go optimizer state to thread previous score
@@ -158,33 +154,33 @@ system.
 ## Manifest-Relative Paths
 
 These manifest fields resolve relative to the directory containing
-`experiment.pkl` unless they are already absolute:
+`round.pkl` unless they are already absolute:
 
 - `scoring.objective`
-- `systems.baseline.policy.path`, when present later
-- `systems.candidate.policy.path`
+- `policies.incumbent.policy.path`, when present later
+- `policies.challenger.policy.path`
 - `outputConfig.bundleRoot`
 
 CLI-only overrides are separate from manifest-relative resolution. For example,
-`searchbench run --bundle-root ...` resolves from the caller environment rather
+`searchbench round run --bundle-root ...` resolves from the caller environment rather
 than from the manifest directory.
 
 ## Produced Artifacts
 
-The manifest-driven local run writes an immutable bundle under the resolved
+The manifest-driven local round writes an immutable bundle under the resolved
 bundle root:
 
-- `resolved.json`
+- `resolved-round.json`
   - resolved manifest projection used for execution
-- `report.json`
+- `round-report.json`
   - structured comparison report
-- `score.pkl`
-  - Pkl-readable score evidence projected from `report.json`
+- `evidence.pkl`
+  - Pkl-readable round evidence projected from `round-report.json`
 - `objective.json`
-  - validated result of evaluating the configured objective against `score.pkl`
+  - validated result of evaluating the configured objective against `evidence.pkl`
 - `metadata.json`
   - deterministic artifact inventory
-- `report.txt` or `report.md`
+- `round-report.txt`
   - optional human-readable rendering
 
 ## Current Scope
@@ -196,8 +192,8 @@ execution. It does not yet implement:
 - real jCodeMunch MCP execution
 - repo materialization
 - tree-sitter indexing
-- writer optimization execution
-- lineage or parent-run discovery by hash
+- real next-challenger execution
+- lineage or parent-round discovery by hash
 - tracing export
 
 Content hashes may still remain useful later as integrity and reproducibility

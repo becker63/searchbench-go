@@ -60,8 +60,8 @@ func TestDemoReportCommandJSONOutput(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if got.Decision.Decision != report.DecisionPromote {
-		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromote)
+	if got.Decision.Decision != report.DecisionPromoteChallenger {
+		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromoteChallenger)
 	}
 }
 
@@ -100,7 +100,7 @@ func TestRunCommandExecutesManifest(t *testing.T) {
 	requirePkl(t)
 
 	temp := t.TempDir()
-	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
+	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl")
 
 	var out bytes.Buffer
 	err := RunWithWriters(

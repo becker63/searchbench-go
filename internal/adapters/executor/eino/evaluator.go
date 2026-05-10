@@ -15,8 +15,8 @@ import (
 
 	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/adapters/executor/eino/callbacks"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	evaluatorprompt "github.com/becker63/searchbench-go/internal/pure/prompts/evaluator"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	evaluatorprompt "github.com/becker63/searchbench-go/internal/pure/prompts/evaluator"
 	"github.com/becker63/searchbench-go/internal/pure/usage"
 )
 
@@ -54,8 +54,8 @@ type Config struct {
 
 // Result is the typed outcome for one evaluator run.
 //
-// A run is one bounded attempt to solve one task. The underlying Eino agent
-// may take multiple model turns and tool calls during that run, but the result
+// One execution is a bounded attempt to solve one match. The underlying Eino agent
+// may take multiple model turns and tool calls during that execution, but the result
 // always captures one final prediction or one typed failure.
 type Result struct {
 	Executed       *run.ExecutedRun
@@ -428,7 +428,7 @@ func (e *Evaluator) runEvaluator(ctx context.Context, renderedPrompt string, max
 
 		// Eino may emit multiple assistant/tool turns inside one evaluator run.
 		// The harness keeps only the final assistant message without tool calls as
-		// the candidate prediction payload for strict finalization.
+		// the challenger prediction payload for strict finalization.
 		if event.Output.MessageOutput.Role == schema.Assistant && len(message.ToolCalls) == 0 {
 			finalOutput = message.Content
 		}

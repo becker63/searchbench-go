@@ -26,7 +26,7 @@ func BuildRoundEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, e
 
 	metrics := make([]score.MetricEvidence, 0, len(roundReport.Comparisons))
 	for _, comparison := range roundReport.Comparisons {
-		metricEvidence, err := score.NewMetricEvidence(comparison.Metric, comparison.Baseline, comparison.Candidate)
+		metricEvidence, err := score.NewMetricEvidence(comparison.Metric, comparison.Incumbent, comparison.Challenger)
 		if err != nil {
 			return score.RoundEvidenceDocument{}, fmt.Errorf("%w: %w: %v", ErrEvidenceProjectionFailed, ErrInvalidMetricEvidence, err)
 		}
@@ -41,8 +41,8 @@ func BuildRoundEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, e
 		regressionDetails = append(regressionDetails, score.RegressionEvidence{
 			MatchID:    regression.MatchID,
 			Metric:     regression.Metric,
-			Incumbent:  regression.Baseline,
-			Challenger: regression.Candidate,
+			Incumbent:  regression.Incumbent,
+			Challenger: regression.Challenger,
 			Delta:      regression.Delta,
 			Severity:   string(regression.Severity),
 			Reason:     regression.Reason,
@@ -58,7 +58,7 @@ func BuildRoundEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, e
 	return score.RoundEvidenceDocument{
 		SchemaVersion: score.EvidenceSchemaVersion,
 		ReportID:      roundReport.ID,
-		Policies:      roundReport.Spec.Systems,
+		Policies:      roundReport.Spec.Policies,
 		MatchCounts: score.MatchCounts{
 			Total: roundReport.Spec.Matches.Len(),
 		},
@@ -85,11 +85,4 @@ func BuildRoundEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, e
 			Reason:   roundReport.Decision.Reason,
 		},
 	}, nil
-}
-
-// ProjectScoreEvidence is a transitional wrapper for BuildRoundEvidence.
-//
-// TODO(issue-32): remove after callers use BuildRoundEvidence directly.
-func ProjectScoreEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, error) {
-	return BuildRoundEvidence(roundReport)
 }

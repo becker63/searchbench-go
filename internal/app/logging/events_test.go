@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -107,10 +107,10 @@ func TestProductionLoggerJSONOutput(t *testing.T) {
 	}
 }
 
-func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet, run.RunFailure, report.CandidateReport) {
+func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet, run.RunFailure, report.RoundReport) {
 	t.Helper()
 
-	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'candidate'", "score")
+	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), "def score(task): return 'challenger'", "score")
 	spec := run.NewSpec(
 		domain.RunID("run-1"),
 		domain.MatchSpec{
@@ -124,11 +124,11 @@ func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet
 		},
 		domain.SystemSpec{
 			ID:      domain.SystemID("system-1"),
-			Name:    "Candidate",
+			Name:    "Challenger",
 			Backend: domain.BackendIterativeContext,
 			Model: domain.ModelSpec{
 				Provider: "openai",
-				Name:     "gpt-candidate",
+				Name:     "gpt-challenger",
 			},
 			PromptBundle: domain.PromptBundleRef{Name: "bundle"},
 			Policy:       &policy,
@@ -155,14 +155,14 @@ func sampleLogArtifacts(t *testing.T) (run.Spec, run.ExecutedRun, score.ScoreSet
 		t.Fatalf("NewScoreSet() error = %v", err)
 	}
 	failure := run.NewFailure(spec, run.FailureScore, "boom")
-	report := report.NewCandidateReport(
+	report := report.NewRoundReport(
 		domain.ReportID("report-1"),
 		report.ComparisonSpec{},
 		domain.NewPair([]score.ScoredRun{}, []score.ScoredRun{}),
 		domain.NewPair([]run.RunFailure{}, []run.RunFailure{failure}),
 		nil,
 		nil,
-		report.PromotionDecision{Decision: report.DecisionPromote},
+		report.Decision{Decision: report.DecisionPromoteChallenger},
 	)
 	return spec, executed, scores, failure, report
 }

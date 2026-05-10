@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -62,7 +62,7 @@ func summarizeScores(scores score.ScoreSet) string {
 	}, " ")
 }
 
-func summarizeReport(report report.CandidateReport) string {
+func summarizeReport(report report.RoundReport) string {
 	return strings.Join([]string{
 		string(report.Decision.Decision),
 		fmt.Sprintf("incumbent=%d ok/%d failed", len(report.Runs.Incumbent), len(report.Failures.Incumbent)),

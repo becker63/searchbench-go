@@ -52,27 +52,27 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error
 
 	roundEvidence, err := report.BuildRoundEvidence(roundReport)
 	if err != nil {
-		return Result{}, &Error{Phase: PhaseScoreEvidenceFailed, Err: err}
+		return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
 	}
 	roundEvidence.GameID = plan.Game.ID
 	roundEvidence.RoundID = plan.Round.ID
 	if err := roundEvidence.Validate(); err != nil {
-		return Result{}, &Error{Phase: PhaseScoreEvidenceFailed, Err: err}
+		return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
 	}
 
-	evidenceInput, err := materializeScoreEvidence(plan, roundEvidence)
+	evidenceInput, err := materializeRoundEvidence(plan, roundEvidence)
 	if err != nil {
-		return Result{}, &Error{Phase: PhaseScorePKLFailed, Err: err}
+		return Result{}, &Error{Phase: PhaseEvidencePKLFailed, Err: err}
 	}
 	defer evidenceInput.Cleanup()
 
 	objectiveResult, err := scoring.Evaluate(ctx, scoring.Request{
-		ScoringPath:      plan.Scoring.ObjectivePath,
-		CurrentRef:       evidenceInput.CurrentRef,
-		CurrentScorePath: evidenceInput.CurrentScorePath,
-		ParentRef:        evidenceInput.ParentRef,
-		ParentScorePath:  evidenceInput.ParentScorePath,
-		PklCommand:       request.PklCommand,
+		ScoringPath:         plan.Scoring.ObjectivePath,
+		CurrentRef:          evidenceInput.CurrentRef,
+		CurrentEvidencePath: evidenceInput.CurrentEvidencePath,
+		ParentRef:           evidenceInput.ParentRef,
+		ParentEvidencePath:  evidenceInput.ParentEvidencePath,
+		PklCommand:          request.PklCommand,
 	})
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseObjectiveFailed, Err: err}

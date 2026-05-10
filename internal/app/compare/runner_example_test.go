@@ -16,13 +16,13 @@ import (
 func TestRunnerExampleComparison(t *testing.T) {
 	t.Parallel()
 
-	policySource := "def score(task):\n    return 'candidate'\n"
+	policySource := "def score(task):\n    return 'challenger'\n"
 
-	// Define the systems being compared and the benchmark tasks.
+	// Define the policies being compared and the benchmark tasks.
 	plan := NewPlan(
 		domain.NewPair(
-			exampleBaselineSystem(),
-			exampleCandidateSystem(policySource),
+			exampleIncumbentPolicy(),
+			exampleChallengerPolicy(policySource),
 		),
 		domain.NewNonEmpty(
 			exampleTask(domain.MatchID("task-1"), domain.RepoRelPath("pkg/bug1.go")),
@@ -37,11 +37,11 @@ func TestRunnerExampleComparison(t *testing.T) {
 	}
 
 	// Inspect the resulting report at a high level.
-	if got.Decision.Decision != report.DecisionPromote {
-		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromote)
+	if got.Decision.Decision != report.DecisionPromoteChallenger {
+		t.Fatalf("Decision = %q, want %q", got.Decision.Decision, report.DecisionPromoteChallenger)
 	}
 	if len(got.Runs.Incumbent) != 2 || len(got.Runs.Challenger) != 2 {
-		t.Fatalf("unexpected run counts: baseline=%d candidate=%d", len(got.Runs.Incumbent), len(got.Runs.Challenger))
+		t.Fatalf("unexpected run counts: incumbent=%d challenger=%d", len(got.Runs.Incumbent), len(got.Runs.Challenger))
 	}
 	if len(got.Failures.Incumbent) != 0 || len(got.Failures.Challenger) != 0 {
 		t.Fatal("expected no failures")
@@ -49,21 +49,21 @@ func TestRunnerExampleComparison(t *testing.T) {
 	if len(got.Regressions) != 0 {
 		t.Fatal("expected no regressions")
 	}
-	if got.Spec.Systems.Challenger.Policy == nil {
-		t.Fatal("expected report-safe candidate policy ref")
+	if got.Spec.Policies.Challenger.Policy == nil {
+		t.Fatal("expected report-safe challenger policy ref")
 	}
 
 	assertReportDoesNotLeakPolicySource(t, got, policySource)
 }
 
-func exampleBaselineSystem() domain.SystemSpec {
+func exampleIncumbentPolicy() domain.SystemSpec {
 	return domain.SystemSpec{
-		ID:      domain.SystemID("baseline-system"),
-		Name:    "Baseline",
+		ID:      domain.SystemID("incumbent-system"),
+		Name:    "Incumbent",
 		Backend: domain.BackendJCodeMunch,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-baseline",
+			Name:     "gpt-incumbent",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -75,15 +75,15 @@ func exampleBaselineSystem() domain.SystemSpec {
 	}
 }
 
-func exampleCandidateSystem(policySource string) domain.SystemSpec {
+func exampleChallengerPolicy(policySource string) domain.SystemSpec {
 	policy := domain.NewPythonPolicy(domain.PolicyID("policy-1"), policySource, "score")
 	return domain.SystemSpec{
-		ID:      domain.SystemID("candidate-system"),
-		Name:    "Candidate",
+		ID:      domain.SystemID("challenger-system"),
+		Name:    "Challenger",
 		Backend: domain.BackendIterativeContext,
 		Model: domain.ModelSpec{
 			Provider: "openai",
-			Name:     "gpt-candidate",
+			Name:     "gpt-challenger",
 		},
 		PromptBundle: domain.PromptBundleRef{
 			Name:    "bundle",
@@ -138,7 +138,7 @@ func fixedTestTime() time.Time {
 	return time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
 }
 
-func assertReportDoesNotLeakPolicySource(t *testing.T, got report.CandidateReport, policySource string) {
+func assertReportDoesNotLeakPolicySource(t *testing.T, got report.RoundReport, policySource string) {
 	t.Helper()
 
 	data, err := json.Marshal(got)

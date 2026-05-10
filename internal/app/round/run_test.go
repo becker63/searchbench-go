@@ -25,9 +25,9 @@ func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 	requirePkl(t)
 
 	root := repoRoot(t)
-	evaluationManifest := filepath.Join(root, "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
-	optimizationManifest := filepath.Join(root, "configs", "experiments", "optimize-ic", "experiment.pkl")
-	inputPolicyPath := filepath.Join(root, "configs", "experiments", "optimize-ic", "policies", "challenger_policy.py")
+	evaluationManifest := filepath.Join(root, "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl")
+	optimizationManifest := filepath.Join(root, "configs", "rounds", "optimize-ic", "round.pkl")
+	inputPolicyPath := filepath.Join(root, "configs", "rounds", "optimize-ic", "policies", "challenger_policy.py")
 	bundleRoot := filepath.Join(t.TempDir(), "artifacts")
 
 	evaluationManifestBefore := mustReadFile(t, evaluationManifest)
@@ -36,7 +36,7 @@ func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 
 	var evaluatorModels []*modeltest.ScriptedModel
 	evaluatorFactory := func(spec run.Spec) (model.ToolCallingChatModel, error) {
-		prediction := `{"predicted_files":["src/baseline_guess.go"],"reasoning":"incumbent fake evaluator stayed conservative"}`
+		prediction := `{"predicted_files":["src/incumbent_guess.go"],"reasoning":"incumbent fake evaluator stayed conservative"}`
 		if spec.System.Backend == domain.BackendIterativeContext {
 			prediction = `{"predicted_files":["src/search_target.go"],"reasoning":"challenger fake evaluator used structural evidence to localize the issue"}`
 		}
@@ -60,7 +60,7 @@ func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 
 	optimizerModel := modeltest.NewScriptedModel(
 		modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"challenger-policy-round-002","artifact_name":"challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"challenger narrows the frontier using the parent evidence"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"challenger narrows the frontier using the parent evidence"}`, nil),
 		},
 	)
 
@@ -81,7 +81,7 @@ func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if result.RoundResult == nil || result.OptimizerResult == nil {
+	if result.RoundResult == nil || result.NextChallengerResult == nil {
 		t.Fatalf("result = %#v, want round evaluation and next challenger results", result)
 	}
 
@@ -94,7 +94,7 @@ func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 		filepath.Join(result.RoundBundle, "decision.json"),
 		filepath.Join(result.RoundBundle, "objective.json"),
 		filepath.Join(result.OptimizerBundle, "COMPLETE"),
-		filepath.Join(result.OptimizerBundle, "challenger_policy.round-002.py"),
+		filepath.Join(result.OptimizerBundle, "next_challenger_policy.round-002.py"),
 		filepath.Join(result.OptimizerBundle, "optimizer_result.json"),
 	} {
 		if _, err := os.Stat(path); err != nil {
@@ -114,7 +114,7 @@ func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 			BundlePath string `json:"bundle_path"`
 		} `json:"parent_round"`
 	}
-	decodeJSONFile(t, filepath.Join(result.OptimizerBundle, "resolved.json"), &optimizerResolved)
+	decodeJSONFile(t, filepath.Join(result.OptimizerBundle, "resolved-next-challenger.json"), &optimizerResolved)
 	if got, want := optimizerResolved.ParentRound.BundlePath, result.RoundBundle; got != want {
 		t.Fatalf("optimizer parent bundle path = %q, want %q", got, want)
 	}
@@ -153,11 +153,11 @@ func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(result.OptimizerResult.Optimizer.RenderedPrompt, "<objective-result>") {
-		t.Fatalf("optimizer prompt missing objective evidence summary:\n%s", result.OptimizerResult.Optimizer.RenderedPrompt)
+	if !strings.Contains(result.NextChallengerResult.Optimizer.RenderedPrompt, "<objective-result>") {
+		t.Fatalf("optimizer prompt missing objective evidence summary:\n%s", result.NextChallengerResult.Optimizer.RenderedPrompt)
 	}
-	if strings.Contains(result.OptimizerResult.Optimizer.RenderedPrompt, "oracle_files") {
-		t.Fatalf("optimizer prompt leaked denied evidence:\n%s", result.OptimizerResult.Optimizer.RenderedPrompt)
+	if strings.Contains(result.NextChallengerResult.Optimizer.RenderedPrompt, "oracle_files") {
+		t.Fatalf("optimizer prompt leaked denied evidence:\n%s", result.NextChallengerResult.Optimizer.RenderedPrompt)
 	}
 }
 
@@ -168,8 +168,8 @@ func TestRoundResolutionFailurePreventsNextChallenger(t *testing.T) {
 
 	optimizerFactoryCalled := false
 	_, err := Run(context.Background(), Input{
-		EvaluationManifestPath:   filepath.Join(repoRoot(t), "configs", "experiments", "missing", "experiment.pkl"),
-		OptimizationManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		EvaluationManifestPath:   filepath.Join(repoRoot(t), "configs", "rounds", "missing", "round.pkl"),
+		OptimizationManifestPath: filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 		OptimizerModelFactory: func() (model.ToolCallingChatModel, error) {
 			optimizerFactoryCalled = true
 			return modeltest.NewScriptedModel(), nil

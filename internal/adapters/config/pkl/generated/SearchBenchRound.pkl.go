@@ -19,7 +19,7 @@ type SearchBenchRound struct {
 
 	Interfaces Interfaces `pkl:"interfaces"`
 
-	Systems Systems `pkl:"systems"`
+	Policies Policies `pkl:"policies"`
 
 	Artifacts Artifacts `pkl:"artifacts"`
 

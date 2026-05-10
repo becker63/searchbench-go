@@ -19,12 +19,12 @@ type proposalPayload struct {
 	RiskNotes    []string `json:"risk_notes"`
 }
 
-func finalizeProposal(raw string, target pureoptimizer.Target, attemptNumber int) (*pureoptimizer.Proposal, *pureoptimizer.Failure) {
+func finalizeProposal(raw string, target pureoptimizer.NextChallengerTarget, attemptNumber int) (*pureoptimizer.NextChallengerProposal, *pureoptimizer.Failure) {
 	var payload proposalPayload
 	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &payload); err != nil {
 		return nil, &pureoptimizer.Failure{
-			Phase:     pureoptimizer.PhaseFinalizeProposal,
-			Kind:      pureoptimizer.FailureKindPolicyProposalFailed,
+			Phase:     pureoptimizer.PhaseFinalizeNextChallenger,
+			Kind:      pureoptimizer.FailureKindNextChallengerFailed,
 			Message:   "parse optimizer proposal JSON",
 			Cause:     err,
 			Attempt:   attemptNumber,
@@ -66,7 +66,7 @@ func finalizeProposal(raw string, target pureoptimizer.Target, attemptNumber int
 		return nil, invalidProposalFailure("proposal code must define def score(...)", attemptNumber)
 	}
 
-	proposal := &pureoptimizer.Proposal{
+	proposal := &pureoptimizer.NextChallengerProposal{
 		ArtifactID:   target.OutputArtifactID,
 		ArtifactName: payload.ArtifactName,
 		InterfaceID:  payload.InterfaceID,
@@ -79,8 +79,8 @@ func finalizeProposal(raw string, target pureoptimizer.Target, attemptNumber int
 
 func invalidProposalFailure(message string, attemptNumber int) *pureoptimizer.Failure {
 	return &pureoptimizer.Failure{
-		Phase:     pureoptimizer.PhaseFinalizeProposal,
-		Kind:      pureoptimizer.FailureKindPolicyProposalFailed,
+		Phase:     pureoptimizer.PhaseFinalizeNextChallenger,
+		Kind:      pureoptimizer.FailureKindNextChallengerFailed,
 		Message:   message,
 		Cause:     errors.New(message),
 		Attempt:   attemptNumber,

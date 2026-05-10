@@ -1,4 +1,4 @@
-amends "../local-ic-vs-jcodemunch/experiment.pkl"
+amends "../local-ic-vs-jcodemunch/round.pkl"
 
 name = "optimize-ic-round-002"
 mode = "optimization"
@@ -24,9 +24,9 @@ artifacts {
   }
 
   nextChallengerRound002 {
-    id = "challenger-policy-round-002"
-    kind = "policy_proposal"
-    artifactName = "challenger_policy.round-002.py"
+    id = "next-challenger-round-002"
+    kind = "next_challenger"
+    artifactName = "next_challenger_policy.round-002.py"
     implements = interfaces.iterativeContextSelectionPolicyV1
   }
 }

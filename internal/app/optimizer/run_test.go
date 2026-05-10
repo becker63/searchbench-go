@@ -23,7 +23,7 @@ func TestResolveOptimizationManifest(t *testing.T) {
 	requirePkl(t)
 
 	plan, err := Resolve(context.Background(), ResolveRequest{
-		ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		ManifestPath: filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 		Now: func() time.Time {
 			return time.Date(2026, 5, 8, 20, 0, 0, 0, time.UTC)
 		},
@@ -32,7 +32,7 @@ func TestResolveOptimizationManifest(t *testing.T) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	if got, want := plan.Target.OutputName, "challenger_policy.round-002.py"; got != want {
+	if got, want := plan.Target.OutputName, "next_challenger_policy.round-002.py"; got != want {
 		t.Fatalf("Target.OutputName = %q, want %q", got, want)
 	}
 	if got, want := plan.ParentBundle.BundleID, "round-001"; got != want {
@@ -57,7 +57,7 @@ func TestResolveOptimizationManifestAllowsParentBundleOverride(t *testing.T) {
 	}
 
 	plan, err := Resolve(context.Background(), ResolveRequest{
-		ManifestPath:             filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		ManifestPath:             filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 		ParentBundlePathOverride: override,
 	})
 	if err != nil {
@@ -75,7 +75,7 @@ func TestRunRejectsEvaluationManifest(t *testing.T) {
 
 	_, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
-			ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
+			ManifestPath: filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl"),
 		},
 	})
 	if err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
@@ -89,7 +89,7 @@ func TestLoadEvidenceRespectsIncludedKinds(t *testing.T) {
 	requirePkl(t)
 
 	plan, err := Resolve(context.Background(), ResolveRequest{
-		ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		ManifestPath: filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -99,8 +99,8 @@ func TestLoadEvidenceRespectsIncludedKinds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadEvidence() error = %v", err)
 	}
-	if evidence.ReportSummary == nil || evidence.ScoreEvidence == nil || evidence.ObjectiveResult == nil {
-		t.Fatalf("evidence = %#v, want report summary, score evidence, objective result", evidence)
+	if evidence.ReportSummary == nil || evidence.RoundEvidence == nil || evidence.ObjectiveResult == nil {
+		t.Fatalf("evidence = %#v, want report summary, round evidence, objective result", evidence)
 	}
 	if strings.Contains(evidence.InputPolicy.Source, "oracle") {
 		t.Fatalf("input policy source unexpectedly contains oracle data:\n%s", evidence.InputPolicy.Source)
@@ -113,7 +113,7 @@ func TestRunMissingParentBundleFailsTyped(t *testing.T) {
 	requirePkl(t)
 
 	plan, err := Resolve(context.Background(), ResolveRequest{
-		ManifestPath: filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
+		ManifestPath: filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -131,22 +131,22 @@ func TestRunSuccessfulOptimizerWritesBundle(t *testing.T) {
 
 	requirePkl(t)
 
-	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl")
-	inputPolicyPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "policies", "challenger_policy.py")
+	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl")
+	inputPolicyPath := filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "policies", "challenger_policy.py")
 	manifestBefore := mustReadFile(t, manifestPath)
 	policyBefore := mustReadFile(t, inputPolicyPath)
 
 	result, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
 			ManifestPath:       manifestPath,
-			BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
+			BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "optimizer"),
 			BundleID:           "optimize-success",
 			Now: func() time.Time {
 				return time.Date(2026, 5, 8, 20, 15, 0, 0, time.UTC)
 			},
 		},
 		Model: modeltest.NewScriptedModel(modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"challenger-policy-round-002","artifact_name":"challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"challenger narrows the search frontier"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"challenger narrows the search frontier"}`, nil),
 		}),
 	})
 	if err != nil {
@@ -157,10 +157,10 @@ func TestRunSuccessfulOptimizerWritesBundle(t *testing.T) {
 	}
 
 	for _, name := range []string{
-		"resolved.json",
+		"resolved-next-challenger.json",
 		"optimizer_prompt.txt",
 		"optimizer_result.json",
-		"challenger_policy.round-002.py",
+		"next_challenger_policy.round-002.py",
 		"metadata.json",
 		"COMPLETE",
 	} {
@@ -184,12 +184,12 @@ func TestRunFailureDoesNotWriteComplete(t *testing.T) {
 
 	result, err := Run(context.Background(), Request{
 		Resolve: ResolveRequest{
-			ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl"),
-			BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
+			ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
+			BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "optimizer"),
 			BundleID:           "optimize-failure",
 		},
 		Model: modeltest.NewScriptedModel(modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage("{\"artifact_id\":\"challenger-policy-round-002\",\"artifact_name\":\"challenger_policy.round-002.py\",\"interface_id\":\"iterative_context.selection_policy.v1\",\"code\":\"```python\\ndef score(task):\\n    return []\\n```\"}", nil),
+			Message: schema.AssistantMessage("{\"artifact_id\":\"next-challenger-round-002\",\"artifact_name\":\"next_challenger_policy.round-002.py\",\"interface_id\":\"iterative_context.selection_policy.v1\",\"code\":\"```python\\ndef score(task):\\n    return []\\n```\"}", nil),
 		}),
 		RetryPolicy: &pureoptimizer.RetryPolicy{
 			MaxAttempts:                  1,
@@ -206,8 +206,8 @@ func TestRunFailureDoesNotWriteComplete(t *testing.T) {
 	if !errors.As(err, &failure) {
 		t.Fatalf("err = %T, want *optimizer.Failure", err)
 	}
-	if failure.Kind != pureoptimizer.FailureKindPolicyProposalFailed {
-		t.Fatalf("failure.Kind = %q, want %q", failure.Kind, pureoptimizer.FailureKindPolicyProposalFailed)
+	if failure.Kind != pureoptimizer.FailureKindNextChallengerFailed {
+		t.Fatalf("failure.Kind = %q, want %q", failure.Kind, pureoptimizer.FailureKindNextChallengerFailed)
 	}
 	if _, statErr := os.Stat(filepath.Join(result.BundlePath, "COMPLETE")); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("COMPLETE stat error = %v, want not exist", statErr)

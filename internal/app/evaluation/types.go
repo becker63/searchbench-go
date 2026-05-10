@@ -32,10 +32,10 @@ type Request struct {
 // EvaluatorExecution is one recorded evaluator-backed run inside the local
 // comparison flow.
 type EvaluatorExecution struct {
-	Role   domain.Role
-	TaskID domain.MatchID
-	RunID  domain.RunID
-	Result executoreino.Result
+	Role    domain.Role
+	MatchID domain.MatchID
+	RunID   domain.RunID
+	Result  executoreino.Result
 }
 
 // Result is the completed manifest-driven local evaluation run.

@@ -15,7 +15,7 @@ This infrastructure exists so agents can build model-backed execution code witho
 - API-key dependencies
 - external network access in default tests
 - paid model usage
-- ad hoc mock systems in production packages
+- ad hoc mock policies in production packages
 
 These helpers are test infrastructure only. They are not production architecture.
 
@@ -305,7 +305,7 @@ Then assert:
 
 Do not:
 
-- put model fixtures in `internal/pure/domain`, `internal/pure/run`, `internal/pure/score`, or `internal/app/compare`
+- put model fixtures in `internal/pure/domain`, `internal/pure/execution`, `internal/pure/score`, or `internal/app/compare`
 - introduce a generic provider abstraction just for tests
 - add real provider calls to default tests
 - copy raw provider dumps with secrets or giant payloads

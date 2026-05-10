@@ -93,7 +93,7 @@ func TestEvaluateRejectsInvalidObjectiveOutput(t *testing.T) {
 	requirePkl(t)
 
 	request := sampleRequest(t)
-	request.ScoringPath = writeTempModule(t, `amends `+quotePkl(fileURI(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl")))+`
+	request.ScoringPath = writeTempModule(t, `amends `+quotePkl(fileURI(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl")))+`
 
 final = ""
 `)
@@ -120,7 +120,7 @@ func TestEvaluateRejectsMissingCurrentScoreFile(t *testing.T) {
 	t.Parallel()
 
 	request := sampleRequest(t)
-	request.CurrentRef.ScorePath = filepath.Join(t.TempDir(), "missing-current.pkl")
+	request.CurrentRef.EvidencePath = filepath.Join(t.TempDir(), "missing-current.pkl")
 
 	_, err := Evaluate(context.Background(), request)
 	if err == nil || !strings.Contains(err.Error(), ErrInvalidRequest.Error()) {
@@ -131,7 +131,7 @@ func TestEvaluateRejectsMissingCurrentScoreFile(t *testing.T) {
 func TestVisibleObjectiveFileUsesSharedValueHelpers(t *testing.T) {
 	t.Parallel()
 
-	path := filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl")
+	path := filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl")
 	contentBytes, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%q) error = %v", path, err)
@@ -161,14 +161,14 @@ func sampleRequest(t *testing.T) Request {
 	currentPath := writeScoreModule(t, "current.pkl", sampleEvidence("current-report", 4, 1, 6))
 	parentPath := writeScoreModule(t, "parent.pkl", sampleEvidence("parent-report", 6, 0, 9))
 	return Request{
-		ScoringPath: filepath.Join(root, "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"),
+		ScoringPath: filepath.Join(root, "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"),
 		CurrentRef: score.ObjectiveEvidenceRef{
-			Name:      "current",
-			ScorePath: currentPath,
+			Name:         "current",
+			EvidencePath: currentPath,
 		},
 		ParentRef: &score.ObjectiveEvidenceRef{
-			Name:      "parent",
-			ScorePath: parentPath,
+			Name:         "parent",
+			EvidencePath: parentPath,
 		},
 	}
 }

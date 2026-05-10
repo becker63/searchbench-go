@@ -23,22 +23,22 @@ func WriteBundle(ctx context.Context, request RoundBundleInput) (RoundBundleRef,
 }
 
 type writer struct {
-	now             func() time.Time
-	marshalJSON     func(any) ([]byte, error)
-	marshalScorePKL func(score.RoundEvidenceDocument) ([]byte, error)
-	rename          func(string, string) error
-	writeFile       func(string, []byte) error
-	mkdirAll        func(string) error
-	removeAll       func(string) error
-	afterWrite      func(string)
+	now                func() time.Time
+	marshalJSON        func(any) ([]byte, error)
+	marshalEvidencePKL func(score.RoundEvidenceDocument) ([]byte, error)
+	rename             func(string, string) error
+	writeFile          func(string, []byte) error
+	mkdirAll           func(string) error
+	removeAll          func(string) error
+	afterWrite         func(string)
 }
 
 func newWriter() writer {
 	return writer{
-		now:             func() time.Time { return time.Now().UTC() },
-		marshalJSON:     marshalDeterministic,
-		marshalScorePKL: marshalRoundEvidencePkl,
-		rename:          os.Rename,
+		now:                func() time.Time { return time.Now().UTC() },
+		marshalJSON:        marshalDeterministic,
+		marshalEvidencePKL: marshalRoundEvidencePkl,
+		rename:             os.Rename,
 		writeFile: func(path string, data []byte) error {
 			return os.WriteFile(path, data, 0o644)
 		},
@@ -135,7 +135,7 @@ func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (Roun
 		files = append(files, fileRecord("rendered_report", rendered.FileName, rendered.MediaType, sha256Bytes(renderedBytes)))
 	}
 
-	evidenceBytes, err := w.marshalScorePKL(request.RoundEvidence)
+	evidenceBytes, err := w.marshalEvidencePKL(request.RoundEvidence)
 	if err != nil {
 		return RoundBundleRef{}, &Error{Phase: phaseEvidence, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
 	}

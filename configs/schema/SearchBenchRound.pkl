@@ -12,7 +12,7 @@ mode: RunMode = "evaluation"
 dataset: Dataset
 
 interfaces: Interfaces = new {}
-systems: Systems
+policies: Policies
 artifacts: Artifacts = new {}
 agents: Agents = new {}
 evaluation: Evaluation?
@@ -29,9 +29,9 @@ typealias ReportFormat = "json" | "text"
 typealias TracingProvider = "langsmith"
 typealias ArtifactKind =
   "policy" |
-  "policy_proposal" |
+  "next_challenger" |
   "completed_round_bundle"
-typealias OptimizerEvidenceKind =
+typealias NextChallengerEvidenceKind =
   "report_summary" |
   "round_evidence" |
   "objective_result" |
@@ -64,7 +64,7 @@ class Interface {
   id: String
 }
 
-class Systems {
+class Policies {
   incumbent: System
   challenger: System
 }
@@ -89,7 +89,7 @@ class Runtime {
 
 class Artifacts {
   challengerPolicyRound001: PolicyArtifact?
-  nextChallengerRound002: PolicyProposalArtifact?
+  nextChallengerRound002: NextChallengerArtifact?
   parentRound001Bundle: CompletedRoundBundleArtifact?
 }
 
@@ -100,9 +100,9 @@ class PolicyArtifact {
   implements: Interface
 }
 
-class PolicyProposalArtifact {
+class NextChallengerArtifact {
   id: String
-  kind: "policy_proposal" = "policy_proposal"
+  kind: "next_challenger" = "next_challenger"
   artifactName: String
   implements: Interface
 }
@@ -201,23 +201,23 @@ class Report {
 class Optimization {
   agent: Optimizer
   parentRound: ParentRound
-  target: OptimizationTarget
-  evidence: OptimizationEvidence = new {}
+  target: NextChallengerTarget
+  evidence: NextChallengerEvidence = new {}
 }
 
 class ParentRound {
   bundle: CompletedRoundBundleArtifact
 }
 
-class OptimizationTarget {
+class NextChallengerTarget {
   input: PolicyArtifact
-  output: PolicyProposalArtifact
+  output: NextChallengerArtifact
 }
 
-class OptimizationEvidence {
+class NextChallengerEvidence {
   from: CompletedRoundBundleArtifact
 
-  include: Listing<OptimizerEvidenceKind> = new {
+  include: Listing<NextChallengerEvidenceKind> = new {
     "report_summary"
     "round_evidence"
     "objective_result"

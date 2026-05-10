@@ -21,7 +21,7 @@ func TestResolveExampleManifest(t *testing.T) {
 
 	requirePkl(t)
 
-	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl")
+	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl")
 	out, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts"),
@@ -41,16 +41,16 @@ func TestResolveExampleManifest(t *testing.T) {
 	if got, want := out.Mode, "evaluation"; got != want {
 		t.Fatalf("Mode = %q, want %q", got, want)
 	}
-	if got, want := out.Systems.Incumbent.ID, domain.SystemID("jcodemunch"); got != want {
+	if got, want := out.Policies.Incumbent.ID, domain.SystemID("jcodemunch"); got != want {
 		t.Fatalf("Incumbent.ID = %q, want %q", got, want)
 	}
-	if got, want := out.Systems.Challenger.ID, domain.SystemID("iterative-context"); got != want {
+	if got, want := out.Policies.Challenger.ID, domain.SystemID("iterative-context"); got != want {
 		t.Fatalf("Challenger.ID = %q, want %q", got, want)
 	}
-	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
+	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("ObjectivePath = %q, want %q", got, want)
 	}
-	if got, want := out.Output.ResolvedPolicyPaths.Challenger, filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py")); got != want {
+	if got, want := out.Output.ResolvedPolicyPaths.Challenger, filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py")); got != want {
 		t.Fatalf("challenger policy path = %q, want %q", got, want)
 	}
 	if got, want := out.Output.BundleWriterRoot, domain.HostPath(filepath.Join(filepath.Dir(manifestPath), "artifacts")); got == want {
@@ -69,7 +69,7 @@ func TestResolveOptimizeICManifestRejectsUnsupportedMode(t *testing.T) {
 
 	requirePkl(t)
 
-	manifestPath := filepath.Join(repoRoot(t), "configs", "experiments", "optimize-ic", "experiment.pkl")
+	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl")
 	_, err := Resolve(context.Background(), ResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
@@ -85,22 +85,22 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 
 	requirePkl(t)
 
-	parentScore := filepath.Join(t.TempDir(), "parent-score.pkl")
-	if err := os.WriteFile(parentScore, []byte("schemaVersion = \"searchbench.round_evidence.v1\"\nreportId = \"parent\"\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(parentScore) error = %v", err)
+	parentEvidence := filepath.Join(t.TempDir(), "parent-evidence.pkl")
+	if err := os.WriteFile(parentEvidence, []byte("schemaVersion = \"searchbench.round_evidence.v1\"\nreportId = \"parent\"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(parentEvidence) error = %v", err)
 	}
 
 	out, err := Resolve(context.Background(), ResolveRequest{
-		ManifestPath:       filepath.Join(repoRoot(t), "configs", "experiments", "local-ic-vs-jcodemunch", "experiment.pkl"),
+		ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl"),
 		BundleRootOverride: filepath.Join(t.TempDir(), "bundle-root"),
 		BundleID:           "with-parent",
 		ParentRef: &score.ObjectiveEvidenceRef{
-			Name:       "parent",
-			BundlePath: "fixtures/parent-run",
-			ScorePath:  "fixtures/parent-run/evidence.pkl",
-			ReportPath: "fixtures/parent-run/round-report.json",
+			Name:         "parent",
+			BundlePath:   "fixtures/parent-run",
+			EvidencePath: "fixtures/parent-run/evidence.pkl",
+			ReportPath:   "fixtures/parent-run/round-report.json",
 		},
-		ParentScorePath: parentScore,
+		ParentEvidencePath: parentEvidence,
 	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -115,11 +115,11 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 	if out.Scoring.ParentEvidence == nil {
 		t.Fatal("ParentEvidence is nil")
 	}
-	if got, want := out.Scoring.ParentEvidence.ScorePath, "fixtures/parent-run/evidence.pkl"; got != want {
-		t.Fatalf("ParentEvidence.ScorePath = %q, want %q", got, want)
+	if got, want := out.Scoring.ParentEvidence.EvidencePath, "fixtures/parent-run/evidence.pkl"; got != want {
+		t.Fatalf("ParentEvidence.EvidencePath = %q, want %q", got, want)
 	}
-	if got, want := out.Scoring.ParentScorePath, parentScore; got != want {
-		t.Fatalf("ParentScorePath = %q, want %q", got, want)
+	if got, want := out.Scoring.ParentEvidencePath, parentEvidence; got != want {
+		t.Fatalf("ParentEvidencePath = %q, want %q", got, want)
 	}
 }
 

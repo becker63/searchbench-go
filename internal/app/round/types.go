@@ -48,8 +48,8 @@ type Record struct {
 	RoundBundle     string
 	OptimizerBundle string
 
-	RoundResult     *evaluation.Result
-	OptimizerResult *appOptimizer.Result
+	RoundResult          *evaluation.Result
+	NextChallengerResult *appOptimizer.Record
 }
 
 func normalizeInput(input Input) Input {

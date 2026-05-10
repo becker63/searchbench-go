@@ -133,7 +133,7 @@ type RuntimeConfig struct {
 
 // SystemSpec is the complete recipe for an agentic code-search system.
 //
-// Baseline and candidate are not different types. They are roles that a
+// Incumbent and challenger are not different types. They are roles that a
 // SystemSpec can occupy inside a comparison.
 type SystemSpec struct {
 	ID           SystemID        `json:"id"`

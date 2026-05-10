@@ -162,7 +162,7 @@ Phase pseudocode is not literal Go code. It defines:
 
 Example:
 
-    Run(ctx, task)
+    Execute(ctx, match)
       create execution result accumulator
 
       phase: render_prompt
@@ -172,7 +172,7 @@ Example:
               return prompt_render_failed
 
       phase: run_evaluator
-          run Eino evaluator agent
+          execute Eino evaluator agent
           expose allowed tools
           if evaluator failed:
               return evaluator_failed
@@ -203,10 +203,10 @@ Examples:
     render_prompt
     run_evaluator
     finalize_prediction
-    generate_candidate
+    generate_challenger
     run_pipeline
     classify_pipeline
-    accept_candidate
+    accept_challenger
     prepare_retry
     exhausted
 
@@ -221,7 +221,7 @@ When referencing old Python SearchBench, distinguish between what should survive
 Use this format:
 
     Preserve:
-    - writer/evaluator isolation
+    - optimizer/evaluator isolation
     - explicit policy identity
     - typed outcomes
     - bounded repair attempts
@@ -229,7 +229,7 @@ Use this format:
 
     Do not preserve:
     - Python state machine framework
-    - Langfuse-specific implementation shape
+    - LangSmith-specific implementation shape
     - Python dict-shaped models
     - worktree mutation as policy selection
     - custom MCP adapter machinery if Eino already buys it
@@ -267,7 +267,7 @@ Example:
     - policy artifacts
     - policy injection
     - graph-distance scoring
-    - writer agent
+    - next-challenger agent
     - optimization loop
     - LangSmith tracing
     - GitHub issue automation
@@ -301,7 +301,7 @@ Prompt documents may use XML-style sections:
 
     <searchbench_prompt>
     <role>
-    <task>
+    <match>
     <issue>
     <available_tools>
     <constraints>
@@ -403,7 +403,7 @@ Use language like:
           render.go
           prompt_test.go
 
-        internal/implementation/executor/eino/
+        internal/adapters/executor/eino/
           evaluator.go
           finalizer.go
           errors.go
@@ -460,7 +460,7 @@ Example:
     After this issue lands, future agents should be able to build:
     - Eino MCP tool wiring
     - MCP server process manager
-    - jCodeMunch external MCP baseline
+    - jCodeMunch external MCP incumbent
     - Iterative Context policy installation
     - IC evaluator runtime
     - graph-distance scoring
@@ -476,15 +476,15 @@ Prefer this sequence:
     1. prove minimal local execution
     2. prove MCP tool wiring
     3. prove process/session lifecycle
-    4. wire external baseline
+    4. wire external incumbent
     5. define policy artifacts
     6. install/verify IC policy
-    7. run IC evaluator
+    7. execute IC evaluator
     8. score graph-distance localization
     9. materialize repos at exact SHA
-    10. compose full run
+    10. compose full round
     11. add tracing
-    12. add writer/optimization loop
+    12. add next-challenger optimization loop
     13. add CLI polish
     14. add GitHub automation
 
@@ -535,10 +535,10 @@ Prefer:
     Implement harness-owned policy installation for IC MCP sessions
 
     Goal:
-      Ensure every IC evaluator run uses an explicit PolicyArtifact.
+      Ensure every IC evaluator execution uses an explicit PolicyArtifact.
 
     Preserve:
-      writer/evaluator isolation
+      optimizer/evaluator isolation
       policy hash attribution
       fail-closed evaluation
 

@@ -3,7 +3,7 @@ package domain
 // ID is a strongly typed identifier.
 //
 // The type parameter is a phantom tag used to prevent accidentally mixing
-// IDs from different domains, such as TaskID and RunID.
+// IDs from different domains, such as MatchID and RunID.
 type ID[T any] string
 
 // String returns the identifier as its raw string value.
@@ -47,7 +47,7 @@ type TraceID = ID[traceTag]
 // ArtifactID identifies one emitted or consumed artifact.
 type ArtifactID = ID[artifactTag]
 
-// ReportID identifies one candidate report.
+// ReportID identifies one round report.
 type ReportID = ID[reportTag]
 
 // NodeID identifies one domain-level node reference.

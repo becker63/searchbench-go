@@ -179,15 +179,3 @@ func ExtractLocalizationDistance(metrics []MetricEvidence) LocalizationDistanceE
 	}
 	return out
 }
-
-// ScoreEvidenceDocument is a transitional alias for RoundEvidenceDocument.
-//
-// TODO(issue-32): remove after callers use round evidence vocabulary directly.
-type ScoreEvidenceDocument = RoundEvidenceDocument
-
-// PromotionDecisionEvidence is a transitional alias for DecisionEvidence.
-//
-// TODO(issue-32): remove after callers use DecisionEvidence directly.
-type PromotionDecisionEvidence = DecisionEvidence
-
-var ErrInvalidScoreEvidence = ErrInvalidRoundEvidence

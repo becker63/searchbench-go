@@ -29,7 +29,7 @@ func Prompt(in Input) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<searchbench-prompt><role>You are the SearchBench optimizer agent.</role> <task>Use the provided parent-run evidence to propose exactly one replacement policy artifact.</task> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<searchbench-prompt><role>You are the SearchBench optimizer agent.</role> <goal>Use the provided parent-round evidence to propose exactly one next-challenger policy artifact.</goal> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -91,7 +91,7 @@ func Prompt(in Input) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</interface-id></target> <parent-run><bundle-id>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</interface-id></target> <parent-round><bundle-id>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -127,7 +127,7 @@ func Prompt(in Input) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</included-evidence></parent-run> <input-policy><artifact-id>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</included-evidence></parent-round> <input-policy><artifact-id>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -176,13 +176,13 @@ func Prompt(in Input) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		if in.ScoreEvidenceJSON != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<score-evidence>")
+		if in.RoundEvidenceJSON != "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<round-evidence>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var11 string
-			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(in.ScoreEvidenceJSON)
+			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(in.RoundEvidenceJSON)
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/pure/prompts/optimizer/prompt.templ`, Line: 31, Col: 41}
 			}
@@ -190,7 +190,7 @@ func Prompt(in Input) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</score-evidence> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</round-evidence> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

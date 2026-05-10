@@ -5,7 +5,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-// RegressionSeverity describes how serious a candidate regression is.
+// RegressionSeverity describes how serious a challenger regression is.
 type RegressionSeverity string
 
 const (
@@ -18,9 +18,9 @@ type Regression struct {
 	MatchID domain.MatchID   `json:"match_id"`
 	Metric  score.MetricName `json:"metric"`
 
-	Baseline  float64 `json:"baseline"`
-	Candidate float64 `json:"candidate"`
-	Delta     float64 `json:"delta"`
+	Incumbent  float64 `json:"incumbent"`
+	Challenger float64 `json:"challenger"`
+	Delta      float64 `json:"delta"`
 
 	Severity RegressionSeverity `json:"severity"`
 	Reason   string             `json:"reason"`
@@ -35,13 +35,13 @@ func NewRegressionFromMetricComparison(
 	reason string,
 ) Regression {
 	return Regression{
-		MatchID:   matchID,
-		Metric:    comparison.Metric,
-		Baseline:  comparison.Baseline,
-		Candidate: comparison.Candidate,
-		Delta:     comparison.Delta,
-		Severity:  severity,
-		Reason:    reason,
+		MatchID:    matchID,
+		Metric:     comparison.Metric,
+		Incumbent:  comparison.Incumbent,
+		Challenger: comparison.Challenger,
+		Delta:      comparison.Delta,
+		Severity:   severity,
+		Reason:     reason,
 	}
 }
 
@@ -57,7 +57,7 @@ func RegressionsForMatch(matchID domain.MatchID, comparisons []score.MetricCompa
 			matchID,
 			comparison,
 			RegressionMinor,
-			"candidate score is worse than baseline",
+			"challenger score is worse than incumbent",
 		))
 	}
 	return out

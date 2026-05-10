@@ -23,7 +23,7 @@ const selectionPolicyV1DefaultSymbol = "score"
 var ErrUnsupportedMode = errors.New("evaluation: only evaluation mode is supported")
 
 // Resolve loads one Pkl manifest through the config adapter and projects it
-// into the canonical resolved experiment plan.
+// into the canonical resolved round plan.
 func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 	request = normalizeRequest(request)
 
@@ -59,22 +59,22 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 		return Plan{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
 
-	baseline, err := resolveSystem(manifestDir, *evaluator, evaluation.Incumbent.System, nil)
+	incumbent, err := resolveSystem(manifestDir, *evaluator, evaluation.Incumbent.System, nil)
 	if err != nil {
-		return Plan{}, fmt.Errorf("resolve incumbent system: %w", err)
+		return Plan{}, fmt.Errorf("resolve incumbent policy: %w", err)
 	}
-	candidate, err := resolveSystem(
+	challenger, err := resolveSystem(
 		manifestDir,
 		*evaluator,
 		evaluation.Challenger.System,
 		&evaluation.Challenger.Uses.SelectionPolicy,
 	)
 	if err != nil {
-		return Plan{}, fmt.Errorf("resolve challenger system: %w", err)
+		return Plan{}, fmt.Errorf("resolve challenger policy: %w", err)
 	}
 
 	tasks := fakeTasks(manifestDir, cfg)
-	systems := domain.NewPair(baseline.spec, candidate.spec)
+	systems := domain.NewPair(incumbent.spec, challenger.spec)
 	comparePlan := compare.NewPlan(systems, tasks)
 	if err := comparePlan.Validate(); err != nil {
 		return Plan{}, fmt.Errorf("validate compare plan: %w", err)
@@ -117,7 +117,7 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			Split:    cfg.Dataset.Split,
 			MaxItems: cfg.Dataset.MaxItems,
 		},
-		Systems:     systems,
+		Policies:    systems,
 		Matches:     tasks,
 		Parallelism: compare.DefaultParallelism(),
 		Evaluator: EvaluatorConfig{
@@ -142,13 +142,13 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 		Scoring: ScoringConfig{
 			ObjectivePath: objectivePath,
 			CurrentEvidence: score.ObjectiveEvidenceRef{
-				Name:       "current",
-				BundlePath: string(expectedBundlePath),
-				ScorePath:  filepath.Join(string(expectedBundlePath), "evidence.pkl"),
-				ReportPath: filepath.Join(string(expectedBundlePath), "round-report.json"),
+				Name:         "current",
+				BundlePath:   string(expectedBundlePath),
+				EvidencePath: filepath.Join(string(expectedBundlePath), "evidence.pkl"),
+				ReportPath:   filepath.Join(string(expectedBundlePath), "round-report.json"),
 			},
-			ParentEvidence:  cloneEvidenceRef(request.ParentRef),
-			ParentScorePath: request.ParentScorePath,
+			ParentEvidence:     cloneEvidenceRef(request.ParentRef),
+			ParentEvidencePath: request.ParentEvidencePath,
 		},
 		Output: OutputConfig{
 			BundleCollectionPath: bundleCollection,
@@ -157,8 +157,8 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			ReportFormats:        reportFormats,
 			RenderHumanReport:    renderHumanReport,
 			ResolvedPolicyPaths: ResolvedPolicyPaths{
-				Incumbent:  filepath.ToSlash(baseline.policyPath),
-				Challenger: filepath.ToSlash(candidate.policyPath),
+				Incumbent:  filepath.ToSlash(incumbent.policyPath),
+				Challenger: filepath.ToSlash(challenger.policyPath),
 			},
 		},
 		Report: ReportConfig{
@@ -329,7 +329,7 @@ func defaultReportID(bundleID string) domain.ReportID {
 func sanitizeBundleID(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
-		return "experiment"
+		return "round"
 	}
 	var b strings.Builder
 	for _, r := range value {

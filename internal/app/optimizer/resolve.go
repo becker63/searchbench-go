@@ -72,7 +72,7 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 
 	return Plan{
 		ManifestPath:       manifestPath,
-		ExperimentName:     cfg.Name,
+		RoundName:          cfg.Name,
 		CreatedAt:          now,
 		BundleID:           bundleID,
 		BundleCollection:   bundleCollection,
@@ -95,7 +95,7 @@ func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
 			},
 			SystemPrompt: systemPrompt,
 		},
-		Target: pureoptimizer.Target{
+		Target: pureoptimizer.NextChallengerTarget{
 			InputArtifactID:  artifactID(cfg.Optimization.Target.Input.Id),
 			OutputArtifactID: artifactID(cfg.Optimization.Target.Output.Id),
 			OutputName:       cfg.Optimization.Target.Output.ArtifactName,
@@ -165,7 +165,7 @@ func stringifyTools(values []string) []string {
 	return out
 }
 
-func stringifyEvidenceKinds(values []config.OptimizerEvidenceKind) []string {
+func stringifyEvidenceKinds(values []config.NextChallengerEvidenceKind) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, value.String())

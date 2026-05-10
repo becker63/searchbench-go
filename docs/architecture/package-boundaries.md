@@ -74,7 +74,7 @@ are genuinely generic.
 
 ## `internal/ports/`
 
-Project-owned contracts for effectful systems.
+Project-owned contracts for effectful policies.
 
 Belongs here:
 - backend/session interfaces

@@ -4,9 +4,9 @@
   "evidence_refs": [
     {
       "name": "current",
-      "bundle_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
-      "score_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
-      "report_path": "/home/becker/projects/searchbench-go/configs/experiments/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
+      "evidence_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
     }
   ],
   "values": [

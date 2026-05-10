@@ -6,11 +6,11 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 )
 
-func TestNewTaskRunSetValidation(t *testing.T) {
+func TestMatchExecutionSetValidation(t *testing.T) {
 	t.Parallel()
 
-	task1 := domain.MatchID("task-1")
-	task2 := domain.MatchID("task-2")
+	match1 := domain.MatchID("match-1")
+	match2 := domain.MatchID("match-2")
 
 	tests := []struct {
 		name    string
@@ -20,31 +20,31 @@ func TestNewTaskRunSetValidation(t *testing.T) {
 	}{
 		{
 			name:    "empty order",
-			items:   map[domain.MatchID]string{task1: "a"},
+			items:   map[domain.MatchID]string{match1: "a"},
 			wantErr: true,
 		},
 		{
-			name:    "missing task",
-			items:   map[domain.MatchID]string{task1: "a"},
-			order:   []domain.MatchID{task1, task2},
+			name:    "missing match",
+			items:   map[domain.MatchID]string{match1: "a"},
+			order:   []domain.MatchID{match1, match2},
 			wantErr: true,
 		},
 		{
-			name: "duplicate task id",
+			name: "duplicate match id",
 			items: map[domain.MatchID]string{
-				task1: "a",
-				task2: "b",
+				match1: "a",
+				match2: "b",
 			},
-			order:   []domain.MatchID{task1, task1},
+			order:   []domain.MatchID{match1, match1},
 			wantErr: true,
 		},
 		{
 			name: "valid",
 			items: map[domain.MatchID]string{
-				task1: "a",
-				task2: "b",
+				match1: "a",
+				match2: "b",
 			},
-			order: []domain.MatchID{task2, task1},
+			order: []domain.MatchID{match2, match1},
 		},
 	}
 
@@ -52,7 +52,7 @@ func TestNewTaskRunSetValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			set, err := NewTaskRunSet(tt.items, tt.order)
+			set, err := NewMatchExecutionSet(tt.items, tt.order)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error")
@@ -72,31 +72,31 @@ func TestNewTaskRunSetValidation(t *testing.T) {
 	}
 }
 
-func TestTaskRunSetItems(t *testing.T) {
+func TestMatchExecutionSetItems(t *testing.T) {
 	t.Parallel()
 
-	task1 := domain.MatchID("task-1")
-	task2 := domain.MatchID("task-2")
-	set, err := NewTaskRunSet(
+	match1 := domain.MatchID("match-1")
+	match2 := domain.MatchID("match-2")
+	set, err := NewMatchExecutionSet(
 		map[domain.MatchID]string{
-			task1: "baseline",
-			task2: "candidate",
+			match1: "incumbent",
+			match2: "challenger",
 		},
-		[]domain.MatchID{task2, task1},
+		[]domain.MatchID{match2, match1},
 	)
 	if err != nil {
-		t.Fatalf("NewTaskRunSet() error = %v", err)
+		t.Fatalf("NewMatchExecutionSet() error = %v", err)
 	}
 
 	gotIDs := make([]domain.MatchID, 0)
 	gotVals := make([]string, 0)
-	for taskID, value := range set.Items() {
-		gotIDs = append(gotIDs, taskID)
+	for matchID, value := range set.Items() {
+		gotIDs = append(gotIDs, matchID)
 		gotVals = append(gotVals, value)
 	}
 
-	wantIDs := []domain.MatchID{task2, task1}
-	wantVals := []string{"candidate", "baseline"}
+	wantIDs := []domain.MatchID{match2, match1}
+	wantVals := []string{"challenger", "incumbent"}
 	for i := range wantIDs {
 		if gotIDs[i] != wantIDs[i] {
 			t.Fatalf("gotIDs[%d] = %q, want %q", i, gotIDs[i], wantIDs[i])

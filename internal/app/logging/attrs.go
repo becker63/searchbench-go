@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -121,7 +121,7 @@ func ScoreSetKV(scores score.ScoreSet) []any {
 }
 
 // ReportSummaryKV returns a compact report summary suitable for structured logs.
-func ReportSummaryKV(report report.CandidateReport) []any {
+func ReportSummaryKV(report report.RoundReport) []any {
 	out := []any{
 		"report_id", report.ID,
 		"decision", report.Decision.Decision,

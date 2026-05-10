@@ -5,7 +5,7 @@ typealias ObjectiveValueKind = "intermediate" | "penalty" | "final"
 class ObjectiveEvidenceRef {
   name: String
   bundlePath: String?
-  scorePath: String?
+  evidencePath: String?
   reportPath: String?
   sha256: String?
 }

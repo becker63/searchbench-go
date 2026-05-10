@@ -18,7 +18,7 @@ type ResolveRequest struct {
 	Now                      func() time.Time
 }
 
-// Request configures one optimizer run.
+// Request configures one next-challenger run.
 type Request struct {
 	Resolve ResolveRequest
 
@@ -28,24 +28,24 @@ type Request struct {
 	RetryPolicy      *pureoptimizer.RetryPolicy
 }
 
-// Result is the app-level optimizer run outcome.
-type Result struct {
+// Record is the app-level next-challenger run outcome.
+type Record struct {
 	ManifestPath string
 	BundlePath   string
-	Optimizer    pureoptimizer.Result
+	Optimizer    pureoptimizer.NextChallengerRecord
 }
 
 // Plan is the resolved optimization plan before evidence loading.
 type Plan struct {
 	ManifestPath       string
-	ExperimentName     string
+	RoundName          string
 	CreatedAt          time.Time
 	BundleID           string
 	BundleCollection   string
 	BundleWriterRoot   string
 	ExpectedBundlePath string
 	Agent              pureoptimizer.AgentConfig
-	Target             pureoptimizer.Target
+	Target             pureoptimizer.NextChallengerTarget
 	ParentBundle       pureoptimizer.ParentRoundRef
 	InputPolicy        InputPolicyPlan
 	IncludedEvidence   []string

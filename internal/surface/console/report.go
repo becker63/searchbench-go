@@ -35,13 +35,6 @@ func RenderRoundReportDefault(r report.RoundReport) string {
 	return RenderRoundReport(r, DefaultOptions())
 }
 
-// RenderCandidateReport is a transitional wrapper for RenderRoundReport.
-//
-// TODO(issue-32): remove after surfaces call RenderRoundReport directly.
-func RenderCandidateReport(r report.RoundReport, opts Options) string {
-	return RenderRoundReport(r, opts)
-}
-
 func renderTitle(r report.RoundReport, styles Styles) string {
 	title := styles.Title.Render("SearchBench Round Report")
 	if r.ID == "" {
@@ -61,11 +54,11 @@ func renderDecision(r report.RoundReport, styles Styles) string {
 
 func stylesForDecision(decision report.DecisionKind, styles Styles) lipgloss.Style {
 	switch decision {
-	case report.DecisionPromote:
+	case report.DecisionPromoteChallenger:
 		return styles.Success
 	case report.DecisionReview:
 		return styles.Warning
-	case report.DecisionReject:
+	case report.DecisionRejectChallenger:
 		return styles.Danger
 	default:
 		return styles.Subtitle
@@ -74,11 +67,11 @@ func stylesForDecision(decision report.DecisionKind, styles Styles) lipgloss.Sty
 
 func renderSystems(r report.RoundReport, styles Styles) string {
 	lines := []string{
-		renderSystemLine("Incumbent", r.Spec.Systems.Incumbent, styles),
-		renderSystemLine("Challenger", r.Spec.Systems.Challenger, styles),
+		renderSystemLine("Incumbent", r.Spec.Policies.Incumbent, styles),
+		renderSystemLine("Challenger", r.Spec.Policies.Challenger, styles),
 	}
-	if r.Spec.Systems.Challenger.Policy != nil {
-		policy := r.Spec.Systems.Challenger.Policy
+	if r.Spec.Policies.Challenger.Policy != nil {
+		policy := r.Spec.Policies.Challenger.Policy
 		lines = append(lines, fmt.Sprintf(
 			"Policy      %s:%s  %s",
 			policy.Language,
@@ -110,8 +103,8 @@ func renderMetrics(r report.RoundReport, styles Styles) string {
 			styles.TableCell,
 			columnWidths([]string{"", "", "", "", ""}),
 			string(comparison.Metric),
-			fmt.Sprintf("%.2f", comparison.Baseline),
-			fmt.Sprintf("%.2f", comparison.Candidate),
+			fmt.Sprintf("%.2f", comparison.Incumbent),
+			fmt.Sprintf("%.2f", comparison.Challenger),
 			fmt.Sprintf("%+.2f", comparison.Delta),
 			style.Render(result),
 		))
@@ -136,8 +129,8 @@ func renderRegressions(r report.RoundReport, styles Styles) string {
 			columnWidths([]string{"", "", "", "", "", "", ""}),
 			regression.MatchID.String(),
 			string(regression.Metric),
-			fmt.Sprintf("%.2f", regression.Baseline),
-			fmt.Sprintf("%.2f", regression.Candidate),
+			fmt.Sprintf("%.2f", regression.Incumbent),
+			fmt.Sprintf("%.2f", regression.Challenger),
 			fmt.Sprintf("%+.2f", regression.Delta),
 			string(regression.Severity),
 			regression.Reason,
@@ -243,7 +236,7 @@ func metricResult(comparison report.ScoreComparison, styles Styles) (string, lip
 	if !ok || comparison.Delta == 0 {
 		return "same", styles.Muted
 	}
-	if score.Improved(direction, comparison.Baseline, comparison.Candidate) {
+	if score.Improved(direction, comparison.Incumbent, comparison.Challenger) {
 		return "improved", styles.Success
 	}
 	return "regressed", styles.Danger

@@ -37,7 +37,7 @@ type LCATaskIdentity struct {
 	PullURL       string `json:"pull_url,omitempty"`
 }
 
-// Validate rejects incomplete task identities.
+// Validate rejects incomplete match identities.
 func (i LCATaskIdentity) Validate() error {
 	switch {
 	case strings.TrimSpace(i.DatasetName) == "":

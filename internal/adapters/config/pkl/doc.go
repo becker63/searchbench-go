@@ -1,4 +1,4 @@
-// Package config owns the Pkl-backed experiment manifest surface.
+// Package config owns the Pkl-backed round manifest surface.
 //
 // The package is intentionally an adapter-edge surface. It may depend on
 // pkl-go generated bindings and handwritten validation, but it does not change

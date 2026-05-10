@@ -4,8 +4,8 @@ import (
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/artifactkind"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/backend"
+	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/nextchallengerevidencekind"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/optimizerdeniedevidencekind"
-	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/optimizerevidencekind"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/provider"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/reportformat"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/runmode"
@@ -18,13 +18,13 @@ type Game = generated.Game
 type Dataset = generated.Dataset
 type Interfaces = generated.Interfaces
 type Interface = generated.Interface
-type Systems = generated.Systems
+type Policies = generated.Policies
 type System = generated.System
 type PromptBundle = generated.PromptBundle
 type Runtime = generated.Runtime
 type Artifacts = generated.Artifacts
 type PolicyArtifact = generated.PolicyArtifact
-type PolicyProposalArtifact = generated.PolicyProposalArtifact
+type NextChallengerArtifact = generated.NextChallengerArtifact
 type CompletedRoundBundleArtifact = generated.CompletedRoundBundleArtifact
 type Agents = generated.Agents
 type AgentToolPolicy = generated.AgentToolPolicy
@@ -42,15 +42,15 @@ type Scoring = generated.Scoring
 type Report = generated.Report
 type Optimization = generated.Optimization
 type ParentRound = generated.ParentRound
-type OptimizationTarget = generated.OptimizationTarget
-type OptimizationEvidence = generated.OptimizationEvidence
+type NextChallengerTarget = generated.NextChallengerTarget
+type NextChallengerEvidence = generated.NextChallengerEvidence
 
 type RunMode = runmode.RunMode
 type Backend = backend.Backend
 type Provider = provider.Provider
 type ReportFormat = reportformat.ReportFormat
 type ArtifactKind = artifactkind.ArtifactKind
-type OptimizerEvidenceKind = optimizerevidencekind.OptimizerEvidenceKind
+type NextChallengerEvidenceKind = nextchallengerevidencekind.NextChallengerEvidenceKind
 type OptimizerDeniedEvidenceKind = optimizerdeniedevidencekind.OptimizerDeniedEvidenceKind
 
 const (
@@ -70,13 +70,13 @@ const (
 	ReportFormatText = reportformat.Text
 
 	ArtifactKindPolicy               = artifactkind.Policy
-	ArtifactKindPolicyProposal       = artifactkind.PolicyProposal
+	ArtifactKindNextChallenger       = artifactkind.NextChallenger
 	ArtifactKindCompletedRoundBundle = artifactkind.CompletedRoundBundle
 
-	OptimizerEvidenceReportSummary   = optimizerevidencekind.ReportSummary
-	OptimizerEvidenceRoundEvidence   = optimizerevidencekind.RoundEvidence
-	OptimizerEvidenceObjectiveResult = optimizerevidencekind.ObjectiveResult
-	OptimizerEvidenceChallengerPolicy = optimizerevidencekind.ChallengerPolicy
+	NextChallengerEvidenceReportSummary    = nextchallengerevidencekind.ReportSummary
+	NextChallengerEvidenceRoundEvidence    = nextchallengerevidencekind.RoundEvidence
+	NextChallengerEvidenceObjectiveResult  = nextchallengerevidencekind.ObjectiveResult
+	NextChallengerEvidenceChallengerPolicy = nextchallengerevidencekind.ChallengerPolicy
 
 	OptimizerDeniedGoldLabels        = optimizerdeniedevidencekind.GoldLabels
 	OptimizerDeniedOracleFiles       = optimizerdeniedevidencekind.OracleFiles

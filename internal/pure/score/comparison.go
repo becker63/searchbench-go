@@ -8,15 +8,15 @@ type MetricPoint struct {
 	Direction Direction
 }
 
-// MetricComparison compares one metric between baseline and candidate.
+// MetricComparison compares one metric between incumbent and challenger.
 type MetricComparison struct {
-	Metric    MetricName
-	Baseline  float64
-	Candidate float64
-	Delta     float64
-	Direction Direction
-	Improved  bool
-	Regressed bool
+	Metric     MetricName
+	Incumbent  float64
+	Challenger float64
+	Delta      float64
+	Direction  Direction
+	Improved   bool
+	Regressed  bool
 }
 
 // Points returns the full required metric set in stable metric order.
@@ -62,28 +62,28 @@ func (s ScoreSet) Points() iter.Seq[MetricPoint] {
 }
 
 // CompareSets compares two complete score sets metric-by-metric.
-func CompareSets(baseline ScoreSet, candidate ScoreSet) []MetricComparison {
-	candidateByName := make(map[MetricName]MetricPoint, 5)
-	for point := range candidate.Points() {
-		candidateByName[point.Name] = point
+func CompareSets(incumbent ScoreSet, challenger ScoreSet) []MetricComparison {
+	challengerByName := make(map[MetricName]MetricPoint, 5)
+	for point := range challenger.Points() {
+		challengerByName[point.Name] = point
 	}
 
 	out := make([]MetricComparison, 0, 5)
-	for base := range baseline.Points() {
-		cand, ok := candidateByName[base.Name]
+	for inc := range incumbent.Points() {
+		chal, ok := challengerByName[inc.Name]
 		if !ok {
 			continue
 		}
-		delta := cand.Value - base.Value
-		improved := Improved(base.Direction, base.Value, cand.Value)
+		delta := chal.Value - inc.Value
+		improved := Improved(inc.Direction, inc.Value, chal.Value)
 		out = append(out, MetricComparison{
-			Metric:    base.Name,
-			Baseline:  base.Value,
-			Candidate: cand.Value,
-			Delta:     delta,
-			Direction: base.Direction,
-			Improved:  improved,
-			Regressed: base.Value != cand.Value && !improved,
+			Metric:     inc.Name,
+			Incumbent:  inc.Value,
+			Challenger: chal.Value,
+			Delta:      delta,
+			Direction:  inc.Direction,
+			Improved:   improved,
+			Regressed:  inc.Value != chal.Value && !improved,
 		})
 	}
 	return out
@@ -118,32 +118,32 @@ func AverageByMetric(runs []ScoredRun) map[MetricName]float64 {
 	return totals
 }
 
-// CompareAverages compares baseline and candidate run sets using per-metric
+// CompareAverages compares incumbent and challenger run sets using per-metric
 // averages.
-func CompareAverages(baseline []ScoredRun, candidate []ScoredRun) []MetricComparison {
-	baselineAverages := AverageByMetric(baseline)
-	candidateAverages := AverageByMetric(candidate)
+func CompareAverages(incumbent []ScoredRun, challenger []ScoredRun) []MetricComparison {
+	incumbentAverages := AverageByMetric(incumbent)
+	challengerAverages := AverageByMetric(challenger)
 
 	return []MetricComparison{
-		newMetricComparison(MetricGoldHop, baselineAverages[MetricGoldHop], candidateAverages[MetricGoldHop]),
-		newMetricComparison(MetricIssueHop, baselineAverages[MetricIssueHop], candidateAverages[MetricIssueHop]),
-		newMetricComparison(MetricTokenEfficiency, baselineAverages[MetricTokenEfficiency], candidateAverages[MetricTokenEfficiency]),
-		newMetricComparison(MetricCost, baselineAverages[MetricCost], candidateAverages[MetricCost]),
-		newMetricComparison(MetricComposite, baselineAverages[MetricComposite], candidateAverages[MetricComposite]),
+		newMetricComparison(MetricGoldHop, incumbentAverages[MetricGoldHop], challengerAverages[MetricGoldHop]),
+		newMetricComparison(MetricIssueHop, incumbentAverages[MetricIssueHop], challengerAverages[MetricIssueHop]),
+		newMetricComparison(MetricTokenEfficiency, incumbentAverages[MetricTokenEfficiency], challengerAverages[MetricTokenEfficiency]),
+		newMetricComparison(MetricCost, incumbentAverages[MetricCost], challengerAverages[MetricCost]),
+		newMetricComparison(MetricComposite, incumbentAverages[MetricComposite], challengerAverages[MetricComposite]),
 	}
 }
 
-func newMetricComparison(name MetricName, baseline float64, candidate float64) MetricComparison {
+func newMetricComparison(name MetricName, incumbent float64, challenger float64) MetricComparison {
 	direction, _ := DirectionForMetric(name)
-	delta := candidate - baseline
-	improved := Improved(direction, baseline, candidate)
+	delta := challenger - incumbent
+	improved := Improved(direction, incumbent, challenger)
 	return MetricComparison{
-		Metric:    name,
-		Baseline:  baseline,
-		Candidate: candidate,
-		Delta:     delta,
-		Direction: direction,
-		Improved:  improved,
-		Regressed: baseline != candidate && !improved,
+		Metric:     name,
+		Incumbent:  incumbent,
+		Challenger: challenger,
+		Delta:      delta,
+		Direction:  direction,
+		Improved:   improved,
+		Regressed:  incumbent != challenger && !improved,
 	}
 }

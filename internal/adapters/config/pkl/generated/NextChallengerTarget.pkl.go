@@ -1,8 +1,8 @@
 // Code generated from Pkl module `searchbench.config.SearchBenchRound`. DO NOT EDIT.
 package generated
 
-type OptimizationTarget struct {
+type NextChallengerTarget struct {
 	Input PolicyArtifact `pkl:"input"`
 
-	Output PolicyProposalArtifact `pkl:"output"`
+	Output NextChallengerArtifact `pkl:"output"`
 }

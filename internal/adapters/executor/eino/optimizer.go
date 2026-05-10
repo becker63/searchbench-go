@@ -25,9 +25,9 @@ type ProposalValidationResult struct {
 }
 
 // ValidateProposalFunc stages and validates one policy proposal.
-type ValidateProposalFunc func(ctx context.Context, proposal pureoptimizer.Proposal) (ProposalValidationResult, *pureoptimizer.Failure)
+type ValidateProposalFunc func(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (ProposalValidationResult, *pureoptimizer.Failure)
 
-// OptimizerConfig defines the first optimizer runner dependencies.
+// OptimizerConfig defines the first next-challenger runner dependencies.
 type OptimizerConfig struct {
 	Model            model.ToolCallingChatModel
 	RenderPrompt     RenderOptimizerPromptFunc
@@ -44,7 +44,7 @@ type Optimizer struct {
 	retryPolicy      pureoptimizer.RetryPolicy
 }
 
-// NewOptimizer constructs a cold optimizer runner.
+// NewOptimizer constructs a cold next-challenger runner.
 func NewOptimizer(config OptimizerConfig) (*Optimizer, error) {
 	if config.Model == nil {
 		return nil, fmt.Errorf("eino optimizer: model is required")
@@ -76,8 +76,8 @@ func NewOptimizer(config OptimizerConfig) (*Optimizer, error) {
 }
 
 // Run executes one optimizer attempt sequence and returns a typed result.
-func (o *Optimizer) Run(ctx context.Context, spec pureoptimizer.Spec) pureoptimizer.Result {
-	result := pureoptimizer.Result{}
+func (o *Optimizer) Run(ctx context.Context, spec pureoptimizer.Spec) pureoptimizer.NextChallengerRecord {
+	result := pureoptimizer.NextChallengerRecord{}
 	recordPhase := func(phase pureoptimizer.Phase) {
 		result.Phases = append(result.Phases, phase)
 	}
@@ -148,7 +148,7 @@ func (o *Optimizer) Run(ctx context.Context, spec pureoptimizer.Spec) pureoptimi
 			result.RawOutput = attempt.RawOutput
 		}
 
-		recordPhase(pureoptimizer.PhaseFinalizeProposal)
+		recordPhase(pureoptimizer.PhaseFinalizeNextChallenger)
 		proposal, failure := finalizeProposal(attempt.RawOutput, spec.Target, attemptNumber)
 		if failure != nil {
 			attempt.Failure = failure
@@ -162,9 +162,9 @@ func (o *Optimizer) Run(ctx context.Context, spec pureoptimizer.Spec) pureoptimi
 			return result
 		}
 		attempt.Proposal = proposal
-		attempt.State = pureoptimizer.AttemptStateProposalFinalized
+		attempt.State = pureoptimizer.AttemptStateNextChallengerFinalized
 
-		recordPhase(pureoptimizer.PhaseWriteCandidateStage)
+		recordPhase(pureoptimizer.PhaseWriteNextChallengerStage)
 		recordPhase(pureoptimizer.PhaseRunPolicyPipeline)
 		validation, failure := o.validateProposal(ctx, *proposal)
 		attempt.PipelineResults = validation.stepResults()
@@ -182,7 +182,7 @@ func (o *Optimizer) Run(ctx context.Context, spec pureoptimizer.Spec) pureoptimi
 			return result
 		}
 
-		recordPhase(pureoptimizer.PhaseAcceptProposal)
+		recordPhase(pureoptimizer.PhaseAcceptNextChallenger)
 		recordPhase(pureoptimizer.PhaseComplete)
 		attempt.State = pureoptimizer.AttemptStateAccepted
 		result.Attempts = append(result.Attempts, attempt)

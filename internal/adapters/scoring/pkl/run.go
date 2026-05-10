@@ -24,17 +24,17 @@ var (
 type Request struct {
 	ScoringPath string
 	CurrentRef  score.ObjectiveEvidenceRef
-	// CurrentScorePath overrides the on-disk Pkl module imported for current
+	// CurrentEvidencePath overrides the on-disk Pkl module imported for current
 	// evidence while preserving CurrentRef as the durable evidence identity.
-	CurrentScorePath string
-	ParentRef        *score.ObjectiveEvidenceRef
-	// ParentScorePath overrides the on-disk Pkl module imported for parent
+	CurrentEvidencePath string
+	ParentRef           *score.ObjectiveEvidenceRef
+	// ParentEvidencePath overrides the on-disk Pkl module imported for parent
 	// evidence while preserving ParentRef as the durable evidence identity.
-	ParentScorePath string
-	PklCommand      []string
+	ParentEvidencePath string
+	PklCommand         []string
 }
 
-// Evaluate executes one Pkl scoring file against score evidence and returns
+// Evaluate executes one Pkl scoring file against round evidence and returns
 // the validated objective result.
 func Evaluate(ctx context.Context, request Request) (score.ObjectiveResult, error) {
 	normalized, err := normalizeRequest(request)
@@ -44,15 +44,15 @@ func Evaluate(ctx context.Context, request Request) (score.ObjectiveResult, erro
 	if err := validateRequest(normalized); err != nil {
 		return score.ObjectiveResult{}, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
-	currentScorePath, err := resolveScorePath(firstNonEmpty(normalized.CurrentScorePath, normalized.CurrentRef.ScorePath))
+	currentEvidencePath, err := resolveEvidencePath(firstNonEmpty(normalized.CurrentEvidencePath, normalized.CurrentRef.EvidencePath))
 	if err != nil {
-		return score.ObjectiveResult{}, fmt.Errorf("%w: current score path: %w", ErrInvalidRequest, err)
+		return score.ObjectiveResult{}, fmt.Errorf("%w: current evidence path: %w", ErrInvalidRequest, err)
 	}
-	var parentScorePath string
+	var parentEvidencePath string
 	if normalized.ParentRef != nil {
-		parentScorePath, err = resolveScorePath(firstNonEmpty(normalized.ParentScorePath, normalized.ParentRef.ScorePath))
+		parentEvidencePath, err = resolveEvidencePath(firstNonEmpty(normalized.ParentEvidencePath, normalized.ParentRef.EvidencePath))
 		if err != nil {
-			return score.ObjectiveResult{}, fmt.Errorf("%w: parent score path: %w", ErrInvalidRequest, err)
+			return score.ObjectiveResult{}, fmt.Errorf("%w: parent evidence path: %w", ErrInvalidRequest, err)
 		}
 	}
 
@@ -63,7 +63,7 @@ func Evaluate(ctx context.Context, request Request) (score.ObjectiveResult, erro
 	defer func() { _ = evaluator.Close() }()
 
 	var result score.ObjectiveResult
-	if err := evaluator.EvaluateModule(ctx, pkl.TextSource(wrapperModuleSource(normalized, currentScorePath, parentScorePath)), &result); err != nil {
+	if err := evaluator.EvaluateModule(ctx, pkl.TextSource(wrapperModuleSource(normalized, currentEvidencePath, parentEvidencePath)), &result); err != nil {
 		return score.ObjectiveResult{}, fmt.Errorf("%w: %w", ErrEvaluate, err)
 	}
 	if err := result.Validate(); err != nil {
@@ -99,20 +99,20 @@ func validateRequest(request Request) error {
 	if _, err := os.Stat(request.ScoringPath); err != nil {
 		return fmt.Errorf("scoring path: %w", err)
 	}
-	if err := validateScoreRef("current", request.CurrentRef); err != nil {
+	if err := validateEvidenceRef("current", request.CurrentRef); err != nil {
 		return err
 	}
 	if request.ParentRef != nil {
-		if err := validateScoreRef("parent", *request.ParentRef); err != nil {
+		if err := validateEvidenceRef("parent", *request.ParentRef); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func resolveScorePath(path string) (string, error) {
+func resolveEvidencePath(path string) (string, error) {
 	if strings.TrimSpace(path) == "" {
-		return "", errors.New("score path is required")
+		return "", errors.New("evidence path is required")
 	}
 	if filepath.IsAbs(path) {
 		if _, err := os.Stat(path); err != nil {
@@ -130,30 +130,30 @@ func resolveScorePath(path string) (string, error) {
 	return abs, nil
 }
 
-func validateScoreRef(role string, ref score.ObjectiveEvidenceRef) error {
+func validateEvidenceRef(role string, ref score.ObjectiveEvidenceRef) error {
 	if strings.TrimSpace(ref.Name) == "" {
 		return fmt.Errorf("%s evidence ref name is required", role)
 	}
-	if strings.TrimSpace(ref.ScorePath) == "" {
-		return fmt.Errorf("%s evidence ref score path is required", role)
+	if strings.TrimSpace(ref.EvidencePath) == "" {
+		return fmt.Errorf("%s evidence ref evidence path is required", role)
 	}
 	return nil
 }
 
-func wrapperModuleSource(request Request, currentScorePath string, parentScorePath string) string {
+func wrapperModuleSource(request Request, currentEvidencePath string, parentEvidencePath string) string {
 	currentRef := renderEvidenceRef("currentRef", request.CurrentRef)
-	currentImport := fmt.Sprintf("import %q as currentScore\n", fileURI(currentScorePath))
+	currentImport := fmt.Sprintf("import %q as currentEvidence\n", fileURI(currentEvidencePath))
 
 	parentImport := ""
 	parentAssignment := "parent = null\nparentRef = null\n"
 	if request.ParentRef != nil {
-		parentImport = fmt.Sprintf("import %q as parentScore\n", fileURI(parentScorePath))
-		parentAssignment = "parent = parentScore.toDynamic()\n" + renderEvidenceRef("parentRef", *request.ParentRef)
+		parentImport = fmt.Sprintf("import %q as parentEvidence\n", fileURI(parentEvidencePath))
+		parentAssignment = "parent = parentEvidence.toDynamic()\n" + renderEvidenceRef("parentRef", *request.ParentRef)
 	}
 
 	return fmt.Sprintf(`amends %q
 %s%s
-current = currentScore.toDynamic()
+current = currentEvidence.toDynamic()
 %s
 %s`, fileURI(request.ScoringPath), currentImport, parentImport, currentRef, parentAssignment)
 }
@@ -166,8 +166,8 @@ func renderEvidenceRef(name string, ref score.ObjectiveEvidenceRef) string {
 	if ref.BundlePath != "" {
 		lines = append(lines, fmt.Sprintf("  bundlePath = %q", ref.BundlePath))
 	}
-	if ref.ScorePath != "" {
-		lines = append(lines, fmt.Sprintf("  scorePath = %q", ref.ScorePath))
+	if ref.EvidencePath != "" {
+		lines = append(lines, fmt.Sprintf("  evidencePath = %q", ref.EvidencePath))
 	}
 	if ref.ReportPath != "" {
 		lines = append(lines, fmt.Sprintf("  reportPath = %q", ref.ReportPath))
