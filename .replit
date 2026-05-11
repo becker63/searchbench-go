@@ -1,0 +1,35 @@
+modules = ["go-1.21", "bash", "nix", "python-3.11"]
+[agent]
+expertMode = true
+stack = "BEST_EFFORT_FALLBACK"
+
+[nix]
+channel = "stable-25_05"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "go build -o searchbench ./cmd/searchbench && echo 'Build successful!' && ./searchbench --help"
+
+[deployment]
+deploymentTarget = "vm"
+run = ["./searchbench", "--help"]
+build = ["go", "build", "-o", "searchbench", "./cmd/searchbench"]
