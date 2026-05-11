@@ -33,3 +33,7 @@ args = "go build -o searchbench ./cmd/searchbench && echo 'Build successful!' &&
 deploymentTarget = "vm"
 run = ["./searchbench", "--help"]
 build = ["go", "build", "-o", "searchbench", "./cmd/searchbench"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
