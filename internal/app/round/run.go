@@ -4,7 +4,7 @@ import (
         "context"
         "errors"
 
-        appOptimizer "github.com/becker63/searchbench-go/internal/app/optimizer"
+        appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
         "github.com/becker63/searchbench-go/internal/games/codelocalization"
         "github.com/becker63/searchbench-go/internal/pure/game"
         "github.com/becker63/searchbench-go/internal/pure/report"
@@ -126,7 +126,7 @@ func ProposeNextChallenger(
         _ report.Decision,
         matches MatchRecords,
         input Input,
-) (*appOptimizer.Record, error) {
+) (*NextChallenger, error) {
         if input.OptimizationManifestPath == "" {
                 return nil, nil
         }
@@ -159,11 +159,15 @@ func ProposeNextChallenger(
                 },
                 Model: optimizerModel,
         })
-        if err != nil {
-                return &nextChallengerRecord, err
+        out := &NextChallenger{
+                ManifestPath: nextChallengerRecord.ManifestPath,
+                BundlePath:   nextChallengerRecord.BundlePath,
+                Optimizer:    nextChallengerRecord.Optimizer,
         }
-
-        return &nextChallengerRecord, nil
+        if err != nil {
+                return out, err
+        }
+        return out, nil
 }
 
 // WriteBundle records the already-written durable round bundle in the round record.
@@ -172,7 +176,7 @@ func WriteBundle(
         evidence score.RoundEvidenceDocument,
         objective *score.ObjectiveResult,
         decision report.Decision,
-        next *appOptimizer.Record,
+        next *NextChallenger,
         matches MatchRecords,
 ) pureround.Record {
         return pureround.Record{

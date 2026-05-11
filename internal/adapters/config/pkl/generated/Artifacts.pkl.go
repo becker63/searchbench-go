@@ -2,9 +2,9 @@
 package generated
 
 type Artifacts struct {
-	ChallengerPolicyRound001 *PolicyArtifact `pkl:"challengerPolicyRound001"`
+	ChallengerPolicy *PolicyArtifact `pkl:"challengerPolicy"`
 
-	NextChallengerRound002 *NextChallengerArtifact `pkl:"nextChallengerRound002"`
+	NextChallenger *NextChallengerArtifact `pkl:"nextChallenger"`
 
-	ParentRound001Bundle *CompletedRoundBundleArtifact `pkl:"parentRound001Bundle"`
+	ParentRoundBundle *CompletedRoundBundleArtifact `pkl:"parentRoundBundle"`
 }

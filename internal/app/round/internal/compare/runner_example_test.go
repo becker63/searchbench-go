@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/becker63/searchbench-go/internal/app/logging"
+	"github.com/becker63/searchbench-go/internal/surface/logging"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 )

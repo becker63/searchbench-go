@@ -10,20 +10,20 @@ interfaces {
 }
 
 artifacts {
-  challengerPolicyRound001 {
+  challengerPolicy {
     id = "challenger-policy-round-001"
     kind = "policy"
     path = "policies/challenger_policy.py"
     implements = interfaces.iterativeContextSelectionPolicyV1
   }
 
-  parentRound001Bundle {
+  parentRoundBundle {
     id = "local-ic-vs-jcodemunch-round-001"
     kind = "completed_round_bundle"
     path = "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001"
   }
 
-  nextChallengerRound002 {
+  nextChallenger {
     id = "next-challenger-round-002"
     kind = "next_challenger"
     artifactName = "next_challenger_policy.round-002.py"
@@ -81,16 +81,16 @@ optimization {
   agent = agents.optimizer
 
   parentRound {
-    bundle = artifacts.parentRound001Bundle
+    bundle = artifacts.parentRoundBundle
   }
 
   target {
-    input = artifacts.challengerPolicyRound001
-    output = artifacts.nextChallengerRound002
+    input = artifacts.challengerPolicy
+    output = artifacts.nextChallenger
   }
 
   evidence {
-    from = artifacts.parentRound001Bundle
+    from = artifacts.parentRoundBundle
 
     include {
       "report_summary"

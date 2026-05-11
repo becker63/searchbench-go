@@ -213,7 +213,7 @@ func TestRejectsSelectionPolicyInterfaceMismatch(t *testing.T) {
 	t.Parallel()
 
 	roundSpec := sampleEvaluationRound()
-	roundSpec.Artifacts.ChallengerPolicyRound001.Implements.Id = "other"
+	roundSpec.Artifacts.ChallengerPolicy.Implements.Id = "other"
 	roundSpec.Evaluation.Challenger.Uses.SelectionPolicy.Implements.Id = "other"
 
 	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrChallengerSelectionPolicyInterfaceMismatch.Error()) {
@@ -225,7 +225,7 @@ func TestRejectsAbsolutePolicyArtifactPath(t *testing.T) {
 	t.Parallel()
 
 	roundSpec := sampleEvaluationRound()
-	roundSpec.Artifacts.ChallengerPolicyRound001.Path = "/tmp/policy.py"
+	roundSpec.Artifacts.ChallengerPolicy.Path = "/tmp/policy.py"
 
 	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrPolicyArtifactPathMustBeRelative.Error()) {
 		t.Fatalf("Validate() error = %v, want relative policy path error", err)
@@ -236,7 +236,7 @@ func TestRejectsProposalArtifactNameWithParentTraversal(t *testing.T) {
 	t.Parallel()
 
 	roundSpec := sampleOptimizationRound()
-	roundSpec.Artifacts.NextChallengerRound002.ArtifactName = "../challenger.py"
+	roundSpec.Artifacts.NextChallenger.ArtifactName = "../challenger.py"
 
 	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrNextChallengerArtifactNameInvalid.Error()) {
 		t.Fatalf("Validate() error = %v, want invalid artifact name error", err)
@@ -417,7 +417,7 @@ func sampleEvaluationRound() RoundSpec {
 			},
 		},
 		Artifacts: Artifacts{
-			ChallengerPolicyRound001: &PolicyArtifact{
+			ChallengerPolicy: &PolicyArtifact{
 				Id:   "challenger-policy-round-001",
 				Kind: "policy",
 				Path: "policies/challenger_policy.py",
@@ -439,7 +439,7 @@ func sampleEvaluationRound() RoundSpec {
 		Challenger: ChallengerEvaluationBinding{
 			System: roundSpec.Policies.Challenger,
 			Uses: ChallengerUses{
-				SelectionPolicy: *roundSpec.Artifacts.ChallengerPolicyRound001,
+				SelectionPolicy: *roundSpec.Artifacts.ChallengerPolicy,
 			},
 		},
 		Scoring: Scoring{
@@ -480,12 +480,12 @@ func sampleOptimizationRound() RoundSpec {
 	roundSpec.Name = "optimize-ic-round-002"
 	roundSpec.Mode = ModeOptimization
 	roundSpec.Evaluation = nil
-	roundSpec.Artifacts.ParentRound001Bundle = &CompletedRoundBundleArtifact{
+	roundSpec.Artifacts.ParentRoundBundle = &CompletedRoundBundleArtifact{
 		Id:   "local-ic-vs-jcodemunch-round-001",
 		Kind: "completed_round_bundle",
 		Path: "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
 	}
-	roundSpec.Artifacts.NextChallengerRound002 = &NextChallengerArtifact{
+	roundSpec.Artifacts.NextChallenger = &NextChallengerArtifact{
 		Id:           "next-challenger-round-002",
 		Kind:         "next_challenger",
 		ArtifactName: "next_next_challenger_policy.round-002.py",
@@ -497,14 +497,14 @@ func sampleOptimizationRound() RoundSpec {
 	roundSpec.Optimization = &Optimization{
 		Agent: *optimizer,
 		ParentRound: ParentRound{
-			Bundle: *roundSpec.Artifacts.ParentRound001Bundle,
+			Bundle: *roundSpec.Artifacts.ParentRoundBundle,
 		},
 		Target: NextChallengerTarget{
-			Input:  *roundSpec.Artifacts.ChallengerPolicyRound001,
-			Output: *roundSpec.Artifacts.NextChallengerRound002,
+			Input:  *roundSpec.Artifacts.ChallengerPolicy,
+			Output: *roundSpec.Artifacts.NextChallenger,
 		},
 		Evidence: NextChallengerEvidence{
-			From: *roundSpec.Artifacts.ParentRound001Bundle,
+			From: *roundSpec.Artifacts.ParentRoundBundle,
 			Include: []NextChallengerEvidenceKind{
 				NextChallengerEvidenceReportSummary,
 				NextChallengerEvidenceRoundEvidence,

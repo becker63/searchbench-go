@@ -32,7 +32,7 @@ policies {
 }
 
 artifacts {
-  challengerPolicyRound001 {
+  challengerPolicy {
     id = "challenger-policy-round-001"
     kind = "policy"
     path = "policies/challenger_policy.py"
@@ -88,7 +88,7 @@ evaluation {
     system = policies.challenger
 
     uses {
-      selectionPolicy = artifacts.challengerPolicyRound001
+      selectionPolicy = artifacts.challengerPolicy
     }
   }
 

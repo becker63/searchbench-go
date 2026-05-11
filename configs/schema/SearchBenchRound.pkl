@@ -88,9 +88,9 @@ class Runtime {
 }
 
 class Artifacts {
-  challengerPolicyRound001: PolicyArtifact?
-  nextChallengerRound002: NextChallengerArtifact?
-  parentRound001Bundle: CompletedRoundBundleArtifact?
+  challengerPolicy: PolicyArtifact?
+  nextChallenger: NextChallengerArtifact?
+  parentRoundBundle: CompletedRoundBundleArtifact?
 }
 
 class PolicyArtifact {

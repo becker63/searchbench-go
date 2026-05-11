@@ -38,8 +38,8 @@ func TestLoadLocalICVsJCodeMunchManifest(t *testing.T) {
 	if roundSpec.Evaluation.Scoring.Objective != "scoring/localization-objective.pkl" {
 		t.Fatalf("roundSpec.Evaluation.Scoring.Objective = %q", roundSpec.Evaluation.Scoring.Objective)
 	}
-	if roundSpec.Artifacts.ChallengerPolicyRound001 == nil || roundSpec.Artifacts.ChallengerPolicyRound001.Path != "policies/challenger_policy.py" {
-		t.Fatalf("challenger policy artifact = %#v, want local policy path", roundSpec.Artifacts.ChallengerPolicyRound001)
+	if roundSpec.Artifacts.ChallengerPolicy == nil || roundSpec.Artifacts.ChallengerPolicy.Path != "policies/challenger_policy.py" {
+		t.Fatalf("challenger policy artifact = %#v, want local policy path", roundSpec.Artifacts.ChallengerPolicy)
 	}
 }
 
@@ -69,8 +69,8 @@ func TestLoadOptimizeICManifest(t *testing.T) {
 	if roundSpec.Evaluation != nil {
 		t.Fatalf("roundSpec.Evaluation = %#v, want nil for optimization manifest", roundSpec.Evaluation)
 	}
-	if roundSpec.Artifacts.ChallengerPolicyRound001 == nil || roundSpec.Artifacts.ChallengerPolicyRound001.Path != "policies/challenger_policy.py" {
-		t.Fatalf("roundSpec.Artifacts.ChallengerPolicyRound001 = %#v, want local optimize policy path", roundSpec.Artifacts.ChallengerPolicyRound001)
+	if roundSpec.Artifacts.ChallengerPolicy == nil || roundSpec.Artifacts.ChallengerPolicy.Path != "policies/challenger_policy.py" {
+		t.Fatalf("roundSpec.Artifacts.ChallengerPolicy = %#v, want local optimize policy path", roundSpec.Artifacts.ChallengerPolicy)
 	}
 	if roundSpec.Optimization.Target.Input.Id != "challenger-policy-round-001" {
 		t.Fatalf("roundSpec.Optimization.Target.Input.Id = %q", roundSpec.Optimization.Target.Input.Id)
