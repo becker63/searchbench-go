@@ -1,0 +1,297 @@
+# Make `internal/app/round` the only public app entry point
+
+## Goal
+Make `internal/app/round.Run` the single canonical app-layer entry point for executing SearchBench rounds.
+After this issue lands, callers should no longer run the system through `internal/app/evaluation`, `internal/app/compare`, or demo-specific app workflows. Those packages may either be deleted, folded into `internal/app/round`, or moved behind private phase helpers, but the public app story should be:
+```text
+round.Run
+  -> resolve game
+  -> resolve round
+  -> evaluate matches
+  -> build evidence
+  -> evaluate objective
+  -> decide
+  -> optionally propose next challenger
+  -> write bundle
+
+The important outcome is architectural clarity before real backend, MCP, LangSmith, and dataset integrations begin.
+
+Background
+
+The repo now has the right product model:
+
+Game -> Round -> Match -> Evidence -> Decision -> NextChallenger
+
+But the app layer still has multiple competing workflow entry points:
+
+internal/app/round
+internal/app/evaluation
+internal/app/compare
+internal/app/optimizer
+
+internal/app/round.Run already reads like the desired high-level lifecycle, but it currently delegates through evaluation and optimizer instead of owning the phase structure directly. Meanwhile, the CLI command still imports and calls internal/app/evaluation.Run, so round.Run is not actually the system entry point.
+
+This creates avoidable integration risk. Future agents may plug real MCP, dataset, provider, or tracing work into the wrong layer.
+
+This issue should collapse that ambiguity.
+
+Architecture rule
+
+internal/app/round is the only public app-layer workflow package.
+
+Allowed direction:
+
+surface/cli
+  -> app/round
+      -> pure models
+      -> ports
+      -> adapters
+
+Disallowed direction after this issue:
+
+surface/cli -> app/evaluation
+surface/cli -> app/compare
+surface/cli -> app/optimizer
+new integration code -> app/evaluation.Run
+new integration code -> app/compare.Runner as the top-level workflow
+
+evaluation, compare, and optimizer may continue to exist only if they are clearly private implementation details of the round lifecycle. Prefer folding their useful code into internal/app/round unless keeping a helper package materially improves clarity.
+
+Scope
+
+1. Route CLI through round.Run
+
+Update the public round command so it calls:
+
+round.Run(ctx, round.Input{...})
+
+instead of:
+
+evaluation.Run(ctx, evaluation.Request{...})
+
+The CLI should remain thin. It should parse flags, call round.Run, and print a short summary from the returned round record.
+
+2. Make round.Input cover the current CLI needs
+
+Ensure round.Input can represent the current CLI options:
+
+manifest path
+bundle root override
+bundle id / round id override
+disable human report
+clock override for tests
+
+Do not expose lower-level evaluation.Request or compare.Plan as public CLI-facing types.
+
+3. Make optimizer optional
+
+A normal evaluation round should not require optimizer configuration.
+
+The round lifecycle should support:
+
+evaluation-only round
+optimization-only / next-challenger round, if already supported
+combined local fake demo round, only if explicitly configured
+
+If no optimizer is configured, round.Run should complete the round without producing a next challenger.
+
+Do not make OptimizerModelFactory or optimizer dependencies mandatory for ordinary round execution.
+
+4. Collapse or privatize internal/app/evaluation
+
+Move the useful phase code from internal/app/evaluation into internal/app/round, or make it an implementation detail that is not imported by CLI/surface packages.
+
+Preferred shape:
+
+internal/app/round/
+  run.go
+  types.go
+  resolve.go
+  evaluate.go
+  evidence.go
+  objective.go
+  decide.go
+  optimize.go
+  bundle.go
+
+Acceptable temporary shape:
+
+internal/app/round/internal/evaluation
+
+if the code is still large enough to justify a subpackage.
+
+Do not leave evaluation.Run as a competing public workflow.
+
+5. Collapse or remove internal/app/compare as a public workflow
+
+compare currently represents an older comparison-runner shape. If parts of it are still useful, they should become round evaluation phase helpers.
+
+The top-level concept should be:
+
+round evaluates matches
+
+not:
+
+compare runner runs a separate app workflow
+
+Delete any demo-only comparison path that duplicates manifest-driven round execution.
+
+6. Remove or hide demo-report if it bypasses round.Run
+
+If the demo command still calls compare directly, either:
+
+1. delete it, or
+2. rewrite it to construct a round input and call round.Run.
+
+Do not preserve a second executable path just for demo output.
+
+7. Update docs and package comments
+
+Update comments/docs that currently say the CLI calls “round/evaluation packages.”
+
+The new rule should be explicit:
+
+The CLI calls internal/app/round.
+The round app package owns the lifecycle.
+Other app packages are phase helpers or should not exist.
+
+Non-goals
+
+Do not implement real MCP integration in this issue.
+
+Do not implement LangSmith tracing in this issue.
+
+Do not implement real dataset loading in this issue.
+
+Do not add new provider abstractions in this issue.
+
+Do not redesign the pure model.
+
+Do not introduce a generic workflow engine.
+
+Do not preserve old app entry points for compatibility unless a test proves they are still required. This is pre-integration cleanup, not a backwards-compatibility migration.
+
+Expected behavior
+
+After this issue:
+
+searchbench round run --manifest configs/rounds/local-ic-vs-jcodemunch/round.pkl
+
+should execute through internal/app/round.Run.
+
+The command should still produce the same essential artifacts:
+
+resolved-round.json
+round-report.json
+round-report.txt, unless disabled
+evidence.pkl
+objective.json
+decision.json
+metadata.json
+COMPLETE
+
+But the call chain should no longer expose evaluation.Run as the app workflow.
+
+Failure behavior
+
+Preserve existing failure semantics where possible.
+
+A round should fail clearly if:
+
+manifest resolution fails
+match evaluation fails
+evidence construction fails
+objective evaluation fails
+bundle writing fails
+optimizer proposal fails when optimizer is explicitly configured
+
+A missing optimizer configuration must not fail an evaluation-only round.
+
+If a bundle write fails, do not create COMPLETE.
+
+If objective evaluation fails, do not silently fall back to a default score.
+
+Acceptance criteria
+
+* internal/surface/cli imports internal/app/round, not internal/app/evaluation or internal/app/compare.
+* The public round CLI path calls round.Run.
+* round.Run is the only public app-layer execution entry point used by production surface code.
+* evaluation.Run is deleted, moved, or made private to the round implementation.
+* compare.Runner is no longer used as a top-level app workflow by CLI/demo code.
+* Any remaining comparison/evaluation code is framed as a round phase, not a separate product flow.
+* Optimizer execution is optional for evaluation-only rounds.
+* The existing manifest-driven fake/local round still runs and writes the expected bundle artifacts.
+* Package docs reflect the new single-entrypoint rule.
+* Import-boundary tests still pass.
+
+Suggested implementation shape
+
+Prefer a direct file-level consolidation before inventing new abstractions:
+
+internal/app/round/
+  doc.go
+  run.go
+  types.go
+  resolve.go
+  evaluate.go
+  evidence.go
+  objective.go
+  decide.go
+  optimize.go
+  bundle.go
+
+If a subpackage is needed, make it private under:
+
+internal/app/round/internal/...
+
+Do not create new sibling app workflows.
+
+Test expectations
+
+Update or add tests proving:
+
+* round.Run executes the manifest-driven local round.
+* CLI round run calls the round app path and still prints the expected summary.
+* Evaluation-only rounds succeed without optimizer dependencies.
+* Explicit optimizer failure only fails rounds where optimization was configured.
+* Bundle artifacts are still written correctly.
+* No production surface package imports internal/app/evaluation or internal/app/compare.
+
+Run:
+
+go test ./...
+
+Review checklist
+
+During review, check for:
+
+* duplicate app-level lifecycle nouns
+* old evaluation.Run or compare.Runner surviving as public workflow APIs
+* CLI importing lower-level app packages
+* optimizer required for ordinary evaluation
+* fake/demo code becoming architectural
+* new generic abstractions that are not needed yet
+* adapter DTOs leaking inward
+* pure model changes unrelated to this cleanup
+
+Follow-up issues unlocked
+
+After this lands, future integration issues can target a single seam:
+
+round.Run -> EvaluateMatches
+
+Likely follow-ups:
+
+* Add real dataset adapter for LCA matches.
+* Add real backend execution for jCodeMunch and Iterative Context.
+* Add MCP process/session lifecycle under adapters.
+* Add LangSmith trace adapter.
+* Move fake local graph/scorer/evaluator code into test fixtures.
+* Generate visualization projection from completed round bundles.
+
+Success sentence
+
+A new contributor should be able to read the code and understand that SearchBench has exactly one executable app story:
+
+Run a round.
+Everything else is a phase of that round.
