@@ -1,4 +1,4 @@
-package evaluation
+package round
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"time"
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	"github.com/becker63/searchbench-go/internal/app/compare"
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
@@ -22,10 +22,10 @@ const selectionPolicyV1DefaultSymbol = "score"
 
 var ErrUnsupportedMode = errors.New("evaluation: only evaluation mode is supported")
 
-// Resolve loads one Pkl manifest through the config adapter and projects it
-// into the canonical resolved round plan.
-func Resolve(ctx context.Context, request ResolveRequest) (Plan, error) {
-	request = normalizeRequest(request)
+// resolveEvaluation loads one Pkl manifest through the config adapter and
+// projects it into the canonical resolved round plan.
+func resolveEvaluation(ctx context.Context, request evaluationResolveRequest) (Plan, error) {
+	request = normalizeEvaluationRequest(request)
 
 	manifestPath, err := filepath.Abs(request.ManifestPath)
 	if err != nil {
@@ -177,7 +177,7 @@ type resolvedSystem struct {
 	policyPath string
 }
 
-func normalizeRequest(request ResolveRequest) ResolveRequest {
+func normalizeEvaluationRequest(request evaluationResolveRequest) evaluationResolveRequest {
 	if request.Now == nil {
 		request.Now = func() time.Time { return time.Now().UTC() }
 	}

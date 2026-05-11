@@ -1,15 +1,15 @@
-package evaluation
+package round
 
 import (
 	"time"
 
-	"github.com/becker63/searchbench-go/internal/app/compare"
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-// ResolveRequest configures one manifest-driven evaluation plan resolution.
-type ResolveRequest struct {
+// evaluationResolveRequest configures one manifest-driven evaluation plan resolution.
+type evaluationResolveRequest struct {
 	ManifestPath       string
 	BundleRootOverride string
 	BundleID           string

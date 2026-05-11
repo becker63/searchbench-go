@@ -1,4 +1,4 @@
-package evaluation
+package round
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 
 	executoreino "github.com/becker63/searchbench-go/internal/adapters/executor/eino"
-	"github.com/becker63/searchbench-go/internal/app/compare"
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
@@ -21,7 +21,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-func runComparison(ctx context.Context, plan Plan, request Request) (report.RoundReport, []EvaluatorExecution, error) {
+func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, error) {
 	executor := &evaluatorExecutor{
 		modelFactory: request.EvaluatorModelFactory,
 		toolFactory:  request.EvaluatorToolFactory,

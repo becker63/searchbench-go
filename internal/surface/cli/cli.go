@@ -14,8 +14,7 @@ import (
 type CLI struct {
 	Round RoundCmd `cmd:"round" help:"Run and inspect SearchBench rounds."`
 
-	DemoReport DemoReportCmd `cmd:"demo-report" hidden:"" help:"Render the legacy demo round report."`
-	Run        RunCmd        `cmd:"run" hidden:"" help:"Run one round manifest."`
+	Run RunCmd `cmd:"run" hidden:"" help:"Run one round manifest."`
 
 	LogFormat string `enum:"dev,json,none" default:"dev" help:"Log format."`
 	NoColor   bool   `help:"Disable color in rendered reports."`
@@ -30,6 +29,19 @@ type App struct {
 	Width   int
 	Quiet   bool
 	Stdout  io.Writer
+}
+
+func (a *App) stdout() io.Writer {
+	if a == nil || a.Stdout == nil {
+		return nilWriter{}
+	}
+	return a.Stdout
+}
+
+type nilWriter struct{}
+
+func (nilWriter) Write(p []byte) (int, error) {
+	return len(p), nil
 }
 
 // Run executes the Searchbench CLI against the process stdio streams.

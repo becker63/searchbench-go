@@ -1,4 +1,4 @@
-package evaluation
+package round
 
 import (
 	"github.com/cloudwego/eino/components/model"
@@ -18,9 +18,9 @@ type EvaluatorModelFactory func(spec run.Spec) (model.ToolCallingChatModel, erro
 // EvaluatorToolFactory constructs the evaluator tool set for one run spec.
 type EvaluatorToolFactory func(spec run.Spec) ([]tool.BaseTool, error)
 
-// Request configures one manifest-driven local evaluation run.
-type Request struct {
-	Resolve ResolveRequest
+// evaluationRequest configures one manifest-driven local evaluation run.
+type evaluationRequest struct {
+	Resolve evaluationResolveRequest
 
 	PklCommand          []string
 	DisableRenderReport bool

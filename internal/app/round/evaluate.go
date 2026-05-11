@@ -1,4 +1,4 @@
-package evaluation
+package round
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 	"github.com/becker63/searchbench-go/internal/surface/console"
 )
 
-// Run executes the smallest manifest-driven local fake SearchBench-Go path and
-// writes one immutable bundle.
-func Run(ctx context.Context, request Request) (Result, error) {
-	plan, err := Resolve(ctx, request.Resolve)
+// runEvaluation executes the smallest manifest-driven local fake SearchBench-Go
+// path and writes one immutable bundle.
+func runEvaluation(ctx context.Context, request evaluationRequest) (Result, error) {
+	plan, err := resolveEvaluation(ctx, request.Resolve)
 	if err != nil {
 		phase := PhaseResolvePlanFailed
 		if errors.Is(err, ErrUnsupportedMode) {
@@ -32,11 +32,11 @@ func Run(ctx context.Context, request Request) (Result, error) {
 		}
 		return Result{}, &Error{Phase: phase, Err: err}
 	}
-	return RunResolved(ctx, plan, request)
+	return runEvaluationResolved(ctx, plan, request)
 }
 
-// RunResolved executes one already-resolved local evaluation plan.
-func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error) {
+// runEvaluationResolved executes one already-resolved local evaluation plan.
+func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationRequest) (Result, error) {
 	runCtx := ctx
 	cancel := func() {}
 	timeout := timeoutFromSeconds(plan.Evaluator.Bounds.TimeoutSeconds)
@@ -108,7 +108,7 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Result, error
 	}, nil
 }
 
-func renderReport(plan Plan, request Request, roundReport report.RoundReport) (*bundlefs.RenderedReport, error) {
+func renderReport(plan Plan, request evaluationRequest, roundReport report.RoundReport) (*bundlefs.RenderedReport, error) {
 	if !plan.Output.RenderHumanReport || request.DisableRenderReport {
 		return nil, nil
 	}

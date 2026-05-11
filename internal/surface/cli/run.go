@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/becker63/searchbench-go/internal/app/evaluation"
+	"github.com/becker63/searchbench-go/internal/app/round"
 )
 
 // RoundCmd groups public round commands.
@@ -26,34 +26,48 @@ func (c *RunCmd) Run(ctx context.Context, app *App) error {
 		app = &App{}
 	}
 
-	result, err := evaluation.Run(ctx, evaluation.Request{
-		Resolve: evaluation.ResolveRequest{
-			ManifestPath:       c.Manifest,
-			BundleRootOverride: c.BundleRoot,
-			BundleID:           c.BundleID,
-		},
-		DisableRenderReport: c.NoHumanReport,
+	record, err := round.Run(ctx, round.Input{
+		EvaluationManifestPath: c.Manifest,
+		BundleRootOverride:     c.BundleRoot,
+		RoundID:                c.BundleID,
+		DisableRenderReport:    c.NoHumanReport,
 	})
 	if err != nil {
 		return err
 	}
 
+	result := record.RoundResult
+	if result == nil {
+		return fmt.Errorf("round: missing evaluation result")
+	}
+
+	objectiveID := ""
+	if result.ObjectiveResult != nil {
+		objectiveID = string(result.ObjectiveResult.ObjectiveID)
+	}
 	if _, err := fmt.Fprintf(
 		app.stdout(),
 		"bundle=%s\nreport_id=%s\nobjective=%s\nfinal=%s:%0.6f\n",
 		result.Bundle.Path,
 		result.ReportID,
-		result.ObjectiveResult.ObjectiveID,
-		result.ObjectiveResult.Final,
-		mustFinalValue(result),
+		objectiveID,
+		finalLabel(result),
+		finalValue(result),
 	); err != nil {
 		return err
 	}
 	return nil
 }
 
-func mustFinalValue(result evaluation.Result) float64 {
-	if result.ObjectiveResult == nil {
+func finalLabel(result *round.Result) string {
+	if result == nil || result.ObjectiveResult == nil {
+		return "final"
+	}
+	return string(result.ObjectiveResult.Final)
+}
+
+func finalValue(result *round.Result) float64 {
+	if result == nil || result.ObjectiveResult == nil {
 		return 0
 	}
 	final, ok := result.ObjectiveResult.FinalValue()

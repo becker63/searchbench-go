@@ -1,11 +1,10 @@
-package evaluation
+package round
 
 import (
 	"context"
 	"go/parser"
 	"go/token"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,7 +21,7 @@ func TestResolveExampleManifest(t *testing.T) {
 	requirePkl(t)
 
 	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl")
-	out, err := Resolve(context.Background(), ResolveRequest{
+	out, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts"),
 		BundleID:           "round-resolve",
@@ -32,7 +31,7 @@ func TestResolveExampleManifest(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
+		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
 
 	if got, want := out.RoundName, "local-ic-vs-jcodemunch-round-001"; got != want {
@@ -70,13 +69,13 @@ func TestResolveOptimizeICManifestRejectsUnsupportedMode(t *testing.T) {
 	requirePkl(t)
 
 	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl")
-	_, err := Resolve(context.Background(), ResolveRequest{
+	_, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
 		BundleID:           "optimize-ic-example",
 	})
 	if err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
-		t.Fatalf("Resolve() error = %v, want unsupported mode", err)
+		t.Fatalf("resolveEvaluation() error = %v, want unsupported mode", err)
 	}
 }
 
@@ -90,7 +89,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 		t.Fatalf("WriteFile(parentEvidence) error = %v", err)
 	}
 
-	out, err := Resolve(context.Background(), ResolveRequest{
+	out, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
 		ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl"),
 		BundleRootOverride: filepath.Join(t.TempDir(), "bundle-root"),
 		BundleID:           "with-parent",
@@ -103,7 +102,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 		ParentEvidencePath: parentEvidence,
 	})
 	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
+		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
 
 	if got, want := out.Output.BundleCollectionPath, domain.HostPath(filepath.Join(string(out.Output.BundleWriterRoot), "games", "code-localization", "rounds")); got != want {
@@ -123,7 +122,7 @@ func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
 	}
 }
 
-func TestEvaluationPackageDoesNotImportGeneratedBindings(t *testing.T) {
+func TestRoundPackageDoesNotImportGeneratedBindings(t *testing.T) {
 	t.Parallel()
 
 	_, currentFile, _, ok := runtime.Caller(0)
@@ -145,27 +144,11 @@ func TestEvaluationPackageDoesNotImportGeneratedBindings(t *testing.T) {
 			for _, imp := range file.Imports {
 				path := strings.Trim(imp.Path.Value, `"`)
 				if strings.Contains(path, "/internal/adapters/config/pkl/generated") {
-					t.Fatalf("app/evaluation import %q leaked generated bindings", path)
+					t.Fatalf("app/round import %q leaked generated bindings", path)
 				}
 			}
 		}
 	}
-}
-
-func requirePkl(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("pkl"); err != nil {
-		t.Skip("pkl CLI not available on PATH")
-	}
-}
-
-func repoRoot(t *testing.T) string {
-	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("filepath.Abs(repo root) error = %v", err)
-	}
-	return root
 }
 
 func reflectStringsEqual(got, want []string) bool {

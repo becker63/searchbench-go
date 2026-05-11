@@ -1,14 +1,10 @@
-package evaluation
+package round
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -39,26 +35,30 @@ func TestLocalManifestCanBeLoadedAndValidated(t *testing.T) {
 func TestRunRejectsUnsupportedMode(t *testing.T) {
 	t.Parallel()
 
-	_, err := Resolve(context.Background(), ResolveRequest{
+	requirePkl(t)
+
+	_, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
 		ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
 		BundleID:           "localrun-unsupported-mode",
 	})
 	if err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
-		t.Fatalf("Resolve() error = %v, want unsupported mode", err)
+		t.Fatalf("resolveEvaluation() error = %v, want unsupported mode", err)
 	}
 }
 
 func TestRoundComparesIncumbentAndChallenger(t *testing.T) {
 	t.Parallel()
 
+	requirePkl(t)
+
 	fixtureDir := createRoundFixture(t, "")
-	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
+	plan, err := resolveEvaluation(context.Background(), sampleEvaluationRequest(fixtureDir).Resolve)
 	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
+		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
 
-	out, executions, err := runComparison(context.Background(), plan, sampleRequest(fixtureDir))
+	out, executions, err := runComparison(context.Background(), plan, sampleEvaluationRequest(fixtureDir))
 	if err != nil {
 		t.Fatalf("runComparison() error = %v", err)
 	}
@@ -84,12 +84,14 @@ func TestRoundComparesIncumbentAndChallenger(t *testing.T) {
 func TestRoundEvidenceUsesMatchExecutions(t *testing.T) {
 	t.Parallel()
 
+	requirePkl(t)
+
 	fixtureDir := createRoundFixture(t, "")
-	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
+	plan, err := resolveEvaluation(context.Background(), sampleEvaluationRequest(fixtureDir).Resolve)
 	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
+		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
-	out, _, err := runComparison(context.Background(), plan, sampleRequest(fixtureDir))
+	out, _, err := runComparison(context.Background(), plan, sampleEvaluationRequest(fixtureDir))
 	if err != nil {
 		t.Fatalf("runComparison() error = %v", err)
 	}
@@ -115,8 +117,8 @@ func TestRoundWritesDurableBundle(t *testing.T) {
 	requirePkl(t)
 
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
-	result, err := Run(context.Background(), Request{
-		Resolve: ResolveRequest{
+	result, err := runEvaluation(context.Background(), evaluationRequest{
+		Resolve: evaluationResolveRequest{
 			ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-success",
@@ -127,7 +129,7 @@ func TestRoundWritesDurableBundle(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("Run() error = %v", err)
+		t.Fatalf("runEvaluation() error = %v", err)
 	}
 
 	if result.Bundle.Path == "" {
@@ -195,10 +197,12 @@ func TestRoundWritesDurableBundle(t *testing.T) {
 func TestMaterializeRoundEvidenceCreatesCurrentTempModule(t *testing.T) {
 	t.Parallel()
 
+	requirePkl(t)
+
 	fixtureDir := createRoundFixture(t, "")
-	plan, err := Resolve(context.Background(), sampleRequest(fixtureDir).Resolve)
+	plan, err := resolveEvaluation(context.Background(), sampleEvaluationRequest(fixtureDir).Resolve)
 	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
+		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
 	current := sampleRoundEvidence(t, domain.ReportID("report-materialized-current"))
 
@@ -223,9 +227,11 @@ func TestMaterializeRoundEvidenceCreatesCurrentTempModule(t *testing.T) {
 func TestMaterializeRoundEvidenceAcceptsExplicitParent(t *testing.T) {
 	t.Parallel()
 
+	requirePkl(t)
+
 	fixtureDir := createRoundFixture(t, "")
 	parentEvidencePath := writeScoreModuleForTest(t, fixtureDir, "parent-evidence.pkl", sampleRoundEvidence(t, domain.ReportID("report-parent")))
-	request := sampleRequest(fixtureDir)
+	request := sampleEvaluationRequest(fixtureDir)
 	request.Resolve.ParentRef = &score.ObjectiveEvidenceRef{
 		Name:         "parent",
 		BundlePath:   filepath.Join(fixtureDir, "artifacts", "games", "code-localization", "rounds", "parent-run"),
@@ -234,9 +240,9 @@ func TestMaterializeRoundEvidenceAcceptsExplicitParent(t *testing.T) {
 	}
 	request.Resolve.ParentEvidencePath = parentEvidencePath
 
-	plan, err := Resolve(context.Background(), request.Resolve)
+	plan, err := resolveEvaluation(context.Background(), request.Resolve)
 	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
+		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
 	current := sampleRoundEvidence(t, domain.ReportID("report-current"))
 
@@ -275,8 +281,8 @@ func TestRunWithParentEvidenceThreadsObjectiveRefs(t *testing.T) {
 	}
 
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
-	result, err := Run(context.Background(), Request{
-		Resolve: ResolveRequest{
+	result, err := runEvaluation(context.Background(), evaluationRequest{
+		Resolve: evaluationResolveRequest{
 			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-parent",
@@ -288,7 +294,7 @@ func TestRunWithParentEvidenceThreadsObjectiveRefs(t *testing.T) {
 		},
 	})
 	if err != nil {
-		t.Fatalf("Run() error = %v", err)
+		t.Fatalf("runEvaluation() error = %v", err)
 	}
 
 	if got, want := len(result.ObjectiveResult.EvidenceRefs), 2; got != want {
@@ -318,8 +324,8 @@ func TestRunObjectiveFailurePreventsCompletedBundle(t *testing.T) {
 
 	fixtureDir := createRoundFixture(t, `final = ""`)
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
-	_, err := Run(context.Background(), Request{
-		Resolve: ResolveRequest{
+	_, err := runEvaluation(context.Background(), evaluationRequest{
+		Resolve: evaluationResolveRequest{
 			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-objective-failure",
@@ -356,8 +362,8 @@ func TestRunMissingObjectiveFailsBeforeFinalization(t *testing.T) {
 	}
 
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
-	_, err := Run(context.Background(), Request{
-		Resolve: ResolveRequest{
+	_, err := runEvaluation(context.Background(), evaluationRequest{
+		Resolve: evaluationResolveRequest{
 			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-missing-objective",
@@ -386,8 +392,8 @@ func TestRunMissingParentScoreFailsCleanly(t *testing.T) {
 
 	fixtureDir := createRoundFixture(t, "")
 	bundleCollection := filepath.Join(t.TempDir(), "artifacts")
-	_, err := Run(context.Background(), Request{
-		Resolve: ResolveRequest{
+	_, err := runEvaluation(context.Background(), evaluationRequest{
+		Resolve: evaluationResolveRequest{
 			ManifestPath:       filepath.Join(fixtureDir, "round.pkl"),
 			BundleRootOverride: bundleCollection,
 			BundleID:           "localrun-missing-parent-score",
@@ -410,91 +416,9 @@ func TestRunMissingParentScoreFailsCleanly(t *testing.T) {
 	}
 }
 
-func TestPurePackagesStillAvoidPklImports(t *testing.T) {
-	t.Parallel()
-
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
-	dirs := []string{
-		filepath.Join(repoRoot, "internal", "pure", "domain"),
-		filepath.Join(repoRoot, "internal", "pure", "execution"),
-		filepath.Join(repoRoot, "internal", "pure", "score"),
-		filepath.Join(repoRoot, "internal", "pure", "report"),
-		filepath.Join(repoRoot, "internal", "pure", "codegraph"),
-		filepath.Join(repoRoot, "internal", "pure", "usage"),
-	}
-
-	for _, dir := range dirs {
-		fs := token.NewFileSet()
-		pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-			name := info.Name()
-			return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-		}, parser.ImportsOnly)
-		if err != nil {
-			t.Fatalf("parser.ParseDir(%q) error = %v", dir, err)
-		}
-		for _, pkg := range pkgs {
-			for _, file := range pkg.Files {
-				for _, imp := range file.Imports {
-					path := strings.Trim(imp.Path.Value, `"`)
-					if strings.Contains(path, "github.com/apple/pkl-go") {
-						t.Fatalf("pure package import %q leaked pkl-go", path)
-					}
-				}
-			}
-		}
-	}
-}
-
-func TestLocalRunPackageAvoidsRealRuntimeImports(t *testing.T) {
-	t.Parallel()
-
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-
-	dir := filepath.Dir(currentFile)
-	fs := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-		name := info.Name()
-		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-	}, parser.ImportsOnly)
-	if err != nil {
-		t.Fatalf("parser.ParseDir() error = %v", err)
-	}
-
-	forbiddenSubstrings := []string{
-		"internal/ports/pipeline",
-		"openai",
-		"anthropic",
-		"cerebras",
-		"openrouter",
-		"mcp",
-		"net/http",
-	}
-
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, imp := range file.Imports {
-				path := strings.Trim(imp.Path.Value, `"`)
-				for _, forbidden := range forbiddenSubstrings {
-					if strings.Contains(strings.ToLower(path), forbidden) {
-						t.Fatalf("forbidden import %q contains %q", path, forbidden)
-					}
-				}
-			}
-		}
-	}
-}
-
-func sampleRequest(tempDir string) Request {
-	return Request{
-		Resolve: ResolveRequest{
+func sampleEvaluationRequest(tempDir string) evaluationRequest {
+	return evaluationRequest{
+		Resolve: evaluationResolveRequest{
 			ManifestPath:       filepath.Join(tempDir, "round.pkl"),
 			BundleRootOverride: filepath.Join(tempDir, "artifacts"),
 			BundleID:           "localrun-test",
@@ -567,22 +491,6 @@ func assertFileExists(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("os.Stat(%q) error = %v", path, err)
-	}
-}
-
-func mustReadFile(t *testing.T, path string) []byte {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
-	}
-	return data
-}
-
-func decodeJSONFile(t *testing.T, path string, target any) {
-	t.Helper()
-	if err := json.Unmarshal(mustReadFile(t, path), target); err != nil {
-		t.Fatalf("json.Unmarshal(%q) error = %v", path, err)
 	}
 }
 
