@@ -6,15 +6,18 @@ import (
         "os"
         "time"
 
-        bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-        config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-        reporttext "github.com/becker63/searchbench-go/internal/adapters/report/text"
-        scoring "github.com/becker63/searchbench-go/internal/adapters/scoring/pkl"
-        "github.com/becker63/searchbench-go/internal/pure/report"
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+	text "github.com/becker63/searchbench-go/internal/adapters/report/text"
+	scoring "github.com/becker63/searchbench-go/internal/adapters/scoring/pkl"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-// runEvaluation executes the smallest manifest-driven local fake SearchBench-Go
-// path and writes one immutable bundle.
+// runEvaluation executes the full manifest-driven evaluation pipeline. It is
+// the convenience entry point used by tests and by the legacy single-call API;
+// the production round flow runs the same helpers individually through the
+// named phase functions in run.go.
 func runEvaluation(ctx context.Context, request evaluationRequest) (Result, error) {
         plan, err := resolveEvaluation(ctx, request.Resolve)
         if err != nil {
@@ -35,91 +38,127 @@ func runEvaluation(ctx context.Context, request evaluationRequest) (Result, erro
         return runEvaluationResolved(ctx, plan, request)
 }
 
-// runEvaluationResolved executes one already-resolved local evaluation plan.
+// runEvaluationResolved orchestrates the full evaluation pipeline once the
+// plan is resolved. Each step delegates to the same helper that the named
+// public phase functions call, so this wrapper and the phase functions stay
+// in lockstep.
 func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationRequest) (Result, error) {
-        runCtx := ctx
-        cancel := func() {}
-        timeout := timeoutFromSeconds(plan.Evaluator.Bounds.TimeoutSeconds)
-        if timeout > 0 {
-                runCtx, cancel = context.WithTimeout(ctx, timeout)
-        }
-        defer cancel()
+	runCtx, cancel := withEvaluatorTimeout(ctx, plan)
+	defer cancel()
 
-        roundReport, evaluatorExecutions, err := runComparison(runCtx, plan, request)
-        if err != nil {
-                return Result{}, &Error{Phase: PhaseComparisonFailed, Err: err}
-        }
+	roundReport, executions, err := runComparison(runCtx, plan, request)
+	if err != nil {
+		return Result{}, &Error{Phase: PhaseComparisonFailed, Err: err}
+	}
 
-        roundEvidence, err := report.BuildRoundEvidence(roundReport)
-        if err != nil {
-                return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
-        }
-        roundEvidence.GameID = plan.Game.ID
-        roundEvidence.RoundID = plan.Round.ID
-        if err := roundEvidence.Validate(); err != nil {
-                return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
-        }
+	evidence, err := buildEvidenceFromReport(plan, roundReport)
+	if err != nil {
+		return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
+	}
 
-        evidenceInput, err := materializeRoundEvidence(plan, roundEvidence)
-        if err != nil {
-                return Result{}, &Error{Phase: PhaseEvidencePKLFailed, Err: err}
-        }
-        defer evidenceInput.Cleanup()
+	objective, err := evaluateObjectiveForPlan(ctx, plan, evidence, request)
+	if err != nil {
+		return Result{}, err
+	}
 
-        objectiveResult, err := scoring.Evaluate(ctx, scoring.Request{
-                ScoringPath:         plan.Scoring.ObjectivePath,
-                CurrentRef:          evidenceInput.CurrentRef,
-                CurrentEvidencePath: evidenceInput.CurrentEvidencePath,
-                ParentRef:           evidenceInput.ParentRef,
-                ParentEvidencePath:  evidenceInput.ParentEvidencePath,
-                PklCommand:          request.PklCommand,
-        })
-        if err != nil {
-                return Result{}, &Error{Phase: PhaseObjectiveFailed, Err: err}
-        }
+	bundleRef, err := writeRoundBundle(ctx, plan, request, roundReport, evidence, objective)
+	if err != nil {
+		return Result{}, err
+	}
 
-        renderedReport, err := renderReport(plan, request, roundReport)
-        if err != nil {
-                return Result{}, &Error{Phase: PhaseRenderReportFailed, Err: err}
-        }
+	return Result{
+		ManifestPath:        plan.ManifestPath,
+		Bundle:              bundleRef,
+		ReportID:            roundReport.ID,
+		RoundReport:         roundReport,
+		RoundEvidence:       evidence,
+		ObjectiveResult:     objective,
+		EvaluatorExecutions: executions,
+	}, nil
+}
 
-        bundleRef, err := bundlefs.WriteBundle(ctx, bundlefs.RoundBundleInput{
-                RootPath:        plan.Output.BundleWriterRoot,
-                BundleID:        plan.Bundle.ID,
-                ResolvedInput:   plan,
-                RoundReport:     roundReport,
-                RoundEvidence:   roundEvidence,
-                ObjectiveResult: &objectiveResult,
-                RenderedReport:  renderedReport,
-                CreatedAt:       plan.CreatedAt,
-        })
-        if err != nil {
-                return Result{}, &Error{Phase: PhaseBundleWriteFailed, Err: err}
-        }
+func withEvaluatorTimeout(ctx context.Context, plan Plan) (context.Context, context.CancelFunc) {
+	timeout := timeoutFromSeconds(plan.Evaluator.Bounds.TimeoutSeconds)
+	if timeout > 0 {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return ctx, func() {}
+}
 
-        return Result{
-                ManifestPath:        plan.ManifestPath,
-                Bundle:              bundleRef,
-                ReportID:            roundReport.ID,
-                RoundReport:         roundReport,
-                RoundEvidence:       roundEvidence,
-                ObjectiveResult:     &objectiveResult,
-                EvaluatorExecutions: evaluatorExecutions,
-        }, nil
+func buildEvidenceFromReport(plan Plan, roundReport report.RoundReport) (score.RoundEvidenceDocument, error) {
+	evidence, err := report.BuildRoundEvidence(roundReport)
+	if err != nil {
+		return score.RoundEvidenceDocument{}, err
+	}
+	evidence.GameID = plan.Game.ID
+	evidence.RoundID = plan.Round.ID
+	if err := evidence.Validate(); err != nil {
+		return score.RoundEvidenceDocument{}, err
+	}
+	return evidence, nil
+}
+
+func evaluateObjectiveForPlan(ctx context.Context, plan Plan, evidence score.RoundEvidenceDocument, request evaluationRequest) (*score.ObjectiveResult, error) {
+	evidenceInput, err := materializeRoundEvidence(plan, evidence)
+	if err != nil {
+		return nil, &Error{Phase: PhaseEvidencePKLFailed, Err: err}
+	}
+	defer evidenceInput.Cleanup()
+
+	objectiveResult, err := scoring.Evaluate(ctx, scoring.Request{
+		ScoringPath:         plan.Scoring.ObjectivePath,
+		CurrentRef:          evidenceInput.CurrentRef,
+		CurrentEvidencePath: evidenceInput.CurrentEvidencePath,
+		ParentRef:           evidenceInput.ParentRef,
+		ParentEvidencePath:  evidenceInput.ParentEvidencePath,
+		PklCommand:          request.PklCommand,
+	})
+	if err != nil {
+		return nil, &Error{Phase: PhaseObjectiveFailed, Err: err}
+	}
+	return &objectiveResult, nil
+}
+
+func writeRoundBundle(
+	ctx context.Context,
+	plan Plan,
+	request evaluationRequest,
+	roundReport report.RoundReport,
+	evidence score.RoundEvidenceDocument,
+	objective *score.ObjectiveResult,
+) (bundlefs.BundleRef, error) {
+	rendered, err := renderReport(plan, request, roundReport)
+	if err != nil {
+		return bundlefs.BundleRef{}, &Error{Phase: PhaseRenderReportFailed, Err: err}
+	}
+	bundleRef, err := bundlefs.WriteBundle(ctx, bundlefs.RoundBundleInput{
+		RootPath:        plan.Output.BundleWriterRoot,
+		BundleID:        plan.Bundle.ID,
+		ResolvedInput:   plan,
+		RoundReport:     roundReport,
+		RoundEvidence:   evidence,
+		ObjectiveResult: objective,
+		RenderedReport:  rendered,
+		CreatedAt:       plan.CreatedAt,
+	})
+	if err != nil {
+		return bundlefs.BundleRef{}, &Error{Phase: PhaseBundleWriteFailed, Err: err}
+	}
+	return bundleRef, nil
 }
 
 func renderReport(plan Plan, request evaluationRequest, roundReport report.RoundReport) (*bundlefs.RenderedReport, error) {
-        if !plan.Output.RenderHumanReport || request.DisableRenderReport {
-                return nil, nil
-        }
-        content := reporttext.RenderRoundReport(roundReport, reporttext.Options{
-                Color: false,
-                Width: 100,
-        })
-        return &bundlefs.RenderedReport{
-                FileName: "round-report.txt",
-                Content:  content + "\n",
-        }, nil
+	if !plan.Output.RenderHumanReport || request.DisableRenderReport {
+		return nil, nil
+	}
+	content := text.RenderRoundReport(roundReport, text.Options{
+		Color: false,
+		Width: 100,
+	})
+	return &bundlefs.RenderedReport{
+		FileName: "round-report.txt",
+		Content:  content + "\n",
+	}, nil
 }
 
 func normalizeManifestPathError(manifestPath string, err error) error {

@@ -1,116 +1,169 @@
 package round
 
 import (
-        "context"
-        "errors"
+	"context"
+	"errors"
 
-        appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
-        "github.com/becker63/searchbench-go/internal/games/codelocalization"
-        "github.com/becker63/searchbench-go/internal/pure/game"
-        "github.com/becker63/searchbench-go/internal/pure/report"
-        pureround "github.com/becker63/searchbench-go/internal/pure/round"
-        "github.com/becker63/searchbench-go/internal/pure/score"
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+	appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
+	"github.com/becker63/searchbench-go/internal/games/codelocalization"
+	"github.com/becker63/searchbench-go/internal/pure/game"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
+	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
 // Run completes one round and, when configured, proposes a next challenger.
+//
+// The flow is the named pipeline: ResolveGame -> ResolveRound ->
+// EvaluateMatches -> BuildEvidence -> EvaluateObjective -> Decide ->
+// WriteBundle -> ProposeNextChallenger. Each step delegates to the
+// corresponding phase function, and only WriteBundle is allowed to write the
+// COMPLETE marker for the round bundle.
 func Run(ctx context.Context, input Input) (Record, error) {
-        input = normalizeInput(input)
-        record := Record{}
+	input = normalizeInput(input)
+	record := Record{}
 
-        resolvedGame, err := ResolveGame(ctx, input)
-        if err != nil {
-                return record, err
-        }
-        record.Game = resolvedGame
+	resolvedGame, err := ResolveGame(ctx, input)
+	if err != nil {
+		return record, err
+	}
+	record.Game = resolvedGame
 
-        resolved, err := ResolveRound(ctx, resolvedGame, input)
-        if err != nil {
-                return record, err
-        }
+	resolved, err := ResolveRound(ctx, resolvedGame, input)
+	if err != nil {
+		return record, err
+	}
 
-        matches, err := EvaluateMatches(ctx, resolved, input)
-        if err != nil {
-                return record, err
-        }
+	matches, err := EvaluateMatches(ctx, resolved, input)
+	if err != nil {
+		return record, err
+	}
 
-        evidence, err := BuildEvidence(resolvedGame, resolved, matches)
-        if err != nil {
-                return record, err
-        }
+	evidence, err := BuildEvidence(resolvedGame, resolved, matches)
+	if err != nil {
+		return record, err
+	}
 
-        objective, err := EvaluateObjective(ctx, resolved, evidence, matches)
-        if err != nil {
-                return record, err
-        }
+	objective, err := EvaluateObjective(ctx, resolved, evidence, matches, input)
+	if err != nil {
+		return record, err
+	}
 
-        decision := Decide(resolvedGame, resolved, evidence, objective, matches)
+	decision := Decide(resolvedGame, resolved, evidence, objective, matches)
 
-        next, err := ProposeNextChallenger(ctx, resolved, evidence, objective, decision, matches, input)
-        if err != nil {
-                return record, err
-        }
+	bundleRef, err := WriteBundle(ctx, resolved, matches, evidence, objective, input)
+	if err != nil {
+		return record, err
+	}
 
-        record.Round = WriteBundle(resolved, evidence, objective, decision, next, matches)
-        record.RoundBundle = string(matches.Evaluation.Bundle.Path)
-        record.RoundResult = &matches.Evaluation
-        if next != nil {
-                record.NextChallengerResult = next
-                record.OptimizerBundle = next.BundlePath
-        }
-        return record, nil
+	roundResult := buildResult(matches, bundleRef, evidence, objective)
+	record.Round = pureround.Record{
+		GameID:          resolvedGame.ID,
+		RoundID:         evidence.RoundID,
+		BundlePath:      bundleRef.Path,
+		Evidence:        evidence,
+		ObjectiveResult: objective,
+		Decision:        decision,
+	}
+	record.RoundBundle = string(bundleRef.Path)
+	record.RoundResult = &roundResult
+
+	next, err := ProposeNextChallenger(ctx, resolved, evidence, objective, decision, bundleRef, input)
+	if err != nil {
+		return record, err
+	}
+	if next != nil {
+		record.NextChallengerResult = next
+		record.OptimizerBundle = next.BundlePath
+		record.Round.NextChallenger = next.Optimizer.Proposal != nil
+	}
+	return record, nil
 }
 
 // ResolveGame resolves the domain contract for the round.
 func ResolveGame(_ context.Context, _ Input) (game.Contract, error) {
-        return codelocalization.Contract(), nil
+	return codelocalization.Contract(), nil
 }
 
 // ResolveRound loads and normalizes the caller's round manifest.
 func ResolveRound(ctx context.Context, resolvedGame game.Contract, input Input) (Resolved, error) {
-        roundPlan, err := resolveEvaluation(ctx, evaluationResolveRequest{
-                ManifestPath:       input.EvaluationManifestPath,
-                BundleRootOverride: roundBundleRoot(input.BundleRootOverride),
-                BundleID:           input.RoundID,
-                Now:                input.Now,
-        })
-        if err != nil {
-                return Resolved{}, err
-        }
-        return Resolved{Game: resolvedGame, Round: roundPlan}, nil
+	roundPlan, err := resolveEvaluation(ctx, evaluationResolveRequest{
+		ManifestPath:       input.EvaluationManifestPath,
+		BundleRootOverride: roundBundleRoot(input.BundleRootOverride),
+		BundleID:           input.RoundID,
+		Now:                input.Now,
+	})
+	if err != nil {
+		return Resolved{}, err
+	}
+	return Resolved{Game: resolvedGame, Round: roundPlan}, nil
 }
 
-// EvaluateMatches runs incumbent and challenger executions for the round matches.
+// EvaluateMatches runs incumbent and challenger executions for the round
+// matches. It must not write any bundle artifacts; persistence is reserved for
+// WriteBundle.
 func EvaluateMatches(ctx context.Context, resolved Resolved, input Input) (MatchRecords, error) {
-        roundResult, err := runEvaluationResolved(ctx, resolved.Round, evaluationRequest{
-                Resolve: evaluationResolveRequest{
-                        ManifestPath:       input.EvaluationManifestPath,
-                        BundleRootOverride: roundBundleRoot(input.BundleRootOverride),
-                        BundleID:           input.RoundID,
-                        Now:                input.Now,
-                },
-                DisableRenderReport:   input.DisableRenderReport,
-                EvaluatorModelFactory: input.EvaluatorModelFactory,
-                EvaluatorToolFactory:  input.EvaluatorToolFactory,
-        })
-        if err != nil {
-                return MatchRecords{}, err
-        }
-        return MatchRecords{Evaluation: roundResult}, nil
+	plan := resolved.Round
+	runCtx, cancel := withEvaluatorTimeout(ctx, plan)
+	defer cancel()
+
+	roundReport, executions, err := runComparison(runCtx, plan, evaluationRequestFromInput(input))
+	if err != nil {
+		return MatchRecords{}, &Error{Phase: PhaseComparisonFailed, Err: err}
+	}
+	return MatchRecords{
+		Plan:                plan,
+		RoundReport:         roundReport,
+		EvaluatorExecutions: executions,
+	}, nil
 }
 
-// BuildEvidence returns the durable round evidence derived from match records.
+// BuildEvidence projects the durable round evidence from the match records.
+// It must not write any bundle artifacts.
 func BuildEvidence(_ game.Contract, _ Resolved, matches MatchRecords) (score.RoundEvidenceDocument, error) {
-        return matches.Evaluation.RoundEvidence, nil
+	evidence, err := buildEvidenceFromReport(matches.Plan, matches.RoundReport)
+	if err != nil {
+		return score.RoundEvidenceDocument{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
+	}
+	return evidence, nil
 }
 
-// EvaluateObjective returns the objective result already evaluated for the round.
-func EvaluateObjective(_ context.Context, _ Resolved, _ score.RoundEvidenceDocument, matches MatchRecords) (*score.ObjectiveResult, error) {
-        return matches.Evaluation.ObjectiveResult, nil
+// EvaluateObjective scores the projected evidence with the manifest's
+// objective. It must not write any bundle artifacts.
+func EvaluateObjective(
+	ctx context.Context,
+	_ Resolved,
+	evidence score.RoundEvidenceDocument,
+	matches MatchRecords,
+	input Input,
+) (*score.ObjectiveResult, error) {
+	return evaluateObjectiveForPlan(ctx, matches.Plan, evidence, evaluationRequestFromInput(input))
 }
 
 // Decide captures the explicit round decision from the round report.
 func Decide(_ game.Contract, _ Resolved, _ score.RoundEvidenceDocument, _ *score.ObjectiveResult, matches MatchRecords) report.Decision {
-        return matches.Evaluation.RoundReport.Decision
+	return matches.RoundReport.Decision
+}
+
+// WriteBundle is the only phase that persists the durable round bundle and
+// writes the COMPLETE marker.
+func WriteBundle(
+	ctx context.Context,
+	_ Resolved,
+	matches MatchRecords,
+	evidence score.RoundEvidenceDocument,
+	objective *score.ObjectiveResult,
+	input Input,
+) (bundlefs.BundleRef, error) {
+	return writeRoundBundle(
+		ctx,
+		matches.Plan,
+		evaluationRequestFromInput(input),
+		matches.RoundReport,
+		evidence,
+		objective,
+	)
 }
 
 // ProposeNextChallenger asks the optimizer for a possible future challenger.
@@ -119,73 +172,79 @@ func Decide(_ game.Contract, _ Resolved, _ score.RoundEvidenceDocument, _ *score
 // configured, the round skips the optimizer cleanly and returns nil without
 // error.
 func ProposeNextChallenger(
-        ctx context.Context,
-        _ Resolved,
-        _ score.RoundEvidenceDocument,
-        _ *score.ObjectiveResult,
-        _ report.Decision,
-        matches MatchRecords,
-        input Input,
-) (*NextChallenger, error) {
-        if input.OptimizationManifestPath == "" {
-                return nil, nil
-        }
-        if input.OptimizerModelFactory == nil {
-                return nil, errors.New("round: OptimizerModelFactory is required when OptimizationManifestPath is set")
-        }
-        optimizerModel, err := input.OptimizerModelFactory()
-        if err != nil {
-                return nil, err
-        }
+	ctx context.Context,
+	_ Resolved,
+	_ score.RoundEvidenceDocument,
+	_ *score.ObjectiveResult,
+	_ report.Decision,
+	bundleRef bundlefs.BundleRef,
+	input Input,
+) (*appOptimizer.Record, error) {
+	if input.OptimizationManifestPath == "" {
+		return nil, nil
+	}
+	if input.OptimizerModelFactory == nil {
+		return nil, errors.New("round: OptimizerModelFactory is required when OptimizationManifestPath is set")
+	}
+	optimizerModel, err := input.OptimizerModelFactory()
+	if err != nil {
+		return nil, err
+	}
 
-        optimizerPlan, err := appOptimizer.Resolve(ctx, appOptimizer.ResolveRequest{
-                ManifestPath:             input.OptimizationManifestPath,
-                BundleRootOverride:       optimizerBundleRoot(input.BundleRootOverride),
-                ParentBundlePathOverride: string(matches.Evaluation.Bundle.Path),
-                BundleID:                 input.OptimizerBundleID,
-                Now:                      input.Now,
-        })
-        if err != nil {
-                return nil, err
-        }
+	optimizerPlan, err := appOptimizer.Resolve(ctx, appOptimizer.ResolveRequest{
+		ManifestPath:             input.OptimizationManifestPath,
+		BundleRootOverride:       optimizerBundleRoot(input.BundleRootOverride),
+		ParentBundlePathOverride: string(bundleRef.Path),
+		BundleID:                 input.OptimizerBundleID,
+		Now:                      input.Now,
+	})
+	if err != nil {
+		return nil, err
+	}
 
-        nextChallengerRecord, err := appOptimizer.RunResolved(ctx, optimizerPlan, appOptimizer.Request{
-                Resolve: appOptimizer.ResolveRequest{
-                        ManifestPath:             input.OptimizationManifestPath,
-                        BundleRootOverride:       optimizerBundleRoot(input.BundleRootOverride),
-                        ParentBundlePathOverride: string(matches.Evaluation.Bundle.Path),
-                        BundleID:                 input.OptimizerBundleID,
-                        Now:                      input.Now,
-                },
-                Model: optimizerModel,
-        })
-        out := &NextChallenger{
-                ManifestPath: nextChallengerRecord.ManifestPath,
-                BundlePath:   nextChallengerRecord.BundlePath,
-                Optimizer:    nextChallengerRecord.Optimizer,
-        }
-        if err != nil {
-                return out, err
-        }
-        return out, nil
+	nextChallengerRecord, err := appOptimizer.RunResolved(ctx, optimizerPlan, appOptimizer.Request{
+		Resolve: appOptimizer.ResolveRequest{
+			ManifestPath:             input.OptimizationManifestPath,
+			BundleRootOverride:       optimizerBundleRoot(input.BundleRootOverride),
+			ParentBundlePathOverride: string(bundleRef.Path),
+			BundleID:                 input.OptimizerBundleID,
+			Now:                      input.Now,
+		},
+		Model: optimizerModel,
+	})
+	if err != nil {
+		return &nextChallengerRecord, err
+	}
+	return &nextChallengerRecord, nil
 }
 
-// WriteBundle records the already-written durable round bundle in the round record.
-func WriteBundle(
-        resolved Resolved,
-        evidence score.RoundEvidenceDocument,
-        objective *score.ObjectiveResult,
-        decision report.Decision,
-        next *NextChallenger,
-        matches MatchRecords,
-) pureround.Record {
-        return pureround.Record{
-                GameID:          resolved.Game.ID,
-                RoundID:         evidence.RoundID,
-                BundlePath:      matches.Evaluation.Bundle.Path,
-                Evidence:        evidence,
-                ObjectiveResult: objective,
-                Decision:        decision,
-                NextChallenger:  next != nil && next.Optimizer.Proposal != nil,
-        }
+func buildResult(
+	matches MatchRecords,
+	bundleRef bundlefs.BundleRef,
+	evidence score.RoundEvidenceDocument,
+	objective *score.ObjectiveResult,
+) Result {
+	return Result{
+		ManifestPath:        matches.Plan.ManifestPath,
+		Bundle:              bundleRef,
+		ReportID:            matches.RoundReport.ID,
+		RoundReport:         matches.RoundReport,
+		RoundEvidence:       evidence,
+		ObjectiveResult:     objective,
+		EvaluatorExecutions: matches.EvaluatorExecutions,
+	}
+}
+
+func evaluationRequestFromInput(input Input) evaluationRequest {
+	return evaluationRequest{
+		Resolve: evaluationResolveRequest{
+			ManifestPath:       input.EvaluationManifestPath,
+			BundleRootOverride: roundBundleRoot(input.BundleRootOverride),
+			BundleID:           input.RoundID,
+			Now:                input.Now,
+		},
+		DisableRenderReport:   input.DisableRenderReport,
+		EvaluatorModelFactory: input.EvaluatorModelFactory,
+		EvaluatorToolFactory:  input.EvaluatorToolFactory,
+	}
 }

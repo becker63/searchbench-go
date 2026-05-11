@@ -6,8 +6,9 @@ import (
 
         "github.com/cloudwego/eino/components/model"
 
+        appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
         "github.com/becker63/searchbench-go/internal/pure/game"
-        pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+        "github.com/becker63/searchbench-go/internal/pure/report"
         pureround "github.com/becker63/searchbench-go/internal/pure/round"
 )
 
@@ -39,9 +40,14 @@ type Resolved struct {
         Round Plan
 }
 
-// MatchRecords captures the incumbent/challenger match execution output.
+// MatchRecords captures the incumbent/challenger match execution output. It is
+// the in-memory hand-off between EvaluateMatches and the downstream phase
+// functions. It must not contain any bundle artifacts; persistence is reserved
+// for WriteBundle.
 type MatchRecords struct {
-        Evaluation Result
+        Plan                Plan
+        RoundReport         report.RoundReport
+        EvaluatorExecutions []EvaluatorExecution
 }
 
 // Record is the completed round workflow outcome.
@@ -53,16 +59,7 @@ type Record struct {
         OptimizerBundle string
 
         RoundResult          *Result
-        NextChallengerResult *NextChallenger
-}
-
-// NextChallenger is the round-owned view of an optimizer run outcome.
-// It mirrors the private optimizer.Record fields using only pure types so the
-// optimizer package can stay private under internal/app/round/internal/.
-type NextChallenger struct {
-        ManifestPath string
-        BundlePath   string
-        Optimizer    pureoptimizer.NextChallengerRecord
+        NextChallengerResult *appOptimizer.Record
 }
 
 func normalizeInput(input Input) Input {
