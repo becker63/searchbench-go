@@ -27,7 +27,7 @@ func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal
 			Cause:   err,
 		}
 	}
-	defer os.RemoveAll(stageDir)
+	defer func() { _ = os.RemoveAll(stageDir) }()
 
 	stagePath := filepath.Join(stageDir, proposal.ArtifactName)
 	if err := os.WriteFile(stagePath, []byte(proposal.Code), 0o644); err != nil {

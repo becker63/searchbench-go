@@ -62,7 +62,7 @@ func resolveEvaluation(ctx context.Context, request evaluationResolveRequest) (P
 	if err != nil {
 		return Plan{}, fmt.Errorf("resolve objective path: %w", err)
 	}
-	bundleCollection, bundleWriterRoot, err := resolveBundlePaths(manifestDir, request.BundleRootOverride)
+	_, bundleWriterRoot, err := resolveBundlePaths(manifestDir, request.BundleRootOverride)
 	if err != nil {
 		return Plan{}, fmt.Errorf("resolve bundle root: %w", err)
 	}
@@ -112,7 +112,7 @@ func resolveEvaluation(ctx context.Context, request evaluationResolveRequest) (P
 	if strings.TrimSpace(gameID) == "" {
 		gameID = "code-localization"
 	}
-	bundleCollection = domain.HostPath(filepath.Join(string(bundleWriterRoot), "games", gameID, "rounds"))
+	bundleCollection := domain.HostPath(filepath.Join(string(bundleWriterRoot), "games", gameID, "rounds"))
 	expectedBundlePath := domain.HostPath(filepath.Join(string(bundleCollection), bundleID))
 	reportFormats := stringifyReportFormats(evaluation.Report.Formats)
 	renderHumanReport := containsReportFormat(reportFormats, config.ReportFormatText.String())

@@ -74,7 +74,7 @@ func WriteBundle(ctx context.Context, req Request) (string, error) {
 	if err := os.Mkdir(stageDir, 0o755); err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(stageDir)
+	defer func() { _ = os.RemoveAll(stageDir) }()
 
 	files := make([]bundleFile, 0, 8)
 	writeJSON := func(name string, value any) error {

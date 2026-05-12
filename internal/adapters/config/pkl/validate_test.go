@@ -1,14 +1,14 @@
 package config
 
 import (
-	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/becker63/searchbench-go/internal/testing/importcheck"
 )
 
 func TestValidEvaluationConfigValidates(t *testing.T) {
@@ -333,20 +333,15 @@ func TestPurePackagesDoNotImportPkl(t *testing.T) {
 
 	for _, dir := range dirs {
 		fs := token.NewFileSet()
-		pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-			name := info.Name()
-			return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-		}, parser.ImportsOnly)
+		files, err := importcheck.ParseNonTestGoFilesImportsOnly(fs, dir)
 		if err != nil {
-			t.Fatalf("parser.ParseDir(%q) error = %v", dir, err)
+			t.Fatalf("ParseNonTestGoFilesImportsOnly(%q) error = %v", dir, err)
 		}
-		for _, pkg := range pkgs {
-			for _, file := range pkg.Files {
-				for _, imp := range file.Imports {
-					path := strings.Trim(imp.Path.Value, `"`)
-					if strings.Contains(path, "github.com/apple/pkl-go") {
-						t.Fatalf("pure package import %q leaked pkl-go", path)
-					}
+		for _, file := range files {
+			for _, imp := range file.Imports {
+				path := strings.Trim(imp.Path.Value, `"`)
+				if strings.Contains(path, "github.com/apple/pkl-go") {
+					t.Fatalf("pure package import %q leaked pkl-go", path)
 				}
 			}
 		}

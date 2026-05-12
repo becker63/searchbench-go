@@ -91,10 +91,6 @@ func (l Logger) renderMetric(name, value string) string {
 	return l.styles.Metric.Render(name + "=" + value)
 }
 
-func (l Logger) renderMuted(value string) string {
-	return l.styles.Muted.Render(value)
-}
-
 func (l Logger) renderLoggerName() string {
 	if l.name == "" {
 		return ""

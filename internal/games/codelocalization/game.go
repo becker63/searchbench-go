@@ -5,8 +5,8 @@ import "github.com/becker63/searchbench-go/internal/pure/game"
 
 const (
 	GameID           game.ID = "code-localization"
-	MatchSchemaID            = "searchbench.games.code_localization.match.v1"
-	EvidenceSchemaID         = "searchbench.games.code_localization.evidence.v1"
+	MatchSchemaID    string  = "searchbench.games.code_localization.match.v1"
+	EvidenceSchemaID string  = "searchbench.games.code_localization.evidence.v1"
 )
 
 // EvidenceName identifies one code-localization evidence field.

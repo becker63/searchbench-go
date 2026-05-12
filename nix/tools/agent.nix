@@ -5,6 +5,11 @@
   searchbench-e2e,
   searchbench-check-generated,
   searchbench-update-repomix,
+  searchbench-staticcheck,
+  searchbench-golangci,
+  searchbench-nix-flake-check,
+  searchbench-go-mod-tidy-check,
+  searchbench-go-test-race,
 }:
 let
   searchbench-agent-start = mkInRepo {
@@ -126,9 +131,13 @@ let
       fi
       pre-commit run --all-files
       go test ./...
+      ${searchbench-go-test-race}/bin/searchbench-go-test-race
+      ${searchbench-staticcheck}/bin/searchbench-staticcheck
+      ${searchbench-golangci}/bin/searchbench-golangci
       ${searchbench-e2e}/bin/searchbench-e2e
-      nix flake check
+      ${searchbench-nix-flake-check}/bin/searchbench-nix-flake-check
       ${searchbench-check-generated}/bin/searchbench-check-generated
+      ${searchbench-go-mod-tidy-check}/bin/searchbench-go-mod-tidy-check
       ${searchbench-update-repomix}/bin/searchbench-update-repomix
       git diff --check
     '';
@@ -139,9 +148,16 @@ let
       pkgs.templ
       pkgs.nix
       pkgs.repomix
+      pkgs.golangci-lint
+      pkgs.go-tools
       searchbench-e2e
       searchbench-check-generated
       searchbench-update-repomix
+      searchbench-nix-flake-check
+      searchbench-go-mod-tidy-check
+      searchbench-staticcheck
+      searchbench-golangci
+      searchbench-go-test-race
     ];
   };
 in

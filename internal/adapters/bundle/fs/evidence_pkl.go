@@ -78,7 +78,6 @@ func marshalRoundEvidencePkl(doc score.RoundEvidenceDocument) ([]byte, error) {
 
 	w.list("metrics", func() {
 		for _, metric := range doc.Metrics {
-			metric := metric
 			w.listObject(func() {
 				writeMetricEvidenceBody(&w, metric)
 			})

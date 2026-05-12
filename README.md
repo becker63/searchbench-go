@@ -38,12 +38,14 @@ The Go implementation keeps deterministic model code and artifact semantics expl
 ```bash
 nix develop              # shell with Go, Pkl, hooks, searchbench-* tools
 nix develop -c pre-commit run --all-files
+nix develop -c searchbench-staticcheck
+nix develop -c searchbench-golangci
 nix flake check
 nix run .#e2e             # root package integration tests
 nix run .#update-repomix  # refresh committed repomix-output.xml
 ```
 
-See [`AGENTS.md`](AGENTS.md) for Repomix rationale, the flake vs full pre-commit split (no checked-in Go vendor), and hook layout.
+See [`AGENTS.md`](AGENTS.md) for Repomix rationale, hook tiers (flake vs pre-commit vs pre-push vs agent merge-check), and command reference.
 
 ---
 

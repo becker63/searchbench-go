@@ -43,7 +43,7 @@ func (c *RunCmd) Run(ctx context.Context, app *App) error {
 
 	objectiveID := ""
 	if result.ObjectiveResult != nil {
-		objectiveID = string(result.ObjectiveResult.ObjectiveID)
+		objectiveID = result.ObjectiveResult.ObjectiveID
 	}
 	if _, err := fmt.Fprintf(
 		app.stdout(),
@@ -63,7 +63,7 @@ func finalLabel(result *round.Result) string {
 	if result == nil || result.ObjectiveResult == nil {
 		return "final"
 	}
-	return string(result.ObjectiveResult.Final)
+	return result.ObjectiveResult.Final
 }
 
 func finalValue(result *round.Result) float64 {

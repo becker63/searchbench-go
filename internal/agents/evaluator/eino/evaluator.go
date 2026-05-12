@@ -3,7 +3,6 @@ package eino
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
@@ -106,15 +105,6 @@ func New(config Config) (*Evaluator, error) {
 	now := config.Now
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
-	}
-
-	workDir := config.WorkDir
-	if workDir == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("eino evaluator: determine working directory: %w", err)
-		}
-		workDir = wd
 	}
 
 	sessionID := config.SessionID

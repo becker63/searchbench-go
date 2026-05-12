@@ -1,8 +1,17 @@
-# Minimal golangci-lint config: high-signal only (see issue #36).
+# High-signal Go checks; avoid style-only linters (see project docs).
 version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
 linters:
   default: none
   enable:
     - govet
-run:
-  timeout: 5m
+    - staticcheck
+    - ineffassign
+    - unused
+    - errcheck
+    - copyloopvar
+    - unconvert

@@ -1,15 +1,14 @@
 package usage
 
 import (
-	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/testing/importcheck"
 )
 
 func TestCollectorReportedUsageCreatesReportedRecord(t *testing.T) {
@@ -116,12 +115,9 @@ func TestUsagePackageAvoidsForbiddenImports(t *testing.T) {
 
 	dir := filepath.Dir(currentFile)
 	fs := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-		name := info.Name()
-		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-	}, parser.ImportsOnly)
+	files, err := importcheck.ParseNonTestGoFilesImportsOnly(fs, dir)
 	if err != nil {
-		t.Fatalf("parser.ParseDir() error = %v", err)
+		t.Fatalf("ParseNonTestGoFilesImportsOnly() error = %v", err)
 	}
 
 	forbiddenSubstrings := []string{
@@ -131,14 +127,12 @@ func TestUsagePackageAvoidsForbiddenImports(t *testing.T) {
 		"tracing",
 	}
 
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, imp := range file.Imports {
-				path := strings.Trim(imp.Path.Value, `"`)
-				for _, forbidden := range forbiddenSubstrings {
-					if strings.Contains(path, forbidden) {
-						t.Fatalf("forbidden import %q contains %q", path, forbidden)
-					}
+	for _, file := range files {
+		for _, imp := range file.Imports {
+			path := strings.Trim(imp.Path.Value, `"`)
+			for _, forbidden := range forbiddenSubstrings {
+				if strings.Contains(path, forbidden) {
+					t.Fatalf("forbidden import %q contains %q", path, forbidden)
 				}
 			}
 		}

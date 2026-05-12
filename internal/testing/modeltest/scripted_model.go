@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/cloudwego/eino/components/model"
@@ -188,7 +189,7 @@ func cloneMessage(message *schema.Message) *schema.Message {
 		cloned.ResponseMeta = &responseMeta
 	}
 	if len(message.MultiContent) > 0 {
-		cloned.MultiContent = append([]schema.ChatMessagePart(nil), message.MultiContent...)
+		cloned.MultiContent = slices.Clone(message.MultiContent)
 	}
 	if len(message.UserInputMultiContent) > 0 {
 		cloned.UserInputMultiContent = append([]schema.MessageInputPart(nil), message.UserInputMultiContent...)

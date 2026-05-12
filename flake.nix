@@ -60,10 +60,21 @@
             entry = "${tools.searchbench-vocabulary-check}/bin/searchbench-vocabulary-check";
             pass_filenames = false;
           };
+
+          searchbench-no-scripts = {
+            enable = true;
+            name = "searchbench no legacy scripts/ directory";
+            entry = "${tools.searchbench-no-scripts-check}/bin/searchbench-no-scripts-check";
+            pass_filenames = false;
+          };
         };
 
         goModuleGraphHooks = {
           govet = {
+            enable = true;
+            extraPackages = [ pkgs.go ];
+          };
+          staticcheck = {
             enable = true;
             extraPackages = [ pkgs.go ];
           };
@@ -75,6 +86,12 @@
             enable = true;
             name = "searchbench architecture import boundaries";
             entry = "${tools.searchbench-architecture-check}/bin/searchbench-architecture-check";
+            pass_filenames = false;
+          };
+          searchbench-prompt-contract = {
+            enable = true;
+            name = "searchbench prompt contract tests";
+            entry = "${tools.searchbench-prompt-contract-check}/bin/searchbench-prompt-contract-check";
             pass_filenames = false;
           };
         };
@@ -90,18 +107,42 @@
             stages = [ "pre-push" ];
           };
 
-          nix-flake-check-push = {
-            enable = true;
-            name = "nix flake check (pre-push)";
-            entry = "${tools.searchbench-nix-flake-check-push}/bin/searchbench-nix-flake-check-push";
-            pass_filenames = false;
-            stages = [ "pre-push" ];
-          };
-
           searchbench-e2e-push = {
             enable = true;
             name = "searchbench root e2e (pre-push)";
             entry = "${tools.searchbench-e2e-push}/bin/searchbench-e2e-push";
+            pass_filenames = false;
+            stages = [ "pre-push" ];
+          };
+
+          searchbench-check-generated-push = {
+            enable = true;
+            name = "searchbench check generated (pre-push)";
+            entry = "${tools.searchbench-check-generated-push}/bin/searchbench-check-generated-push";
+            pass_filenames = false;
+            stages = [ "pre-push" ];
+          };
+
+          searchbench-go-mod-tidy-check-push = {
+            enable = true;
+            name = "searchbench go mod tidy check (pre-push)";
+            entry = "${tools.searchbench-go-mod-tidy-check-push}/bin/searchbench-go-mod-tidy-check-push";
+            pass_filenames = false;
+            stages = [ "pre-push" ];
+          };
+
+          searchbench-staticcheck-push = {
+            enable = true;
+            name = "searchbench staticcheck (pre-push)";
+            entry = "${tools.searchbench-staticcheck-push}/bin/searchbench-staticcheck-push";
+            pass_filenames = false;
+            stages = [ "pre-push" ];
+          };
+
+          searchbench-golangci-push = {
+            enable = true;
+            name = "searchbench golangci-lint (pre-push)";
+            entry = "${tools.searchbench-golangci-push}/bin/searchbench-golangci-push";
             pass_filenames = false;
             stages = [ "pre-push" ];
           };
@@ -131,6 +172,7 @@
 
         projectToolPkgs = with tools; [
           searchbench-go-test-all
+          searchbench-go-test-race
           searchbench-e2e
           searchbench-architecture-check
           searchbench-check-pkl-generated
@@ -139,6 +181,14 @@
           searchbench-update-repomix
           searchbench-nix-flake-check
           searchbench-vocabulary-check
+          searchbench-staticcheck
+          searchbench-golangci
+          searchbench-go-mod-tidy-check
+          searchbench-prompt-contract-check
+          searchbench-refresh-pkl-example-fixtures
+          searchbench-go-build-root
+          searchbench-no-scripts-check
+          searchbench-openai-netwatch
           searchbench-agent-start
           searchbench-agent-check
           searchbench-agent-pack

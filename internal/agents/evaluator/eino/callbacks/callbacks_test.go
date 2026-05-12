@@ -2,14 +2,13 @@ package callbacks
 
 import (
 	"context"
-	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/becker63/searchbench-go/internal/testing/importcheck"
 	einocallbacks "github.com/cloudwego/eino/callbacks"
 )
 
@@ -77,12 +76,9 @@ func TestCallbackPackageAvoidsForbiddenImports(t *testing.T) {
 	// Parse only the non-test Go files in this package and inspect their import
 	// lists directly. This keeps the assertion focused on the production callback
 	// boundary rather than on what test helpers happen to import.
-	pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-		name := info.Name()
-		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-	}, parser.ImportsOnly)
+	files, err := importcheck.ParseNonTestGoFilesImportsOnly(fs, dir)
 	if err != nil {
-		t.Fatalf("parser.ParseDir() error = %v", err)
+		t.Fatalf("ParseNonTestGoFilesImportsOnly() error = %v", err)
 	}
 
 	forbiddenSubstrings := []string{
@@ -99,14 +95,12 @@ func TestCallbackPackageAvoidsForbiddenImports(t *testing.T) {
 	// fail if production callback code starts depending on core domain/scoring
 	// packages or on tracing-specific integrations that belong in future sibling
 	// callback implementations.
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, imp := range file.Imports {
-				path := strings.Trim(imp.Path.Value, `"`)
-				for _, forbidden := range forbiddenSubstrings {
-					if strings.Contains(path, forbidden) {
-						t.Fatalf("forbidden import %q contains %q", path, forbidden)
-					}
+	for _, file := range files {
+		for _, imp := range file.Imports {
+			path := strings.Trim(imp.Path.Value, `"`)
+			for _, forbidden := range forbiddenSubstrings {
+				if strings.Contains(path, forbidden) {
+					t.Fatalf("forbidden import %q contains %q", path, forbidden)
 				}
 			}
 		}

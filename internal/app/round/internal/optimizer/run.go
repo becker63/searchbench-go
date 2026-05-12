@@ -2,7 +2,6 @@ package optimizer
 
 import (
 	"context"
-	"os"
 
 	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
@@ -102,14 +101,4 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Record, error
 		return record, nextChallengerRecord.Failure
 	}
 	return record, nil
-}
-
-func normalizeManifestPathError(manifestPath string, err error) error {
-	if manifestPath == "" {
-		return nil
-	}
-	if _, statErr := os.Stat(manifestPath); statErr != nil {
-		return statErr
-	}
-	return nil
 }

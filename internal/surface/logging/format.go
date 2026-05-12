@@ -7,7 +7,6 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
 func shortSHA(value string) string {
@@ -15,10 +14,6 @@ func shortSHA(value string) string {
 		return value
 	}
 	return value[:8]
-}
-
-func shortFingerprint(value domain.SystemFingerprint) string {
-	return shortSHA(string(value))
 }
 
 func shortRepoSHA(value domain.RepoSHA) string {
@@ -50,16 +45,6 @@ func formatCost(value float64) string {
 		return fmt.Sprintf("$%.4f", value)
 	}
 	return fmt.Sprintf("$%.2f", value)
-}
-
-func summarizeScores(scores score.ScoreSet) string {
-	return strings.Join([]string{
-		"gold_hop=" + formatFloat(float64(scores.GoldHop.Value)),
-		"issue_hop=" + formatFloat(float64(scores.IssueHop.Value)),
-		"token_efficiency=" + formatFloat(float64(scores.TokenEfficiency.Value)),
-		"cost=" + formatCost(float64(scores.Cost.Value)),
-		"composite=" + formatFloat(float64(scores.Composite.Value)),
-	}, " ")
 }
 
 func summarizeReport(report report.RoundReport) string {

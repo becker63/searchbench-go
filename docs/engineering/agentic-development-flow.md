@@ -317,4 +317,4 @@ For day-to-day and parallel agent work, prefer the flake-backed workflow documen
 - `nix flake check` — fast, sandboxed checks without mutating the tree **and without network** (formatting / Nix / shell — not full Go analysis). Full Go hooks run in `nix develop` / pre-push.
 - Intentionally committed `repomix-output.xml` — see [`AGENTS.md`](../../AGENTS.md) for why this file is not ignored.
 
-Project automation lives in `nix/*.nix` (for example `nix/dev-tools.nix`); do not add a loose `scripts/` directory for SearchBench tooling.
+Project automation lives in `nix/tools/` (wired from `flake.nix`); do not add a loose `scripts/` directory for SearchBench tooling.

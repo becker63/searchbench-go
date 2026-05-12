@@ -26,7 +26,7 @@ func TestFakeOpenAIServerReturnsFixtureSuccessResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http.Post() error = %v", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
@@ -54,7 +54,7 @@ func TestFakeOpenAIServerReturnsFixtureErrorResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http.Post() error = %v", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if got, want := response.StatusCode, http.StatusTooManyRequests; got != want {
 		t.Fatalf("status = %d, want %d", got, want)
@@ -75,7 +75,7 @@ func TestFakeOpenAIServerRecordsRequestMethodPathAndBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http.Post() error = %v", err)
 	}
-	response.Body.Close()
+	_ = response.Body.Close()
 
 	requests := server.Requests()
 	if len(requests) != 1 {
@@ -102,7 +102,7 @@ func TestFakeOpenAIServerReturnsDeterministicErrorWhenResponsesExhausted(t *test
 	if err != nil {
 		t.Fatalf("http.Post() error = %v", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {

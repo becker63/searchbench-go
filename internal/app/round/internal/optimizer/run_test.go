@@ -2,7 +2,6 @@ package optimizer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -251,11 +250,4 @@ func mustReadFile(t *testing.T, path string) []byte {
 		t.Fatalf("os.ReadFile(%q) error = %v", path, err)
 	}
 	return data
-}
-
-func decodeJSONFixture(t *testing.T, path string, target any) {
-	t.Helper()
-	if err := json.Unmarshal(mustReadFile(t, path), target); err != nil {
-		t.Fatalf("json.Unmarshal(%q) error = %v", path, err)
-	}
 }

@@ -55,10 +55,12 @@ go build -o searchbench ./cmd/searchbench
 ```bash
 nix develop                    # dev shell + pre-commit + searchbench-* tools
 nix flake check                # sandboxed checks (no network — quick Nix/shell/format gate)
+nix develop -c searchbench-staticcheck
+nix develop -c searchbench-golangci
 nix develop -c searchbench-e2e
 ```
 
-See the root [`AGENTS.md`](../../AGENTS.md) for `searchbench-agent-start`, Repomix, and hook details.
+See the root [`AGENTS.md`](../../AGENTS.md) for hook tiers, `searchbench-agent-merge-check`, Repomix, and the full command list.
 
 ---
 
@@ -75,4 +77,4 @@ Strict "Pure Center" layering: `pure/` has no external dependencies. `adapters/`
 ## User Preferences
 
 - CLI tool only — no web frontend
-- Build with `go build -o searchbench ./cmd/searchbench`
+- Build with `nix develop -c searchbench-go-build-root` or `go build -o searchbench ./cmd/searchbench`

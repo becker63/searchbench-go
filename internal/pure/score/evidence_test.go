@@ -3,7 +3,6 @@ package score
 import (
 	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -75,12 +74,10 @@ func TestRoundEvidencePackageAvoidsForbiddenImports(t *testing.T) {
 
 	dir := filepath.Dir(currentFile)
 	fs := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-		name := info.Name()
-		return name == "evidence.go"
-	}, parser.ImportsOnly)
+	path := filepath.Join(dir, "evidence.go")
+	file, err := parser.ParseFile(fs, path, nil, parser.ImportsOnly)
 	if err != nil {
-		t.Fatalf("parser.ParseDir() error = %v", err)
+		t.Fatalf("parser.ParseFile(%q) error = %v", path, err)
 	}
 
 	forbiddenSubstrings := []string{
@@ -95,15 +92,11 @@ func TestRoundEvidencePackageAvoidsForbiddenImports(t *testing.T) {
 		"internal/adapters/artifact",
 	}
 
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, imp := range file.Imports {
-				path := strings.Trim(imp.Path.Value, `"`)
-				for _, forbidden := range forbiddenSubstrings {
-					if strings.Contains(strings.ToLower(path), forbidden) {
-						t.Fatalf("forbidden import %q contains %q", path, forbidden)
-					}
-				}
+	for _, imp := range file.Imports {
+		impPath := strings.Trim(imp.Path.Value, `"`)
+		for _, forbidden := range forbiddenSubstrings {
+			if strings.Contains(strings.ToLower(impPath), forbidden) {
+				t.Fatalf("forbidden import %q contains %q", impPath, forbidden)
 			}
 		}
 	}

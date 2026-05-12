@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -20,6 +19,7 @@ import (
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
+	"github.com/becker63/searchbench-go/internal/testing/importcheck"
 )
 
 func TestRoundWritesDurableBundle(t *testing.T) {
@@ -364,12 +364,9 @@ func TestArtifactPackageAvoidsForbiddenImports(t *testing.T) {
 
 	dir := filepath.Dir(currentFile)
 	fs := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-		name := info.Name()
-		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-	}, parser.ImportsOnly)
+	files, err := importcheck.ParseNonTestGoFilesImportsOnly(fs, dir)
 	if err != nil {
-		t.Fatalf("parser.ParseDir() error = %v", err)
+		t.Fatalf("ParseNonTestGoFilesImportsOnly() error = %v", err)
 	}
 
 	forbiddenSubstrings := []string{
@@ -384,14 +381,12 @@ func TestArtifactPackageAvoidsForbiddenImports(t *testing.T) {
 		"treesitter",
 	}
 
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, imp := range file.Imports {
-				path := strings.Trim(imp.Path.Value, `"`)
-				for _, forbidden := range forbiddenSubstrings {
-					if strings.Contains(strings.ToLower(path), forbidden) {
-						t.Fatalf("forbidden import %q contains %q", path, forbidden)
-					}
+	for _, file := range files {
+		for _, imp := range file.Imports {
+			path := strings.Trim(imp.Path.Value, `"`)
+			for _, forbidden := range forbiddenSubstrings {
+				if strings.Contains(strings.ToLower(path), forbidden) {
+					t.Fatalf("forbidden import %q contains %q", path, forbidden)
 				}
 			}
 		}
@@ -408,12 +403,9 @@ func TestArtifactPackageNoLongerDefinesRoundEvidenceTypes(t *testing.T) {
 
 	dir := filepath.Dir(currentFile)
 	fs := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fs, dir, func(info os.FileInfo) bool {
-		name := info.Name()
-		return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
-	}, 0)
+	files, err := importcheck.ParseNonTestGoFiles(fs, dir, 0)
 	if err != nil {
-		t.Fatalf("parser.ParseDir() error = %v", err)
+		t.Fatalf("ParseNonTestGoFiles() error = %v", err)
 	}
 
 	forbiddenTypeNames := map[string]struct{}{
@@ -426,21 +418,19 @@ func TestArtifactPackageNoLongerDefinesRoundEvidenceTypes(t *testing.T) {
 		"ObjectiveBounds":      {},
 	}
 
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				gen, ok := decl.(*ast.GenDecl)
-				if !ok || gen.Tok != token.TYPE {
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				typeSpec, ok := spec.(*ast.TypeSpec)
+				if !ok {
 					continue
 				}
-				for _, spec := range gen.Specs {
-					typeSpec, ok := spec.(*ast.TypeSpec)
-					if !ok {
-						continue
-					}
-					if _, forbidden := forbiddenTypeNames[typeSpec.Name.Name]; forbidden {
-						t.Fatalf("artifact package still defines forbidden round evidence type %q", typeSpec.Name.Name)
-					}
+				if _, forbidden := forbiddenTypeNames[typeSpec.Name.Name]; forbidden {
+					t.Fatalf("artifact package still defines forbidden round evidence type %q", typeSpec.Name.Name)
 				}
 			}
 		}

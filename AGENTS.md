@@ -61,6 +61,29 @@ The file `.pre-commit-config.yaml` is generated when you enter `nix develop` and
 
 **Repomix:** This repository intentionally commits `repomix-output.xml` so the current tree can be shared quickly with AI assistants for architectural review. That is intentional workflow hygiene for this project, not a general recommendation for every repo.
 
-**Go dependencies:** There is no checked-in `vendor/` tree. The module cache is populated from the network (or your local cache) when you build and test. **Hooks that load the full module graph** (`govet`, `golangci-lint`, `searchbench-architecture`, pre-push Go tests) run in `nix develop` and on pre-push — not inside `nix flake check`, because that runs in a sandbox without internet ([git-hooks.nix](https://github.com/cachix/git-hooks.nix) documents this). You can run `go mod vendor` locally if you want a `./vendor` directory; it is gitignored.
+**Go dependencies:** There is no checked-in `vendor/` tree. The module cache is populated from the network (or your local cache) when you build and test. **Hooks that load the full module graph** (`govet`, `staticcheck`, `golangci-lint`, `searchbench-architecture`, `searchbench-prompt-contract`, pre-push Go tests) run in `nix develop` and on pre-push — not inside `nix flake check`, because that runs in a sandbox without internet ([git-hooks.nix](https://github.com/cachix/git-hooks.nix) documents this). You can run `go mod vendor` locally if you want a `./vendor` directory; it is gitignored.
 
-**Staticcheck:** The standalone `staticcheck` pre-commit hook is not enabled yet because the current tree still has a backlog of `SA*`/`U1000` findings (mostly in tests and generated-adjacent helpers). `gofmt`, `govet`, and `golangci-lint` (minimal config: `govet` only) run via `nix develop` / pre-commit / pre-push; run `staticcheck ./...` locally when you are cleaning that backlog.
+**`staticcheck` binary:** Provided on `PATH` via `nixpkgs` `go-tools` (same family as the git-hooks `staticcheck` integration). Run `nix develop -c staticcheck ./...` or `nix develop -c searchbench-staticcheck`.
+
+**Go / lint policy:** `.golangci.yml` enables high-signal checks (`govet`, `staticcheck`, `ineffassign`, `unused`, `errcheck`, `copyloopvar`, `unconvert`) — not broad style linters.
+
+**Quality gate tiers:**
+
+| Tier | What runs |
+| --- | --- |
+| `nix flake check` | Sandboxed: `gofmt`, Nix (`nixfmt`, `statix`, …), shell, `searchbench-no-scripts`, vocabulary warning — **no** full Go module graph |
+| `nix develop` + pre-commit | Full dev hook set: Go vet, staticcheck, golangci-lint, architecture + prompt contract tests, generated checks, Repomix refresh, etc. |
+| `git push` (pre-push) | `go test ./...`, root e2e, `searchbench-check-generated`, `searchbench-go-mod-tidy-check`, `searchbench-staticcheck`, `searchbench-golangci` |
+| `nix develop -c searchbench-agent-merge-check` | Strictest local gate: pre-commit, `go test`, `go test -race`, staticcheck, golangci-lint, e2e, `nix flake check`, generated checks, go mod tidy check, Repomix refresh, `git diff --check` |
+
+**Handy commands:**
+
+| Command | Purpose |
+| --- | --- |
+| `nix develop -c searchbench-staticcheck` | `staticcheck ./...` |
+| `nix develop -c searchbench-golangci` | `golangci-lint run ./...` (uses `.golangci.yml`) |
+| `nix develop -c searchbench-go-mod-tidy-check` | Fail if `go mod tidy` would change `go.mod` / `go.sum` |
+| `nix develop -c searchbench-prompt-contract-check` | Tests for `.templ` XML prompt contracts |
+| `nix develop -c searchbench-refresh-pkl-example-fixtures` | Regenerate optimize-IC fixtures from the local round (long-running) |
+| `nix develop -c searchbench-openai-netwatch` | Optional HTTPS connection diagnostics helper (migrated from legacy `scripts/`) |
+| `nix develop -c searchbench-go-build-root` | `go build -o searchbench ./cmd/searchbench` |

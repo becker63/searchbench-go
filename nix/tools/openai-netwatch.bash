@@ -1,7 +1,5 @@
-#!/usr/bin/env nix-shell
-#! nix-shell -i bash -p bash coreutils gnugrep gnused gawk iproute2 lsof dnsutils procps strace tcpdump
-# shellcheck shell=bash disable=SC1008
-# Nix-shell shebang above; body is bash.
+#!/usr/bin/env bash
+# shellcheck shell=bash
 
 set -euo pipefail
 
