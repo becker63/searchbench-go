@@ -126,6 +126,12 @@ internal/
         serialize.go
         writer_test.go
         writer.go
+    codegraph/
+      treesitter/
+        doc.go
+        index_test.go
+        index.go
+        stub.go
     config/
       pkl/
         doc.go
@@ -282,6 +288,8 @@ internal/
       doc.go
       edge.go
       graph.go
+      localdistance_test.go
+      localdistance.go
       node.go
       path.go
       store.go
@@ -8181,6 +8189,132 @@ func safeBundleName(name string) bool
 func hasCompleteMarker(dir string) bool
 </file>
 
+<file path="internal/adapters/codegraph/treesitter/doc.go">
+// Package treesitter builds SearchBench code graphs from materialized repositories
+// using the tree-sitter Go grammar. Parsing runs in this adapter package; scoring
+// should consume codegraph.Graph only.
+//
+// This package requires CGO (tree-sitter C runtime). With CGO disabled, use the
+// stub implementation that returns [ErrCGODisabled].
+package treesitter
+</file>
+
+<file path="internal/adapters/codegraph/treesitter/index_test.go">
+//go:build cgo
+⋮----
+package treesitter_test
+⋮----
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/adapters/codegraph/treesitter"
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"os"
+"path/filepath"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/adapters/codegraph/treesitter"
+"github.com/becker63/searchbench-go/internal/pure/codegraph"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestBuildDirectory_threeFileChain(t *testing.T)
+⋮----
+func writeFile(t *testing.T, path, body string)
+</file>
+
+<file path="internal/adapters/codegraph/treesitter/index.go">
+//go:build cgo
+⋮----
+package treesitter
+⋮----
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/golang"
+
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"fmt"
+"io/fs"
+"os"
+"path/filepath"
+"strings"
+⋮----
+sitter "github.com/smacker/go-tree-sitter"
+"github.com/smacker/go-tree-sitter/golang"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/codegraph"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// BuildDirectory walks absRepoRoot for *.go sources (skipping dot dirs, vendor,
+// and .git) and returns an in-memory graph with file nodes, function nodes,
+// defines edges, and same-directory call edges resolved by callee identifier name.
+func BuildDirectory(absRepoRoot string) (*codegraph.Store, error)
+⋮----
+type fileJob struct {
+		abs  string
+		rel  domain.RepoRelPath
+		data []byte
+	}
+⋮----
+var jobs []fileJob
+⋮----
+type dirSyms struct {
+		funcs map[string]codegraph.NodeID
+	}
+⋮----
+func collectFuncSymbols(n sitter.Node, src []byte, file domain.RepoRelPath, out map[string]codegraph.NodeID)
+⋮----
+func materializeFile(store *codegraph.Store, addedFiles map[domain.RepoRelPath]struct
+⋮----
+var walkErr error
+var walk func(sitter.Node)
+⋮----
+func scanCalls(store *codegraph.Store, n sitter.Node, src []byte, caller codegraph.NodeID, sym map[string]codegraph.NodeID)
+⋮----
+func declName(n sitter.Node, src []byte) string
+⋮----
+func declFuncID(n sitter.Node, src []byte, file domain.RepoRelPath) codegraph.NodeID
+⋮----
+func buildFuncNode(decl sitter.Node, src []byte, file domain.RepoRelPath, id codegraph.NodeID) codegraph.Node
+</file>
+
+<file path="internal/adapters/codegraph/treesitter/stub.go">
+//go:build !cgo
+⋮----
+package treesitter
+⋮----
+import (
+	"errors"
+
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+)
+⋮----
+"errors"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/codegraph"
+⋮----
+// ErrCGODisabled indicates the tree-sitter indexer was compiled without CGO.
+var ErrCGODisabled = errors.New("codegraph/treesitter: tree-sitter indexer requires CGO_ENABLED=1")
+⋮----
+// BuildDirectory is unavailable without CGO.
+func BuildDirectory(absRepoRoot string) (*codegraph.Store, error)
+</file>
+
 <file path="internal/adapters/config/pkl/doc.go">
 // Package config owns the Pkl-backed round manifest surface.
 //
@@ -13344,6 +13478,46 @@ type Graph interface {
 }
 </file>
 
+<file path="internal/pure/codegraph/localdistance_test.go">
+package codegraph_test
+⋮----
+import (
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/codegraph"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestMinCallHopsAcrossFiles_twoFiles(t *testing.T)
+</file>
+
+<file path="internal/pure/codegraph/localdistance.go">
+package codegraph
+⋮----
+import (
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// MinCallHopsAcrossFiles reports the smallest shortest-path hop count between any
+// function node anchored in fromFiles and any function node anchored in toFiles,
+// considering only directed EdgeCalls edges.
+//
+// Files are matched via Node.RepoFile; only NodeFunction kinds participate.
+// If either side has no function nodes in those files, it returns ok=false.
+func MinCallHopsAcrossFiles(g Graph, fromFiles, toFiles []domain.RepoRelPath) (hops int, ok bool)
+⋮----
+func functionNodesInFiles(g Graph, files []domain.RepoRelPath) []NodeID
+⋮----
+var out []NodeID
+</file>
+
 <file path="internal/pure/codegraph/node.go">
 package codegraph
 ⋮----
@@ -18056,6 +18230,7 @@ require (
 	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/hmdsefi/gograph v0.7.0
 	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	go.uber.org/zap v1.27.1
 )
 
