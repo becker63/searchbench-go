@@ -6,6 +6,7 @@ import (
 	"fmt"
 )
 
+// Formats written for the round report (machine-readable JSON, human text, or both).
 type ReportFormat string
 
 const (

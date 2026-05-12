@@ -1,24 +1,28 @@
+/// Small helpers for building [`ObjectiveValue`] rows without repeating `kind` literals
+/// in every scoring module. Import alongside `SearchBenchObjective.pkl`.
+///
+/// This module imports the objective schema as `objective` and exposes convenience constructors.
 module searchbench.scoring.ObjectiveHelpers
 
 import "SearchBenchObjective.pkl" as objective
 
-function intermediate(valueName: String, amount: Number) =
-  new objective.ObjectiveValue {
-    name = valueName
-    value = amount
-    kind = "intermediate"
-  }
+/// Builds an intermediate (non-final) row with the given metric name and amount.
+function intermediate(valueName: String, amount: Number) = new objective.ObjectiveValue {
+  name = valueName
+  value = amount
+  kind = "intermediate"
+}
 
-function penalty(valueName: String, amount: Number) =
-  new objective.ObjectiveValue {
-    name = valueName
-    value = amount
-    kind = "penalty"
-  }
+/// Builds a penalty row (negative treatment depends on downstream aggregation).
+function penalty(valueName: String, amount: Number) = new objective.ObjectiveValue {
+  name = valueName
+  value = amount
+  kind = "penalty"
+}
 
-function finalValue(valueName: String, amount: Number) =
-  new objective.ObjectiveValue {
-    name = valueName
-    value = amount
-    kind = "final"
-  }
+/// Builds a final headline row (typically the composite or primary outcome).
+function finalValue(valueName: String, amount: Number) = new objective.ObjectiveValue {
+  name = valueName
+  value = amount
+  kind = "final"
+}

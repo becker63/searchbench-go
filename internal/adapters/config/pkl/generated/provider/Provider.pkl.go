@@ -6,6 +6,7 @@ import (
 	"fmt"
 )
 
+// LLM provider id for agent models (`openai`, `openrouter`, `cerebras`, or `fake` for scripted/stub runs).
 type Provider string
 
 const (

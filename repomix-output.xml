@@ -696,40 +696,81 @@ optimization {
 </file>
 
 <file path="configs/schema/SearchBenchObjective.pkl">
+/// Schema for the **objective result** document emitted when a scoring Pkl module is evaluated
+/// against one or more on-disk evidence bundles (current round, optional parent round).
+///
+/// Objective modules typically `import` this shape or compute compatible objects; the Go scoring
+/// adapter materializes a `score.ObjectiveResult` from the evaluated Pkl value.
 module searchbench.scoring.Objective
 
+/// How to interpret an [`ObjectiveValue`] row: `intermediate` (partial / component),
+/// `penalty` (negative weighting), or `final` (headline outcome).
 typealias ObjectiveValueKind = "intermediate" | "penalty" | "final"
 
+/// Locates evidence and report files on disk for objective evaluation context.
 class ObjectiveEvidenceRef {
+  /// Short label distinguishing this evidence slot (e.g. `current`, `parent`).
   name: String
+
+  /// Root path of the round bundle directory, when relevant.
   bundlePath: String?
+
+  /// Path to `evidence.pkl` (or equivalent) inside the bundle.
   evidencePath: String?
+
+  /// Path to `round-report.json` (or equivalent) inside the bundle.
   reportPath: String?
+
+  /// Optional content hash for reproducibility checks.
   sha256: String?
 }
 
+/// One named numeric contribution to the objective (metric row).
 class ObjectiveValue {
+  /// Metric or component name (stable key in code and reports).
   name: String
+
+  /// Numeric value for this row (higher/lower interpretation depends on metric).
   value: Number
+
+  /// Row classification (`intermediate`, `penalty`, or `final`).
   kind: ObjectiveValueKind
+
+  /// Optional unit string for display (e.g. `score`, `USD`).
   unit: String?
+
+  /// Human-readable explanation shown in tooling.
   description: String?
 }
 
+/// Optional numeric domain for interpreting or clamping displayed values.
 class ObjectiveBounds {
+  /// Lower bound when applicable.
   min: Number?
+
+  /// Upper bound when applicable.
   max: Number?
 }
 
+/// Internal wiring: default empty dynamic bag for objective modules that stash scratch values.
 hidden current: Dynamic = new Dynamic {}
+
+/// Internal wiring: parent-round dynamic bag when comparing to a baseline run (optional).
 hidden parent: Dynamic?
+
+/// Internal wiring: evidence ref for the round under evaluation (must be set by the objective module).
 hidden currentRef: ObjectiveEvidenceRef
+
+/// Internal wiring: evidence ref for an optional parent round (omit when no parent comparison).
 hidden parentRef: ObjectiveEvidenceRef?
 
+/// Schema version string for forward-compatible consumers.
 schemaVersion: String = "searchbench.objective_result.v1"
 
+/// Stable identifier for this objective definition (product / registry key).
 objectiveId: String
 
+/// Evidence locations passed into the objective; includes parent when `parentRef` is non-null.
 evidenceRefs: Listing<ObjectiveEvidenceRef> =
   if (parentRef != null)
     new {
@@ -741,260 +782,476 @@ evidenceRefs: Listing<ObjectiveEvidenceRef> =
       currentRef
     }
 
+/// All metric rows produced by the objective computation.
 values: Listing<ObjectiveValue>
 
+/// Name of the [`ObjectiveValue`] row that should be treated as the headline final score.
 final: String
 
+/// Optional numeric bounds metadata for the overall score presentation.
 bounds: ObjectiveBounds?
 </file>
 
 <file path="configs/schema/SearchBenchObjectiveHelpers.pkl">
+/// Small helpers for building [`ObjectiveValue`] rows without repeating `kind` literals
+/// in every scoring module. Import alongside `SearchBenchObjective.pkl`.
+///
+/// This module imports the objective schema as `objective` and exposes convenience constructors.
 module searchbench.scoring.ObjectiveHelpers
 
 import "SearchBenchObjective.pkl" as objective
 
-function intermediate(valueName: String, amount: Number) =
-  new objective.ObjectiveValue {
-    name = valueName
-    value = amount
-    kind = "intermediate"
-  }
+/// Builds an intermediate (non-final) row with the given metric name and amount.
+function intermediate(valueName: String, amount: Number) = new objective.ObjectiveValue {
+  name = valueName
+  value = amount
+  kind = "intermediate"
+}
 
-function penalty(valueName: String, amount: Number) =
-  new objective.ObjectiveValue {
-    name = valueName
-    value = amount
-    kind = "penalty"
-  }
+/// Builds a penalty row (negative treatment depends on downstream aggregation).
+function penalty(valueName: String, amount: Number) = new objective.ObjectiveValue {
+  name = valueName
+  value = amount
+  kind = "penalty"
+}
 
-function finalValue(valueName: String, amount: Number) =
-  new objective.ObjectiveValue {
-    name = valueName
-    value = amount
-    kind = "final"
-  }
+/// Builds a final headline row (typically the composite or primary outcome).
+function finalValue(valueName: String, amount: Number) = new objective.ObjectiveValue {
+  name = valueName
+  value = amount
+  kind = "final"
+}
 </file>
 
 <file path="configs/schema/SearchBenchRound.pkl">
+/// Root schema for a SearchBench **round** manifest.
+///
+/// A round binds a dataset slice, incumbent/challenger policy systems, optional artifacts,
+/// and agent configurations. The Go runtime loads this file to resolve bundle paths, evaluation
+/// plans, and (when configured) optimization / next-challenger flows.
+///
+/// Validation and projection to execution types are implemented in `internal/adapters/config/pkl`
+/// and `internal/app/round`. The `go.pkl` import attaches `pkl-go` struct tags for generated Go bindings.
 @go.Package { name = "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated" }
 module searchbench.config.SearchBenchRound
 
 import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/go.pkl"
 
+/// Stable game identity for this round (used in bundle layout and reporting).
 game: Game = new {}
 
+/// Human-readable round name; may influence default bundle IDs and reports.
 name: String
 
+/// Which top-level workflow this manifest participates in (evaluation-only vs optimization).
 mode: RunMode = "evaluation"
 
+/// Dataset selection: upstream benchmark id, language/config, and split.
 dataset: Dataset
 
+/// Declares interface contracts (e.g. iterative context selection policy) referenced by artifacts and policy bindings.
 interfaces: Interfaces = new {}
+
+/// Incumbent and challenger policy **systems** for the comparative run (ids, backends, prompt bundles, runtime caps).
 policies: Policies
+
+/// Optional artifact references (policy file on disk, next-challenger output, parent bundle, etc.).
 artifacts: Artifacts = new {}
+
+/// Agents used when resolving rounds: evaluator (always required for `evaluation` mode) and optimizer (required for `optimization` mode).
 agents: Agents = new {}
+
+/// Evaluation-mode wiring: must mirror `agents.evaluator`, bind systems to artifacts, and point at the scoring objective file.
 evaluation: Evaluation?
+
+/// Optimization-mode wiring: must mirror `agents.optimizer`, parent bundle, target artifacts, and evidence policy for next-challenger proposal.
 optimization: Optimization?
 
-typealias RunMode =
-  "evaluation" |
-  "optimization"
+/// Top-level workflow discriminator for this manifest:
+/// - `evaluation` — compare incumbent vs challenger on the dataset slice and produce evidence/decision.
+/// - `optimization` — propose a next challenger policy using parent round evidence (requires optimizer agent and optimization block).
+typealias RunMode = "evaluation" | "optimization"
 
+/// Upstream dataset family; currently only LCA-style bug localization is supported.
 typealias DatasetKind = "lca"
-typealias Backend = "iterative_context" | "jcodemunch" | "fake"
-typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
-typealias ReportFormat = "json" | "text"
-typealias TracingProvider = "langsmith"
-typealias ArtifactKind =
-  "policy" |
-  "next_challenger" |
-  "completed_round_bundle"
-typealias NextChallengerEvidenceKind =
-  "report_summary" |
-  "round_evidence" |
-  "objective_result" |
-  "challenger_policy"
-typealias OptimizerDeniedEvidenceKind =
-  "gold_labels" |
-  "oracle_files" |
-  "raw_dataset_answers"
 
+/// Execution backend for a policy system. `iterative_context` is the iterative context challenger stack;
+/// `jcodemunch` is the legacy path; `fake` is a deterministic local stub for tests and offline runs.
+typealias Backend = "iterative_context" | "jcodemunch" | "fake"
+
+/// LLM provider id for agent models (`openai`, `openrouter`, `cerebras`, or `fake` for scripted/stub runs).
+typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
+
+/// Formats written for the round report (machine-readable JSON, human text, or both).
+typealias ReportFormat = "json" | "text"
+
+/// Optional tracer integration (reserved).
+typealias TracingProvider = "langsmith"
+
+/// Semantic kinds for durable artifacts: `policy` (checked-in policy file), `next_challenger` (optimizer output slot),
+/// `completed_round_bundle` (pointer to a finished round bundle directory).
+typealias ArtifactKind = "policy" | "next_challenger" | "completed_round_bundle"
+
+/// Evidence kinds the optimizer may pull from the parent bundle when `include` lists them.
+/// - `report_summary` — high-level report JSON / summary text.
+/// - `round_evidence` — structured round evidence document.
+/// - `objective_result` — prior objective scoring payload.
+/// - `challenger_policy` — the challenger policy source under evaluation.
+typealias NextChallengerEvidenceKind =
+  "report_summary" | "round_evidence" | "objective_result" | "challenger_policy"
+
+/// Labels for evidence the optimizer prompt must never include (leakage / safety).
+/// `gold_labels` — canonical answers or gold labels from the dataset.
+/// `oracle_files` — file lists or paths from oracle-only fields.
+/// `raw_dataset_answers` — raw supervision fields from dataset rows.
+typealias OptimizerDeniedEvidenceKind = "gold_labels" | "oracle_files" | "raw_dataset_answers"
+
+/// Logical game this round belongs to (drives artifact roots under the game id).
 class Game {
+  /// Stable game id (e.g. product bundle namespace).
   id: String = "code-localization"
+
+  /// Free-form game kind string for downstream classification.
   kind: String = "code_localization"
 }
 
+/// Selects a dataset slice from an upstream bug-localization benchmark.
 class Dataset {
+  /// Dataset family; constrains how the harness loads instances.
   kind: DatasetKind = "lca"
+
+  /// Upstream dataset repository or product identifier.
   name: String = "JetBrains-Research/lca-bug-localization"
+
+  /// Profile/config key interpreted by the dataset adapter (e.g. language stack).
   config: String
+
+  /// Split name within the dataset (e.g. train/dev).
   split: String
+
+  /// Optional cap on the number of matches to draw; omit for the adapter default.
   maxItems: Int(this > 0)?
 }
 
+/// Declares interface identifiers that policies and artifacts must satisfy.
 class Interfaces {
+  /// Binding for `iterative_context.selection_policy.v1` (challenger selection policy contract).
   iterativeContextSelectionPolicyV1: Interface = new {
     id = "iterative_context.selection_policy.v1"
   }
 }
 
+/// Named capability contract (id is the stable string compared across manifest, artifacts, and code).
 class Interface {
+  /// Opaque interface id string (e.g. `iterative_context.selection_policy.v1`).
   id: String
 }
 
+/// Pair of executable policy systems compared in this round.
 class Policies {
+  /// Baseline system (incumbent policy role).
   incumbent: System
+
+  /// Candidate system (challenger policy role).
   challenger: System
 }
 
+/// One executable policy: identity, engine backend, prompts, and runtime limits.
 class System {
+  /// Stable slug for this system in runs and reports.
   id: String
+
+  /// Display name; defaults to `id` when omitted in instances (see default below).
   name: String = id
+
+  /// Which runtime backend executes this system’s policy implementation.
   backend: Backend
+
+  /// Prompt bundle reference (name + optional version) resolved by the harness.
   promptBundle: PromptBundle = new {}
+
+  /// Per-run execution bounds (steps, wall clock).
   runtime: Runtime = new {}
 }
 
+/// Locates the prompt bundle material for a system (version pins reproducibility).
 class PromptBundle {
+  /// Bundle name known to the product (e.g. `default`).
   name: String = "default"
+
+  /// Optional version or channel label for the bundle.
   version: String? = "dev"
 }
 
+/// Hard limits while executing one system on one match.
 class Runtime {
+  /// Maximum LLM/agent steps for this system (must be positive).
   maxSteps: Int(this > 0) = 16
+
+  /// Wall-clock timeout in seconds for system execution on one match attempt.
   timeoutSeconds: Int(this > 0) = 300
 }
 
+/// Durable artifact pointers used when binding evaluation and optimization targets.
 class Artifacts {
+  /// Challenger policy file on disk (relative to manifest dir unless otherwise specified by harness).
   challengerPolicy: PolicyArtifact?
+
+  /// Declares the artifact record for the next-challenger proposal output.
   nextChallenger: NextChallengerArtifact?
+
+  /// Completed parent round bundle (for evidence loading in optimization or scored comparisons with a parent).
   parentRoundBundle: CompletedRoundBundleArtifact?
 }
 
+/// A versioned policy artifact implementing a declared interface.
 class PolicyArtifact {
+  /// Stable artifact id for cross-manifest references.
   id: String
+
+  /// Fixed kind tag for routing and validation.
   kind: "policy" = "policy"
+
+  /// Repo-relative path to policy source checked in next to the manifest tree.
   path: String
+
+  /// Interface contract this policy must implement.
   implements: Interface
 }
 
+/// Describes the next challenger artifact slot produced by optimization.
 class NextChallengerArtifact {
+  /// Stable artifact id.
   id: String
+
+  /// Fixed kind tag.
   kind: "next_challenger" = "next_challenger"
+
+  /// File name (relative path) for the emitted next challenger policy artifact.
   artifactName: String
+
+  /// Interface the emitted artifact must satisfy.
   implements: Interface
 }
 
+/// Pointer to an on-disk completed round bundle directory (evidence, reports, metadata).
 class CompletedRoundBundleArtifact {
+  /// Stable id referencing this completed bundle in other blocks.
   id: String
+
+  /// Fixed kind tag.
   kind: "completed_round_bundle" = "completed_round_bundle"
+
+  /// Relative path from the manifest to the bundle root (normalized by the harness).
   path: String
 }
 
+/// Agent definitions for roles that participate in round resolution.
 class Agents {
+  /// Evaluator agent configuration (required when `mode` is `evaluation` and for `evaluation.*` blocks).
   evaluator: Evaluator?
+
+  /// Optimizer agent configuration (required when `mode` is `optimization` and for `optimization.*` blocks).
   optimizer: Optimizer?
 }
 
+/// Allow/deny tool policy for an agent manifest surface.
+///
+/// Structural validation is done in config load; **evaluator** tool names are also checked at round resolution
+/// against the runtime tool registry (`Available` vs explicit allow vs defaults).
 class AgentToolPolicy {
+  /// Explicit allow list; when empty, the runtime uses **default allowed** tools minus **deny** (see round resolution docs).
   allow: Listing<String> = new {}
+
+  /// Names subtracted from the active candidate set (must not overlap explicit allow entries; validated in Go).
   deny: Listing<String> = new {}
 }
 
+/// LLM call routing for an agent’s chat/completion model.
 class Model {
+  /// Provider key consumed by the harness / adapter.
   provider: Provider
+
+  /// Model name within the provider.
   name: String
+
+  /// Optional provider-specific routing hint (e.g. deployment id).
   routing: String?
+
+  /// Optional max output tokens for the model call (positive when set).
   maxOutputTokens: Int(this > 0)? = 2000
 }
 
+/// Shared safety bounds for agent loops (evaluator, optimizer).
 class AgentBounds {
+  /// Maximum model turns per attempt in the agent harness.
   maxModelTurns: Int(this > 0) = 8
+
+  /// Maximum tool invocations per attempt (non-negative; `0` may disable tools depending on runtime).
   maxToolCalls: Int(this >= 0) = 24
+
+  /// Wall-clock ceiling in seconds for a single agent attempt sequence.
   timeoutSeconds: Int(this > 0) = 300
 }
 
+/// Configuration for the SearchBench **evaluator** agent (compares predictions on matches).
 class Evaluator {
+  /// Primary chat model used by the evaluator runtime.
   model: Model
+
+  /// Loop and wall-clock bounds for evaluator attempts.
   bounds: AgentBounds = new {}
+
+  /// Tool allow/deny policy surfaced from the manifest; intersected with the evaluator runtime registry in Go.
   tools: AgentToolPolicy = new {}
+
+  /// Optional extra system-facing instructions appended to the stable evaluator prompt XML (trimmed; size-capped in Go).
   systemPrompt: String?
+
+  /// Retry behavior across evaluator attempts (distinct from model “turns” inside one attempt).
   retry: RetryPolicy = new {}
+
+  /// Optional telemetry hooks (reserved / product-specific).
   tracing: Tracing?
 }
 
+/// Configuration for the **optimizer** agent (next challenger proposal). Tool allow/deny is validated for shape only until an optimizer tool runtime exists.
 class Optimizer {
+  /// Chat model used for optimization / proposal generation.
   model: Model
+
+  /// Agent attempt bounds for the optimizer loop.
   bounds: AgentBounds = new {}
+
+  /// Structural tool allow/deny (not enforced against a registry in the current harness).
   tools: AgentToolPolicy = new {}
+
+  /// Optional extra instructions for the optimizer prompt appendix (size-capped in Go when validated).
   systemPrompt: String?
 }
 
+/// How the harness retries failed evaluator attempts before surfacing a run failure.
 class RetryPolicy {
+  /// Upper bound on distinct evaluator attempts including retries (must be positive).
   maxAttempts: Int(this > 0) = 2
+
+  /// Whether to retry after provider/model transport style errors.
   retryOnModelError: Boolean = true
+
+  /// Whether to retry after tool execution failures inside the evaluator agent loop.
   retryOnToolFailure: Boolean = false
+
+  /// Whether to retry when JSON prediction finalization fails.
   retryOnFinalizationFailure: Boolean = true
+
+  /// Whether to retry when the model returns a prediction that fails schema validation.
   retryOnInvalidPrediction: Boolean = true
 }
 
+/// Optional tracing configuration (feature-flag style).
 class Tracing {
+  /// Master switch for emission of traces.
   enabled: Boolean = false
+
+  /// Tracing backend identifier when enabled.
   provider: TracingProvider?
+
+  /// Optional project or workspace key for the tracer.
   project: String?
 }
 
+/// Evaluation-mode root block: wires agent, policy bindings, scoring objective path, and report outputs.
+///
+/// Must stay consistent with `agents.evaluator` and `policies` (validated in Go).
 class Evaluation {
+  /// Snapshot that must equal `agents.evaluator` (same model, bounds, tools, prompts).
   agent: Evaluator
+
+  /// Which manifest `policies.incumbent` entry this evaluation uses for the incumbent role.
   incumbent: EvaluationSystemBinding
+
+  /// Which manifest `policies.challenger` entry this evaluation uses, plus required selection policy artifact binding.
   challenger: ChallengerEvaluationBinding
+
+  /// Path to the Pkl **objective** module that defines scoring over evidence.
   scoring: Scoring
+
+  /// Report output formats for this round run.
   report: Report = new {}
 }
 
+/// Indirection so evaluation can reference a member of `policies` by value identity checks in Go.
 class EvaluationSystemBinding {
+  /// System block from `policies` for this role (incumbent).
   system: System
 }
 
+/// Challenger side binding plus artifact reference for the implemented selection policy.
 class ChallengerEvaluationBinding {
+  /// System block from `policies` for the challenger role.
   system: System
+
+  /// Artifact pointers required for challenger execution.
   uses: ChallengerUses = new {}
 }
 
+/// Artifact wiring for a challenger evaluation run.
 class ChallengerUses {
+  /// Selection policy file (`PolicyArtifact`) the challenger must load for this round.
   selectionPolicy: PolicyArtifact
 }
 
+/// Locates the scoring objective module relative to the manifest.
 class Scoring {
+  /// Path to the SearchBench objective .pkl (e.g. under `scoring/` next to the round).
   objective: String
 }
 
+/// Human- and machine-readable report outputs for the round bundle.
 class Report {
+  /// Which report artifacts to materialize (JSON and/or text summaries).
   formats: Listing<ReportFormat> = new {
     "json"
     "text"
   }
 }
 
+/// Optimization-mode root block: proposes a next challenger policy using evidence from a completed parent round.
 class Optimization {
+  /// Must mirror `agents.optimizer` (same model, bounds, tools, prompts).
   agent: Optimizer
+
+  /// Which completed bundle supplies parent-round context.
   parentRound: ParentRound
+
+  /// Input policy artifact and output next-challenger artifact slots for the proposal.
   target: NextChallengerTarget
+
+  /// Which evidence streams to include / forbid when prompting the optimizer.
   evidence: NextChallengerEvidence = new {}
 }
 
+/// Parent round locator inside the optimization graph.
 class ParentRound {
+  /// Completed round bundle artifact; must align with `artifacts.parentRoundBundle` (validated in Go).
   bundle: CompletedRoundBundleArtifact
 }
 
+/// Declares input policy to improve and the next challenger output artifact record.
 class NextChallengerTarget {
+  /// Current challenger policy artifact that optimization reads as input.
   input: PolicyArtifact
+
+  /// Artifact record describing the file name and interface for the proposed next policy.
   output: NextChallengerArtifact
 }
 
+/// Evidence inclusion and denial rules for optimizer prompts.
 class NextChallengerEvidence {
+  /// Parent bundle artifact that evidence is loaded from; must match optimization parent wiring (validated in Go).
   from: CompletedRoundBundleArtifact
 
+  /// Evidence kinds pulled into the prompt when present in the parent bundle.
   include: Listing<NextChallengerEvidenceKind> = new {
     "report_summary"
     "round_evidence"
@@ -1002,6 +1259,7 @@ class NextChallengerEvidence {
     "challenger_policy"
   }
 
+  /// Evidence channels that must never be inlined into the optimizer prompt.
   deny: Listing<OptimizerDeniedEvidenceKind> = new {
     "gold_labels"
     "oracle_files"

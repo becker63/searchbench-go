@@ -6,6 +6,9 @@ import (
 	"fmt"
 )
 
+// Top-level workflow discriminator for this manifest:
+// - `evaluation` — compare incumbent vs challenger on the dataset slice and produce evidence/decision.
+// - `optimization` — propose a next challenger policy using parent round evidence (requires optimizer agent and optimization block).
 type RunMode string
 
 const (

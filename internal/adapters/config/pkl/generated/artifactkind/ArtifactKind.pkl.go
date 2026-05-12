@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+// Semantic kinds for durable artifacts: `policy` (checked-in policy file), `next_challenger` (optimizer output slot),
+// `completed_round_bundle` (pointer to a finished round bundle directory).
 type ArtifactKind string
 
 const (

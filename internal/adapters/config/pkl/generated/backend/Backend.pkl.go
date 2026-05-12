@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+// Execution backend for a policy system. `iterative_context` is the iterative context challenger stack;
+// `jcodemunch` is the legacy path; `fake` is a deterministic local stub for tests and offline runs.
 type Backend string
 
 const (

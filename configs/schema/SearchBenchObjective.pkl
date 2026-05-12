@@ -1,37 +1,78 @@
+/// Schema for the **objective result** document emitted when a scoring Pkl module is evaluated
+/// against one or more on-disk evidence bundles (current round, optional parent round).
+///
+/// Objective modules typically `import` this shape or compute compatible objects; the Go scoring
+/// adapter materializes a `score.ObjectiveResult` from the evaluated Pkl value.
 module searchbench.scoring.Objective
 
+/// How to interpret an [`ObjectiveValue`] row: `intermediate` (partial / component),
+/// `penalty` (negative weighting), or `final` (headline outcome).
 typealias ObjectiveValueKind = "intermediate" | "penalty" | "final"
 
+/// Locates evidence and report files on disk for objective evaluation context.
 class ObjectiveEvidenceRef {
+  /// Short label distinguishing this evidence slot (e.g. `current`, `parent`).
   name: String
+
+  /// Root path of the round bundle directory, when relevant.
   bundlePath: String?
+
+  /// Path to `evidence.pkl` (or equivalent) inside the bundle.
   evidencePath: String?
+
+  /// Path to `round-report.json` (or equivalent) inside the bundle.
   reportPath: String?
+
+  /// Optional content hash for reproducibility checks.
   sha256: String?
 }
 
+/// One named numeric contribution to the objective (metric row).
 class ObjectiveValue {
+  /// Metric or component name (stable key in code and reports).
   name: String
+
+  /// Numeric value for this row (higher/lower interpretation depends on metric).
   value: Number
+
+  /// Row classification (`intermediate`, `penalty`, or `final`).
   kind: ObjectiveValueKind
+
+  /// Optional unit string for display (e.g. `score`, `USD`).
   unit: String?
+
+  /// Human-readable explanation shown in tooling.
   description: String?
 }
 
+/// Optional numeric domain for interpreting or clamping displayed values.
 class ObjectiveBounds {
+  /// Lower bound when applicable.
   min: Number?
+
+  /// Upper bound when applicable.
   max: Number?
 }
 
+/// Internal wiring: default empty dynamic bag for objective modules that stash scratch values.
 hidden current: Dynamic = new Dynamic {}
+
+/// Internal wiring: parent-round dynamic bag when comparing to a baseline run (optional).
 hidden parent: Dynamic?
+
+/// Internal wiring: evidence ref for the round under evaluation (must be set by the objective module).
 hidden currentRef: ObjectiveEvidenceRef
+
+/// Internal wiring: evidence ref for an optional parent round (omit when no parent comparison).
 hidden parentRef: ObjectiveEvidenceRef?
 
+/// Schema version string for forward-compatible consumers.
 schemaVersion: String = "searchbench.objective_result.v1"
 
+/// Stable identifier for this objective definition (product / registry key).
 objectiveId: String
 
+/// Evidence locations passed into the objective; includes parent when `parentRef` is non-null.
 evidenceRefs: Listing<ObjectiveEvidenceRef> =
   if (parentRef != null)
     new {
@@ -43,8 +84,11 @@ evidenceRefs: Listing<ObjectiveEvidenceRef> =
       currentRef
     }
 
+/// All metric rows produced by the objective computation.
 values: Listing<ObjectiveValue>
 
+/// Name of the [`ObjectiveValue`] row that should be treated as the headline final score.
 final: String
 
+/// Optional numeric bounds metadata for the overall score presentation.
 bounds: ObjectiveBounds?
