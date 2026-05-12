@@ -59,7 +59,7 @@ func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationReq
 		return Result{}, &Error{Phase: PhaseComparisonFailed, Err: err}
 	}
 
-	evidence, err := buildEvidenceFromReport(plan, roundReport)
+	evidence, err := projectRoundEvidence(plan, roundReport, matchExec)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
 	}
@@ -104,6 +104,15 @@ func buildEvidenceFromReport(plan Plan, roundReport report.RoundReport) (score.R
 	if err := evidence.Validate(); err != nil {
 		return score.RoundEvidenceDocument{}, err
 	}
+	return evidence, nil
+}
+
+func projectRoundEvidence(plan Plan, roundReport report.RoundReport, matchExec []report.MatchExecutionRecord) (score.RoundEvidenceDocument, error) {
+	evidence, err := buildEvidenceFromReport(plan, roundReport)
+	if err != nil {
+		return score.RoundEvidenceDocument{}, err
+	}
+	enrichLocalizationEvidence(&evidence, matchExec)
 	return evidence, nil
 }
 
