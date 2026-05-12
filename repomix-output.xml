@@ -48,12 +48,20 @@ cmd/
 configs/
   rounds/
     local-ic-vs-jcodemunch/
+      datasets/
+        JetBrains-Research_lca-bug-localization/
+          py/
+            dev.jsonl
       policies/
         challenger_policy.py
       scoring/
         localization-objective.pkl
       round.pkl
     optimize-ic/
+      datasets/
+        JetBrains-Research_lca-bug-localization/
+          py/
+            dev.jsonl
       round.pkl
   schema/
     core/
@@ -86,6 +94,16 @@ docs/
   README.md
 internal/
   adapters/
+    backend/
+      jcodemunch/
+        doc.go
+        errors.go
+        factory.go
+        jcodemunch_test.go
+        normalize.go
+        runtime.go
+        toolinfo.go
+        uri.go
     bundle/
       fs/
         bundle.go
@@ -106,6 +124,21 @@ internal/
         round_spec.go
         validate_test.go
         validate.go
+    dataset/
+      lca/
+        load.go
+        names.go
+        source_test.go
+        source.go
+    materialize/
+      git/
+        cache_key.go
+        doc.go
+        errors.go
+        materialize_test.go
+        materialize.go
+        runner.go
+        types.go
     pipeline/
       exec/
         doc.go
@@ -204,6 +237,7 @@ internal/
       evaluation_types.go
       evaluator.go
       example_fixtures_test.go
+      match_source.go
       run_test.go
       run.go
       types.go
@@ -371,6 +405,16 @@ import (
 func main()
 </file>
 
+<file path="configs/rounds/local-ic-vs-jcodemunch/datasets/JetBrains-Research_lca-bug-localization/py/dev.jsonl">
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"1111111111111111111111111111111111111111","issue_title":"Bug one","issue_body":"First repro","issue_url":"https://example.test/issues/01","changed_files":["src/one.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"2222222222222222222222222222222222222222","issue_title":"Bug two","issue_body":"Second repro","issue_url":"https://example.test/issues/02","changed_files":["src/two.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"3333333333333333333333333333333333333333","issue_title":"Bug three","issue_body":"Third repro","issue_url":"https://example.test/issues/03","changed_files":["src/three.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"4444444444444444444444444444444444444444","issue_title":"Bug four","issue_body":"Fourth repro","issue_url":"https://example.test/issues/04","changed_files":["src/four.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"5555555555555555555555555555555555555555","issue_title":"Bug five","issue_body":"Fifth repro","issue_url":"https://example.test/issues/05","changed_files":["src/five.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"6666666666666666666666666666666666666666","issue_title":"Bug six","issue_body":"Sixth repro","issue_url":"https://example.test/issues/06","changed_files":["src/six.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"7777777777777777777777777777777777777777","issue_title":"Bug seven","issue_body":"Seventh repro","issue_url":"https://example.test/issues/07","changed_files":["src/seven.go"]}
+</file>
+
 <file path="configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py">
 def score(match)
 </file>
@@ -444,6 +488,16 @@ round = (game.defineFromScratch("round-001")) {
   evaluator = game.fakeEvaluator()
   scoring = game.objective("scoring/localization-objective.pkl")
 }
+</file>
+
+<file path="configs/rounds/optimize-ic/datasets/JetBrains-Research_lca-bug-localization/py/dev.jsonl">
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"1111111111111111111111111111111111111111","issue_title":"Bug one","issue_body":"First repro","issue_url":"https://example.test/issues/01","changed_files":["src/one.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"2222222222222222222222222222222222222222","issue_title":"Bug two","issue_body":"Second repro","issue_url":"https://example.test/issues/02","changed_files":["src/two.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"3333333333333333333333333333333333333333","issue_title":"Bug three","issue_body":"Third repro","issue_url":"https://example.test/issues/03","changed_files":["src/three.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"4444444444444444444444444444444444444444","issue_title":"Bug four","issue_body":"Fourth repro","issue_url":"https://example.test/issues/04","changed_files":["src/four.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"5555555555555555555555555555555555555555","issue_title":"Bug five","issue_body":"Fifth repro","issue_url":"https://example.test/issues/05","changed_files":["src/five.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"6666666666666666666666666666666666666666","issue_title":"Bug six","issue_body":"Sixth repro","issue_url":"https://example.test/issues/06","changed_files":["src/six.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"7777777777777777777777777777777777777777","issue_title":"Bug seven","issue_body":"Seventh repro","issue_url":"https://example.test/issues/07","changed_files":["src/seven.go"]}
 </file>
 
 <file path="configs/rounds/optimize-ic/round.pkl">
@@ -6912,6 +6966,301 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.
 </file>
 
+<file path="internal/adapters/backend/jcodemunch/doc.go">
+// Package jcodemunch connects SearchBench evaluator runs to a jCodeMunch MCP server.
+//
+// The adapter owns MCP session lifecycle, repo root registration, MCP tool listing,
+// conversion into Eino tools, and normalization of tool results for the evaluator.
+// Setup failures (connect, list tools during tool construction) are distinct from
+// per-invocation tool failures.
+⋮----
+// Production use starts a subprocess transport via [OpenCommand]. Tests should use
+// [NewRuntime] with an in-memory MCP session from [github.com/modelcontextprotocol/go-sdk/mcp.NewInMemoryTransports].
+package jcodemunch
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/errors.go">
+package jcodemunch
+⋮----
+import (
+	"errors"
+	"fmt"
+)
+⋮----
+"errors"
+"fmt"
+⋮----
+// Kind classifies jCodeMunch adapter failures for errors.Is-style checks.
+type Kind int
+⋮----
+const (
+	// KindSetup covers MCP session setup: connect, initialize, optional repo
+	// indexing hooks, and prefetch steps such as tools/list when building the tool surface.
+	KindSetup Kind = iota
+	// KindToolCall covers MCP tools/call failures and tool results marked as errors.
+	KindToolCall
+)
+⋮----
+// KindSetup covers MCP session setup: connect, initialize, optional repo
+// indexing hooks, and prefetch steps such as tools/list when building the tool surface.
+⋮----
+// KindToolCall covers MCP tools/call failures and tool results marked as errors.
+⋮----
+// Error is a typed adapter failure with an operation label.
+type Error struct {
+	Kind Kind
+	Op   string
+	Err  error
+}
+⋮----
+func (e *Error) Error() string
+⋮----
+// Unwrap implements error unwrapper semantics.
+func (e *Error) Unwrap() error
+⋮----
+// IsSetup reports whether err is (or wraps) a [Error] with [KindSetup].
+func IsSetup(err error) bool
+⋮----
+var je *Error
+⋮----
+// IsToolCall reports whether err is (or wraps) a [Error] with [KindToolCall].
+func IsToolCall(err error) bool
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/factory.go">
+package jcodemunch
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"encoding/json"
+"fmt"
+"strings"
+⋮----
+"github.com/cloudwego/eino/components/tool"
+"github.com/cloudwego/eino/schema"
+⋮----
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+// EvaluatorToolFactory returns an [run]-compatible tool factory backed by MCP tools
+// exposed through rt. Tool metadata is fetched on each factory invocation so policy
+// filtering in the round executor sees the same tool names as the server.
+func EvaluatorToolFactory(rt *Runtime) func(run.Spec) ([]tool.BaseTool, error)
+⋮----
+var out []tool.BaseTool
+⋮----
+type mcpInvokableTool struct {
+	rt   *Runtime
+	name string
+	info *schema.ToolInfo
+}
+⋮----
+func (t mcpInvokableTool) Info(_ context.Context) (*schema.ToolInfo, error)
+⋮----
+func (t mcpInvokableTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error)
+⋮----
+var _ tool.InvokableTool = mcpInvokableTool{}
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/jcodemunch_test.go">
+package jcodemunch_test
+⋮----
+import (
+	"context"
+	"os/exec"
+	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/becker63/searchbench-go/internal/adapters/backend/jcodemunch"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"os/exec"
+"testing"
+"time"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+"github.com/becker63/searchbench-go/internal/adapters/backend/jcodemunch"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+func TestScriptedMCPToolSurface(t *testing.T)
+⋮----
+// Admin-style tool name: still listed by MCP; round executor allow-lists gate exposure for the model.
+⋮----
+func TestCallToolSurfacesMCPResultErrors(t *testing.T)
+⋮----
+func TestOpenCommandFailsSetup(t *testing.T)
+⋮----
+func TestRepoRootRegisteredBeforeConnect(t *testing.T)
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/normalize.go">
+package jcodemunch
+⋮----
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"encoding/json"
+"fmt"
+"strings"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// NormalizeCallToolResult turns an MCP tools/call result into a single JSON string for Eino.
+//
+// When the result is not an MCP error payload but [mcp.CallToolResult.IsError] is set,
+// this returns a [Error] with [KindToolCall].
+func NormalizeCallToolResult(res *mcp.CallToolResult) (string, error)
+⋮----
+// Fall back to serializing raw content blocks for non-text payloads.
+⋮----
+func textFromContent(parts []mcp.Content) string
+⋮----
+var b strings.Builder
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/runtime.go">
+package jcodemunch
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os/exec"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"context"
+"encoding/json"
+"fmt"
+"os/exec"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// Runtime holds a live MCP client session for jCodeMunch-style tool servers.
+type Runtime struct {
+	session *mcp.ClientSession
+}
+⋮----
+// NewRuntime wraps an initialized MCP client session. The caller must have already
+// completed the MCP initialize handshake (for example via [mcp.Client.Connect]).
+func NewRuntime(session *mcp.ClientSession) *Runtime
+⋮----
+// Session returns the underlying MCP session for advanced call sites.
+func (r *Runtime) Session() *mcp.ClientSession
+⋮----
+// Close ends the MCP session.
+func (r *Runtime) Close() error
+⋮----
+// ListTools returns the full paginated tool list advertised by the server.
+func (r *Runtime) ListTools(ctx context.Context) ([]*mcp.Tool, error)
+⋮----
+var (
+		all    []*mcp.Tool
+		cursor string
+	)
+⋮----
+// CallTool invokes MCP tools/call and normalizes the payload for the evaluator tool surface.
+func (r *Runtime) CallTool(ctx context.Context, name string, arguments json.RawMessage) (string, error)
+⋮----
+var args any
+⋮----
+// CommandConfig starts an MCP server subprocess over stdio and completes the MCP handshake.
+type CommandConfig struct {
+	// Command is the MCP server command (stdin/stdout JSON-RPC). Required.
+	Command *exec.Cmd
+	// RepoPath, when non-empty, is registered as an MCP root before connecting.
+	RepoPath string
+	// Client, when non-empty, is used as the MCP client; otherwise a default SearchBench client is created.
+	Client *mcp.Client
+	// Setup is invoked after a successful connect/index window for optional repo indexing tools
+	// or other admin calls. Failures should wrap or return [Error] with [KindSetup] where appropriate.
+	Setup func(ctx context.Context, rt *Runtime) error
+}
+⋮----
+// Command is the MCP server command (stdin/stdout JSON-RPC). Required.
+⋮----
+// RepoPath, when non-empty, is registered as an MCP root before connecting.
+⋮----
+// Client, when non-empty, is used as the MCP client; otherwise a default SearchBench client is created.
+⋮----
+// Setup is invoked after a successful connect/index window for optional repo indexing tools
+// or other admin calls. Failures should wrap or return [Error] with [KindSetup] where appropriate.
+⋮----
+// OpenCommand connects to a jCodeMunch MCP server launched as a subprocess.
+func OpenCommand(ctx context.Context, cfg CommandConfig) (*Runtime, error)
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/toolinfo.go">
+package jcodemunch
+⋮----
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"encoding/json"
+"fmt"
+⋮----
+"github.com/cloudwego/eino/schema"
+"github.com/eino-contrib/jsonschema"
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// ToolInfoFromMCP converts an MCP tool definition into Eino [schema.ToolInfo].
+func ToolInfoFromMCP(t *mcp.Tool) (*schema.ToolInfo, error)
+⋮----
+func paramsFromInputSchema(input any) (*schema.ParamsOneOf, error)
+⋮----
+var js jsonschema.Schema
+⋮----
+// Last resort: accept arbitrary JSON object arguments as a single string field.
+// This keeps marginal servers usable even when their schema is not draft 2020-12 compatible.
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/uri.go">
+package jcodemunch
+⋮----
+import (
+	"fmt"
+	"net/url"
+	"path/filepath"
+	"strings"
+)
+⋮----
+"fmt"
+"net/url"
+"path/filepath"
+"strings"
+⋮----
+// filePathToRootURI turns a local filesystem path into a file-scheme URI suitable
+// for MCP roots (absolute path, forward slashes in the URI path segment).
+func filePathToRootURI(path string) (string, error)
+</file>
+
 <file path="internal/adapters/bundle/fs/bundle.go">
 package bundlefs
 ⋮----
@@ -7650,6 +7999,392 @@ func validateToolPolicy(prefix string, policy AgentToolPolicy) error
 func validateSystemPrompt(fieldPath string, prompt *string) error
 ⋮----
 func containsParentPath(path string) bool
+</file>
+
+<file path="internal/adapters/dataset/lca/load.go">
+package lca
+⋮----
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+⋮----
+"bufio"
+"bytes"
+"encoding/json"
+"fmt"
+"os"
+"path/filepath"
+"strings"
+⋮----
+func safePathSegment(label, value string) (string, error)
+⋮----
+// ResolveJetBrainsLCASlicePath returns the JSONL path for one config/split under
+// manifestDir/datasets/<slug(name)>/<config>/<split>.jsonl .
+func ResolveJetBrainsLCASlicePath(manifestDir, datasetName, config, split string) (string, error)
+⋮----
+func loadRowsJSONL(path string) ([]json.RawMessage, error)
+⋮----
+var rows []json.RawMessage
+</file>
+
+<file path="internal/adapters/dataset/lca/names.go">
+package lca
+⋮----
+import (
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+)
+⋮----
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+⋮----
+// JetBrainsLCADatasetName is the Hugging Face id for the LCA benchmark slice.
+const JetBrainsLCADatasetName = "JetBrains-Research/lca-bug-localization"
+⋮----
+// IsJetBrainsDataset reports whether req selects the JetBrains LCA dataset.
+func IsJetBrainsDataset(r dataset.Request) bool
+⋮----
+func normalizeDatasetName(value string) string
+⋮----
+func slugDatasetName(name string) string
+</file>
+
+<file path="internal/adapters/dataset/lca/source_test.go">
+package lca
+⋮----
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"os"
+"path/filepath"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestSourceMatchesSortsAndWindows(t *testing.T)
+⋮----
+func TestIsJetBrainsDatasetNameCaseInsensitive(t *testing.T)
+</file>
+
+<file path="internal/adapters/dataset/lca/source.go">
+package lca
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"encoding/json"
+"fmt"
+"os"
+"sort"
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+type Source struct{}
+⋮----
+// NewSource returns a MatchSource that reads JetBrains LCA JSONL fixtures.
+func NewSource() Source
+⋮----
+// Matches loads manifest-local JSONL, normalizes rows, sorts by MatchID, and
+// applies MaxItems windowing when set.
+func (Source) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty[domain.MatchSpec], error)
+⋮----
+var specs []domain.MatchSpec
+⋮----
+var row domain.LCAHFRow
+</file>
+
+<file path="internal/adapters/materialize/git/cache_key.go">
+package gitmaterialize
+⋮----
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"path/filepath"
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// CacheKey returns the deterministic cache segment for one repo@sha (owner,
+// name, base SHA normalized like domain identity tokens).
+func CacheKey(owner, name, baseSHA string) string
+⋮----
+// CacheKeyFromTask delegates to identity fields on the LCA task.
+func CacheKeyFromTask(t domain.LCATask) string
+</file>
+
+<file path="internal/adapters/materialize/git/doc.go">
+// Package gitmaterialize materializes GitHub-backed LCA repository tasks into
+// local working trees keyed deterministically by owner, name,
+// and base SHA (GitHub issue becker63/searchbench-go#10).
+package gitmaterialize
+</file>
+
+<file path="internal/adapters/materialize/git/errors.go">
+package gitmaterialize
+⋮----
+import (
+	"errors"
+	"fmt"
+)
+⋮----
+"errors"
+"fmt"
+⋮----
+// FailureKind classifies git materialization faults.
+type FailureKind string
+⋮----
+const (
+	FailureInvalidRepoURL  FailureKind = "invalid_repo_url"
+	FailureCloneFailed     FailureKind = "clone_failed"
+	FailureFetchFailed     FailureKind = "fetch_failed"
+	FailureCheckoutFailed  FailureKind = "checkout_failed"
+	FailureMissingBaseSHA  FailureKind = "missing_base_sha"
+	FailureCachePermission FailureKind = "cache_permission_failed"
+	FailureInvalidTaskRepo FailureKind = "invalid_task_repo"
+	FailureFilesystemError FailureKind = "filesystem_error"
+)
+⋮----
+// MaterializeError wraps a typed materialization failure.
+type MaterializeError struct {
+	Kind FailureKind
+	Err  error
+}
+⋮----
+func (e *MaterializeError) Error() string
+⋮----
+func (e *MaterializeError) Unwrap() error
+⋮----
+// AsFailureKind unwraps Kind from a [*MaterializeError], if any.
+func AsFailureKind(err error) (FailureKind, bool)
+⋮----
+var me *MaterializeError
+⋮----
+func newErr(kind FailureKind, err error) error
+</file>
+
+<file path="internal/adapters/materialize/git/materialize_test.go">
+package gitmaterialize
+⋮----
+import (
+	"context"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"net/url"
+"os"
+"os/exec"
+"path/filepath"
+"strings"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestMaterialize_LocalRepo_CheckoutSHA_AndReuse(t *testing.T)
+⋮----
+func TestMaterialize_InvalidSHA_CheckoutFails(t *testing.T)
+⋮----
+func TestMaterialize_InvalidTask(t *testing.T)
+⋮----
+func TestMaterialize_InvalidRemoteURL(t *testing.T)
+⋮----
+func TestCacheKey_FromTask(t *testing.T)
+⋮----
+func TestMaterialize_ResultFields(t *testing.T)
+⋮----
+func bootstrapOneCommitRepo(t *testing.T) string
+⋮----
+func fixtureTask(t *testing.T, owner, name, sha string) domain.LCATask
+⋮----
+func assertFileReadable(t *testing.T, path string)
+⋮----
+func runGit(t *testing.T, dir string, args ...string)
+⋮----
+func revParseHEAD(t *testing.T, repo string) string
+⋮----
+func writeFile(t *testing.T, path, content string)
+⋮----
+func fileURL(t *testing.T, path string) string
+</file>
+
+<file path="internal/adapters/materialize/git/materialize.go">
+package gitmaterialize
+⋮----
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"fmt"
+"io/fs"
+"net/url"
+"os"
+"path/filepath"
+"strings"
+"time"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// Materializer prepares local checkouts for LCA tasks.
+type Materializer struct {
+	Git GitRunner
+}
+⋮----
+// Materialize clones or reuses a bare mirror and checks out ref (base SHA) into
+// a deterministic per-(owner,name,sha) working tree under [MaterializeRequest.CacheDir].
+func (m *Materializer) Materialize(ctx context.Context, req MaterializeRequest) (MaterializedRepo, error)
+⋮----
+func buildResult(task domain.LCATask, remote, key, checkoutPath string) MaterializedRepo
+⋮----
+func mirrorDirName(owner, name string) string
+⋮----
+func pathSegment(s string) string
+⋮----
+var b strings.Builder
+⋮----
+func validateRemoteURL(raw string) error
+⋮----
+func ensureMirror(ctx context.Context, runner GitRunner, remote, mirrorPath string) error
+⋮----
+func ensureSHAInMirror(ctx context.Context, runner GitRunner, mirrorPath string, remote, sha string) error
+⋮----
+func shaExistsBare(ctx context.Context, runner GitRunner, bareDir string, sha string) bool
+⋮----
+func cacheHit(ctx context.Context, runner GitRunner, checkoutPath string, wantSHA string) (bool, error)
+⋮----
+func checkoutAtSHA(ctx context.Context, runner GitRunner, checkoutPath string, sha string) error
+⋮----
+func markWorktreeReadOnly(root string) error
+⋮----
+func removePathIfExists(p string) error
+</file>
+
+<file path="internal/adapters/materialize/git/runner.go">
+package gitmaterialize
+⋮----
+import (
+	"bytes"
+	"context"
+	"os/exec"
+)
+⋮----
+"bytes"
+"context"
+"os/exec"
+⋮----
+// GitRunner runs `git` subprocesses. Production code uses [ExecGitRunner];
+// tests may inject a fake runner.
+type GitRunner interface {
+	RunGit(ctx context.Context, workDir string, args ...string) (stdout, stderr string, exitCode int, err error)
+}
+⋮----
+// ExecGitRunner implements [GitRunner] with os/exec.
+type ExecGitRunner struct{}
+⋮----
+func (ExecGitRunner) RunGit(ctx context.Context, workDir string, args ...string) (stdout, stderr string, exitCode int, err error)
+⋮----
+var sout, serr bytes.Buffer
+</file>
+
+<file path="internal/adapters/materialize/git/types.go">
+package gitmaterialize
+⋮----
+import (
+	"strings"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"strings"
+"time"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// MaterializeRequest describes one materialization using existing domain shapes.
+type MaterializeRequest struct {
+	Task domain.LCATask
+
+	// CacheDir is the root directory for mirrors and checkouts.
+	CacheDir domain.HostPath
+
+	// RemoteURL overrides the default https://github.com/{owner}/{name}.git URL.
+⋮----
+// CacheDir is the root directory for mirrors and checkouts.
+⋮----
+// RemoteURL overrides the default https://github.com/{owner}/{name}.git URL.
+⋮----
+// MaterializedRepo is the durable outcome of materializing one task.
+type MaterializedRepo struct {
+	TaskID domain.MatchID
+
+	RepoOwner string
+	RepoName  string
+	BaseSHA   string
+
+	RepoURL string
+
+	RootPath domain.HostPath
+
+	CacheKey string
+
+	MaterializedAt time.Time
+}
+⋮----
+// NewMaterializeRequest builds a request from an LCA task and cache directory.
+func NewMaterializeRequest(task domain.LCATask, cacheDir domain.HostPath, forceRefresh bool) MaterializeRequest
+⋮----
+// DefaultGitHubRemoteURL resolves the canonical GitHub HTTPS remote for the task identity.
+func DefaultGitHubRemoteURL(id domain.LCATaskIdentity) string
 </file>
 
 <file path="internal/adapters/pipeline/exec/doc.go">
@@ -11046,6 +11781,9 @@ func resolveRoundMatches(
 	parent *pureround.Continuation,
 ) (domain.NonEmpty[domain.MatchSpec], DatasetConfig, error)
 ⋮----
+// Materialize matches via dataset.MatchSource (JetBrains LCA JSONL under
+// the manifest directory, or the local fake for other selections).
+⋮----
 func resolveRoundEvaluator(round *config.RoundManifest, parent *pureround.Continuation) (EvaluatorConfig, domain.ModelSpec, EvaluatorBoundsConfig, int, error)
 ⋮----
 func resolveRoundScoring(
@@ -11153,7 +11891,6 @@ import (
 	"time"
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/score"
@@ -11168,16 +11905,13 @@ import (
 "time"
 ⋮----
 config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 "github.com/becker63/searchbench-go/internal/ports/dataset"
 "github.com/becker63/searchbench-go/internal/pure/domain"
 "github.com/becker63/searchbench-go/internal/pure/score"
 ⋮----
-// defaultMatchSource is the deterministic local match source used when the
-// caller does not inject a real dataset adapter. It is wired through the
-// MatchSource port so a real adapter can be substituted without touching
-// resolveEvaluation.
-var defaultMatchSource dataset.MatchSource = evaluatorfake.NewMatchSource()
+// defaultMatchSource wires JetBrains LCA JSONL loading (manifest-local datasets)
+// and falls back to the evaluator fake for non-JetBrains match selections.
+var defaultMatchSource dataset.MatchSource = newDefaultMatchSource()
 ⋮----
 // selectionPolicyV1DefaultSymbol is the runtime callable used for policy
 // artifacts that implement iterative_context.selection_policy.v1.
@@ -11413,6 +12147,35 @@ func TestWriteExampleRoundFixtures(t *testing.T)
 func resetExampleBundleDir(t *testing.T, path string)
 ⋮----
 func scriptedExampleOptimizerFactory() OptimizerModelFactory
+</file>
+
+<file path="internal/app/round/match_source.go">
+package round
+⋮----
+import (
+	"context"
+
+	lcaadapter "github.com/becker63/searchbench-go/internal/adapters/dataset/lca"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+⋮----
+lcaadapter "github.com/becker63/searchbench-go/internal/adapters/dataset/lca"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+type compositeMatchSource struct {
+	jetBrainsLCA dataset.MatchSource
+	localFake    dataset.MatchSource
+}
+⋮----
+func newDefaultMatchSource() dataset.MatchSource
+⋮----
+func (c compositeMatchSource) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty[domain.MatchSpec], error)
 </file>
 
 <file path="internal/app/round/run_test.go">
@@ -16675,7 +17438,9 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cloudwego/eino v0.8.11
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
+	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/hmdsefi/gograph v0.7.0
+	github.com/modelcontextprotocol/go-sdk v1.4.1
 	go.uber.org/zap v1.27.1
 )
 
@@ -16693,8 +17458,8 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -16711,6 +17476,8 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/segmentio/asm v1.1.3 // indirect
+	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
@@ -16719,11 +17486,13 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
-	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/oauth2 v0.34.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 </file>
