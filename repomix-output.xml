@@ -261,9 +261,11 @@ internal/
       evaluation_resolve.go
       evaluation_test.go
       evaluation_types.go
+      evaluator_runtime_test.go
       evaluator.go
       example_fixtures_test.go
       match_source.go
+      prepared_tools.go
       run_test.go
       run.go
       types.go
@@ -12794,6 +12796,56 @@ type Result struct {
 }
 </file>
 
+<file path="internal/app/round/evaluator_runtime_test.go">
+package round
+⋮----
+import (
+	"context"
+	"fmt"
+	"testing"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	iterativecontext "github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
+	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"fmt"
+"testing"
+⋮----
+"github.com/cloudwego/eino/components/tool"
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+iterativecontext "github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
+evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+func TestDefaultPreparedTools_selectsFakeBackend(t *testing.T)
+⋮----
+func TestDefaultPreparedTools_jCodeMunchRequiresEnv(t *testing.T)
+⋮----
+func TestDefaultPreparedTools_iterativeContextRequiresPolicy(t *testing.T)
+⋮----
+func TestDefaultPreparedTools_iterativeContextRequiresEnv(t *testing.T)
+⋮----
+func TestEvaluatorExecutor_fakeBackendUsesDefaultPreparedTools(t *testing.T)
+⋮----
+func TestEvaluatorExecutor_toolFactoryErrorSkipsEvaluatorRun(t *testing.T)
+⋮----
+func TestIterativeContextEvaluatorToolSurfaceOmitsAdminTools(t *testing.T)
+⋮----
+func TestLegacyToolFactoryWrapperPassesThrough(t *testing.T)
+⋮----
+func testEvaluatorSpec(t *testing.T, backend domain.BackendKind, policy *domain.PolicyArtifact) run.Spec
+</file>
+
 <file path="internal/app/round/evaluator.go">
 package round
 ⋮----
@@ -12839,7 +12891,7 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 ⋮----
 type evaluatorExecutor struct {
 	modelFactory EvaluatorModelFactory
-	toolFactory  EvaluatorToolFactory
+	toolFactory  preparedToolFactory
 	allowedTools map[string]struct{}
 ⋮----
 // evaluatorAppendix holds manifest-only evaluator text (e.g. systemPrompt).
@@ -12924,6 +12976,63 @@ type compositeMatchSource struct {
 func newDefaultMatchSource() dataset.MatchSource
 ⋮----
 func (c compositeMatchSource) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty[domain.MatchSpec], error)
+</file>
+
+<file path="internal/app/round/prepared_tools.go">
+package round
+⋮----
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/cloudwego/eino/components/tool"
+
+	iterativecontext "github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
+	jcodemunch "github.com/becker63/searchbench-go/internal/adapters/backend/jcodemunch"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"fmt"
+"os"
+"os/exec"
+"strings"
+⋮----
+"github.com/cloudwego/eino/components/tool"
+⋮----
+iterativecontext "github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
+jcodemunch "github.com/becker63/searchbench-go/internal/adapters/backend/jcodemunch"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+// Environment variables name MCP server launch commands (stdin/stdout JSON-RPC).
+// Values are executed as `sh -c <value>` so quoting behaves like a shell command line.
+const (
+	envJCodeMunchCommand       = "SEARCHBENCH_JCODEMUNCH_COMMAND"
+	envIterativeContextCommand = "SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND"
+)
+⋮----
+// preparedToolFactory builds evaluator tools for one spec and returns an optional
+// cleanup callback once the evaluator run finishes (MCP sessions, temp policy files).
+type preparedToolFactory func(ctx context.Context, spec run.Spec) ([]tool.BaseTool, func(), error)
+⋮----
+func wrapLegacyEvaluatorToolFactory(f EvaluatorToolFactory) preparedToolFactory
+⋮----
+func defaultPreparedToolFactory() preparedToolFactory
+⋮----
+func resolvePreparedToolFactory(req evaluationRequest) preparedToolFactory
+⋮----
+func openJCodeMunchTools(ctx context.Context, spec run.Spec) ([]tool.BaseTool, func(), error)
+⋮----
+func openIterativeContextTools(ctx context.Context, spec run.Spec) ([]tool.BaseTool, func(), error)
+⋮----
+func writePolicyTempFile(p *domain.PolicyArtifact) (path string, cleanup func(), err error)
 </file>
 
 <file path="internal/app/round/run_test.go">

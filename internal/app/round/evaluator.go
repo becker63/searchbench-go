@@ -37,7 +37,7 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 
 	executor := &evaluatorExecutor{
 		modelFactory: modelFactory,
-		toolFactory:  request.EvaluatorToolFactory,
+		toolFactory:  resolvePreparedToolFactory(request),
 		allowedTools: allowedTools,
 		evaluatorAppendix: run.EvaluatorRunAppendix{
 			SystemPrompt: plan.Evaluator.ToolPolicy.SystemPrompt,
@@ -77,7 +77,7 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 
 type evaluatorExecutor struct {
 	modelFactory EvaluatorModelFactory
-	toolFactory  EvaluatorToolFactory
+	toolFactory  preparedToolFactory
 	allowedTools map[string]struct{}
 	// evaluatorAppendix holds manifest-only evaluator text (e.g. systemPrompt).
 	evaluatorAppendix run.EvaluatorRunAppendix
@@ -102,9 +102,12 @@ func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.Exe
 
 	toolFactory := e.toolFactory
 	if toolFactory == nil {
-		toolFactory = evaluatorfake.ToolFactory
+		toolFactory = wrapLegacyEvaluatorToolFactory(evaluatorfake.ToolFactory)
 	}
-	tools, err := toolFactory(spec)
+	tools, cleanup, err := toolFactory(ctx, spec)
+	if cleanup != nil {
+		defer cleanup()
+	}
 	if err != nil {
 		return run.ExecutedRun{}, fmt.Errorf("local evaluator tools: %w", err)
 	}
