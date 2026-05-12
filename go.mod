@@ -13,6 +13,7 @@ require (
 	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/hmdsefi/gograph v0.7.0
 	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	go.uber.org/zap v1.27.1
 )
 
