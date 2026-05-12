@@ -9,6 +9,7 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 
+	evaluatormodel "github.com/becker63/searchbench-go/internal/adapters/providers/evaluatormodel"
 	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
@@ -22,8 +23,18 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 	for _, name := range plan.Evaluator.ToolPolicy.EffectiveAllowed {
 		allowedTools[name] = struct{}{}
 	}
+
+	modelFactory := request.EvaluatorModelFactory
+	if modelFactory == nil {
+		modelFactory = evaluatormodel.NewFactory(evaluatormodel.Config{
+			Provider:        plan.Evaluator.Model.Provider,
+			Model:           plan.Evaluator.Model.Name,
+			MaxOutputTokens: plan.Evaluator.Model.MaxOutputTokens,
+		})
+	}
+
 	executor := &evaluatorExecutor{
-		modelFactory: request.EvaluatorModelFactory,
+		modelFactory: modelFactory,
 		toolFactory:  request.EvaluatorToolFactory,
 		allowedTools: allowedTools,
 		evaluatorAppendix: run.EvaluatorRunAppendix{
@@ -79,6 +90,7 @@ func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.Exe
 
 	modelFactory := e.modelFactory
 	if modelFactory == nil {
+		// Defensive: runComparison normally injects evaluatormodel.NewFactory.
 		modelFactory = evaluatorfake.ModelFactory
 	}
 	model, err := modelFactory(spec)

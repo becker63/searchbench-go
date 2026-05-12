@@ -144,6 +144,11 @@ internal/
         doc.go
         runner_test.go
         runner.go
+    providers/
+      evaluatormodel/
+        doc.go
+        factory_test.go
+        factory.go
     report/
       text/
         doc.go
@@ -156,6 +161,11 @@ internal/
         doc.go
         run_test.go
         run.go
+    trace/
+      langsmith/
+        context.go
+        factory_test.go
+        factory.go
   agents/
     evaluator/
       eino/
@@ -8493,6 +8503,109 @@ var exitErr *exec.ExitError
 func normalizeResult(spec ports.CommandSpec, result ports.StepResult) ports.StepResult
 </file>
 
+<file path="internal/adapters/providers/evaluatormodel/doc.go">
+// Package evaluatormodel resolves manifest evaluator model settings plus process
+// environment into an Eino ToolCallingChatModel factory. Provider SDK types stay
+// in this adapter; pure packages receive only usage records and execution results.
+//
+// Environment (OpenAI-compatible HTTP):
+⋮----
+//	openai:     OPENAI_API_KEY, optional OPENAI_BASE_URL
+//	openrouter: OPENROUTER_API_KEY (or OPENAI_API_KEY), optional OPENROUTER_BASE_URL (default https://openrouter.ai/api/v1)
+//	cerebras:   CEREBRAS_API_KEY, optional CEREBRAS_BASE_URL (default https://api.cerebras.ai/v1)
+⋮----
+// Manifest provider "fake" (or missing/empty provider) uses the local deterministic
+// fake model. If a cloud provider is selected but credentials are missing, the
+// factory falls back to the fake model so tests and CI stay offline by default.
+package evaluatormodel
+</file>
+
+<file path="internal/adapters/providers/evaluatormodel/factory_test.go">
+package evaluatormodel
+⋮----
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/cloudwego/eino/schema"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/testing/modeltest"
+)
+⋮----
+"context"
+"net/http"
+"testing"
+⋮----
+"github.com/cloudwego/eino/schema"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+"github.com/becker63/searchbench-go/internal/testing/modeltest"
+⋮----
+func TestNewFactoryFakeProviderUsesLocalFake(t *testing.T)
+⋮----
+func TestNewFactoryOpenAIWithoutCredentialsUsesLocalFake(t *testing.T)
+⋮----
+func TestNewFactoryOpenAIWithFixtureServer(t *testing.T)
+⋮----
+func TestNewFactoryOpenRouterUsesOpenRouterEnv(t *testing.T)
+⋮----
+func sampleSpec() run.Spec
+</file>
+
+<file path="internal/adapters/providers/evaluatormodel/factory.go">
+package evaluatormodel
+⋮----
+import (
+	"context"
+	"os"
+	"strings"
+
+	openai "github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/components/model"
+
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"os"
+"strings"
+⋮----
+openai "github.com/cloudwego/eino-ext/components/model/openai"
+"github.com/cloudwego/eino/components/model"
+⋮----
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+// Config is manifest evaluator model configuration (provider-neutral).
+type Config struct {
+	Provider        string
+	Model           string
+	MaxOutputTokens int
+}
+⋮----
+// NewFactory returns a factory that honors [Config] and the environment.
+//
+// When credentials for a cloud provider are absent, the returned factory is the
+// same as [evaluatorfake.ModelFactory] so default validation runs need no secrets.
+func NewFactory(cfg Config) func(spec run.Spec) (model.ToolCallingChatModel, error)
+⋮----
+func normalizeProvider(p string) string
+⋮----
+type openAICreds struct {
+	apiKey  string
+	baseURL string
+}
+⋮----
+func resolveOpenAICreds(provider string) openAICreds
+⋮----
+func newOpenAIChatModel(cfg Config) (model.ToolCallingChatModel, bool)
+</file>
+
 <file path="internal/adapters/report/text/doc.go">
 // Package text renders Searchbench artifacts for human terminal output.
 //
@@ -8796,6 +8909,119 @@ func renderEvidenceRef(name string, ref score.ObjectiveEvidenceRef) string
 func fileURI(path string) string
 ⋮----
 func firstNonEmpty(values ...string) string
+</file>
+
+<file path="internal/adapters/trace/langsmith/context.go">
+package langsmith
+⋮----
+import (
+	"context"
+	"os"
+	"strings"
+	"sync"
+
+	extlangsmith "github.com/cloudwego/eino-ext/callbacks/langsmith"
+)
+⋮----
+"context"
+"os"
+"strings"
+"sync"
+⋮----
+extlangsmith "github.com/cloudwego/eino-ext/callbacks/langsmith"
+⋮----
+// ContextLabels carries non-authoritative dimensions for LangSmith trace UX only.
+type ContextLabels struct {
+	SessionName string
+	MatchID     string
+	RunID       string
+	Role        string
+}
+⋮----
+// AugmentContext attaches LangSmith trace options when LANGSMITH_API_KEY is set.
+// It does not perform scoring or decisions and does not replace SearchBench usage
+// accounting.
+func AugmentContext(ctx context.Context, labels ContextLabels) context.Context
+</file>
+
+<file path="internal/adapters/trace/langsmith/factory_test.go">
+package langsmith
+⋮----
+import (
+	"context"
+	"testing"
+)
+⋮----
+"context"
+"testing"
+⋮----
+func TestNewHandlerFactory_DisabledWithoutAPIKey(t *testing.T)
+⋮----
+func TestHandlerFactoryFromEnv_DefaultOffline(t *testing.T)
+⋮----
+func TestNewHandlerFactory_EnabledWithAPIKey(t *testing.T)
+⋮----
+func TestAugmentContext_NoKeyNoOp(t *testing.T)
+⋮----
+func TestAugmentContext_WithKeyAddsTrace(t *testing.T)
+</file>
+
+<file path="internal/adapters/trace/langsmith/factory.go">
+// Package langsmith is the SearchBench adapter boundary for optional LangSmith/Eino
+// trace callbacks. SearchBench bundle, scoring, evidence, and decisions remain
+// authoritative; this integration is observational only and must not define core
+// domain types.
+package langsmith
+⋮----
+import (
+	"context"
+	"os"
+	"strings"
+
+	extlangsmith "github.com/cloudwego/eino-ext/callbacks/langsmith"
+	einocallbacks "github.com/cloudwego/eino/callbacks"
+)
+⋮----
+"context"
+"os"
+"strings"
+⋮----
+extlangsmith "github.com/cloudwego/eino-ext/callbacks/langsmith"
+einocallbacks "github.com/cloudwego/eino/callbacks"
+⋮----
+// Well-known environment variables for optional LangSmith export (same names as
+// LangChain/LangSmith tooling when applicable).
+const (
+	EnvAPIKey = "LANGSMITH_API_KEY"
+	EnvAPIURL = "LANGSMITH_API_URL"
+	// EnvSession overrides the default LangSmith session name for trace grouping.
+	EnvSession = "SEARCHBENCH_LANGSMITH_SESSION"
+)
+⋮----
+// EnvSession overrides the default LangSmith session name for trace grouping.
+⋮----
+// Config configures construction of the upstream LangSmith Eino callback handler.
+type Config struct {
+	APIKey string
+	APIURL string
+	// RunIDGen is forwarded to the upstream handler; nil uses its default.
+	RunIDGen func(context.Context) string
+}
+⋮----
+// RunIDGen is forwarded to the upstream handler; nil uses its default.
+⋮----
+// HandlerFactory matches the evaluator callback composer shape
+// (internal/agents/evaluator/eino/callbacks.Factory).
+type HandlerFactory func(context.Context) (einocallbacks.Handler, error)
+⋮----
+// NewHandlerFactory returns a cold factory that yields the LangChain LangSmith
+// Eino handler, or (nil, nil) when APIKey is empty so tracing stays off without
+// credentials.
+func NewHandlerFactory(cfg Config) (HandlerFactory, error)
+⋮----
+// HandlerFactoryFromEnv builds a factory from LANGSMITH_API_KEY /
+// LANGSMITH_API_URL. When the API key is unset, returns (nil, nil).
+func HandlerFactoryFromEnv() (HandlerFactory, error)
 </file>
 
 <file path="internal/agents/evaluator/eino/callbacks/callbacks_test.go">
@@ -12068,6 +12294,7 @@ import (
 
 	"github.com/cloudwego/eino/components/tool"
 
+	evaluatormodel "github.com/becker63/searchbench-go/internal/adapters/providers/evaluatormodel"
 	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
@@ -12084,6 +12311,7 @@ import (
 ⋮----
 "github.com/cloudwego/eino/components/tool"
 ⋮----
+evaluatormodel "github.com/becker63/searchbench-go/internal/adapters/providers/evaluatormodel"
 evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 "github.com/becker63/searchbench-go/internal/app/round/internal/compare"
@@ -12101,6 +12329,8 @@ type evaluatorExecutor struct {
 // evaluatorAppendix holds manifest-only evaluator text (e.g. systemPrompt).
 ⋮----
 func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
+⋮----
+// Defensive: runComparison normally injects evaluatormodel.NewFactory.
 ⋮----
 func (e *evaluatorExecutor) recordExecution(spec run.Spec, result evaluatoreino.Result)
 ⋮----
