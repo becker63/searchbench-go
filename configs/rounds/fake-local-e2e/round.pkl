@@ -1,0 +1,24 @@
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "fake-local-e2e-round"
+
+round = (game.defineFromScratch("fake-local-e2e-001")) {
+  incumbent = game.fakeRoundPolicy("incumbent-fake", "Fake Incumbent")
+
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    system {
+      id = "challenger-fake"
+      name = "Fake Challenger"
+      backend = "fake"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy-fake-local-e2e"
+    }
+  }
+
+  matches = game.lca("py", "dev", 5)
+  evaluator = game.fakeEvaluator()
+  scoring = game.objective("scoring/localization-objective.pkl")
+}

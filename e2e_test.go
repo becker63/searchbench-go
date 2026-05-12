@@ -16,6 +16,14 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
+const (
+	envSearchBenchJCodeMunchCommand       = "SEARCHBENCH_JCODEMUNCH_COMMAND"
+	envSearchBenchIterativeContextCommand = "SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND"
+)
+
+// TestSearchBenchRoundRunCLIE2E exercises bundle/objective/decision wiring against the
+// example manifest that declares real JC/IC backends. Evaluator executions may fail when
+// MCP launcher env vars are unset; see configs/rounds/fake-local-e2e for an offline fake-backend smoke manifest.
 func TestSearchBenchRoundRunCLIE2E(t *testing.T) {
 	t.Parallel()
 
@@ -35,6 +43,7 @@ func TestSearchBenchRoundRunCLIE2E(t *testing.T) {
 	ctx := context.Background()
 	runCli := exec.CommandContext(ctx, binary, "run", "--manifest="+manifestPath, "--bundle-root="+bundleArtifacts)
 	runCli.Dir = repoRoot
+	runCli.Env = os.Environ()
 	out, err := runCli.CombinedOutput()
 	if err != nil {
 		t.Fatalf("CLI run failed: %v\n%s", err, out)
@@ -84,6 +93,8 @@ func TestSearchBenchRoundRunCLIE2E(t *testing.T) {
 	}
 }
 
+// TestSearchBenchRoundRunEngineE2E mirrors TestSearchBenchRoundRunCLIE2E through round.Run;
+// it proves resolver + bundle writers for the JC/IC-declared example manifest, not successful MCP-backed runs.
 func TestSearchBenchRoundRunEngineE2E(t *testing.T) {
 	t.Parallel()
 
@@ -121,6 +132,114 @@ func TestSearchBenchRoundRunEngineE2E(t *testing.T) {
 		if strings.TrimSpace(string(v.Kind)) == "" {
 			t.Fatalf("objective value %q has empty kind", v.Name)
 		}
+	}
+}
+
+func TestSearchBenchFakeLocalRoundRunCLIE2E(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	repoRoot := repoRootDir(t)
+	bundleArtifacts := filepath.Join(t.TempDir(), "artifacts")
+	manifestPath := filepath.Join(repoRoot, "configs", "rounds", "fake-local-e2e", "round.pkl")
+	binary := filepath.Join(t.TempDir(), "searchbench")
+
+	build := exec.Command("go", "build", "-trimpath", "-o", binary, "./cmd/searchbench")
+	build.Dir = repoRoot
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+
+	ctx := context.Background()
+	runCli := exec.CommandContext(ctx, binary, "run", "--manifest="+manifestPath, "--bundle-root="+bundleArtifacts)
+	runCli.Dir = repoRoot
+	runCli.Env = envWithoutMCPLauncher(os.Environ())
+	out, err := runCli.CombinedOutput()
+	if err != nil {
+		t.Fatalf("CLI run failed: %v\n%s", err, out)
+	}
+
+	var bundlePrefix string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if after, ok := strings.CutPrefix(line, "bundle="); ok {
+			bundlePrefix = strings.TrimSpace(after)
+			break
+		}
+	}
+	if bundlePrefix == "" {
+		t.Fatalf("CLI output missing bundle= line:\n%s", out)
+	}
+
+	assertBundleArtifacts(t, bundlePrefix)
+	assertRoundReportJSONHasNoFailures(t, filepath.Join(bundlePrefix, "round-report.json"))
+}
+
+func TestSearchBenchFakeLocalRoundRunEngineE2E(t *testing.T) {
+	requirePkl(t)
+
+	t.Setenv(envSearchBenchJCodeMunchCommand, "")
+	t.Setenv(envSearchBenchIterativeContextCommand, "")
+
+	root := repoRootDir(t)
+	bundleArtifacts := filepath.Join(t.TempDir(), "artifacts")
+	manifestPath := filepath.Join(root, "configs", "rounds", "fake-local-e2e", "round.pkl")
+
+	rec, err := round.Run(context.Background(), round.Input{
+		EvaluationManifestPath: manifestPath,
+		BundleRootOverride:     bundleArtifacts,
+		RoundID:                "e2e-fake-local-engine",
+		Now: func() time.Time {
+			return time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+		},
+	})
+	if err != nil {
+		t.Fatalf("round.Run error = %v", err)
+	}
+	if rec.RoundResult == nil {
+		t.Fatal("missing RoundResult")
+	}
+	bp := string(rec.RoundResult.Bundle.Path)
+	assertBundleArtifacts(t, bp)
+	assertAllEvaluatorRunsSucceeded(t, rec.RoundResult.EvaluatorExecutions)
+	assertRoundReportJSONHasNoFailures(t, filepath.Join(bp, "round-report.json"))
+}
+
+func envWithoutMCPLauncher(environ []string) []string {
+	out := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		if strings.HasPrefix(kv, envSearchBenchJCodeMunchCommand+"=") ||
+			strings.HasPrefix(kv, envSearchBenchIterativeContextCommand+"=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
+func assertAllEvaluatorRunsSucceeded(tb testing.TB, executions []round.EvaluatorExecution) {
+	tb.Helper()
+	if len(executions) == 0 {
+		tb.Fatal("expected at least one evaluator execution")
+	}
+	for _, ex := range executions {
+		if !ex.Result.Success() {
+			tb.Fatalf("evaluator run failed: role=%v match=%v run=%v failure=%+v", ex.Role, ex.MatchID, ex.RunID, ex.Result.Failure)
+		}
+	}
+}
+
+func assertRoundReportJSONHasNoFailures(tb testing.TB, path string) {
+	tb.Helper()
+	var payload struct {
+		Failures struct {
+			Incumbent  []any `json:"incumbent"`
+			Challenger []any `json:"challenger"`
+		} `json:"failures"`
+	}
+	decodeJSON(tb, path, &payload)
+	if len(payload.Failures.Incumbent) != 0 || len(payload.Failures.Challenger) != 0 {
+		tb.Fatalf("%s has failures: incumbent=%d challenger=%d", path, len(payload.Failures.Incumbent), len(payload.Failures.Challenger))
 	}
 }
 

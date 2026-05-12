@@ -13,6 +13,7 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [LangSmith](integrations/langsmith-integration.md) | Trace/evaluator platform positioning |
 | [Replit](guides/replit.md) | Quick environment and tech stack orientation |
 | [Roadmap](roadmap/todo.md) | High-level implementation pressure |
+| [Fake e2e runs](roadmap/fake-e2e-runs.md) | Offline fake-round commands, manifests, and artifact expectations |
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
 | [Issue wave publisher](engineering/issue-wave-manifest.md) | `gh`-backed JSON manifest for batch issue creation (dev tooling) |
 
