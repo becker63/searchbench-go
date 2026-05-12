@@ -18003,8 +18003,9 @@ for ((i = 0; i < count; i++)); do
 
 	if [[ $dry_run -eq 1 ]]; then
 		echo "dry-run: would create issue: $title"
-		if [[ ${#label_args[@]} -gt 0 ]]; then
-			echo "         labels: ${label_args[*]}"
+		labels_human="$(jq -r --argjson idx "$i" '(.issues[$idx].labels // []) | join(", ")' "$manifest")"
+		if [[ -n $labels_human ]]; then
+			echo "         labels: $labels_human"
 		fi
 		parallel_safe=$(jq -r --argjson idx "$i" '.issues[$idx].parallel_safe // false' "$manifest")
 		if [[ $want_develop -eq 1 && $parallel_safe == "true" ]]; then
