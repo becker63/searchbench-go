@@ -75,7 +75,7 @@ func resolveRoundManifest(ctx context.Context, cfg config.RoundSpec, manifestPat
 		parentEvidencePath = filepath.Join(parentBundlePath, "evidence.pkl")
 	}
 
-	matches, datasetConfig, err := resolveRoundMatches(ctx, manifestDir, cfg, round, parentContinuation)
+	matches, datasetConfig, err := resolveRoundMatches(ctx, manifestDir, cfg, round, parentContinuation, request)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -233,17 +233,20 @@ func resolveRoundMatches(
 	cfg config.RoundSpec,
 	round *config.RoundManifest,
 	parent *pureround.Continuation,
+	request evaluationResolveRequest,
 ) (domain.NonEmpty[domain.MatchSpec], DatasetConfig, error) {
 	if round != nil && round.Matches != nil {
 		// Materialize matches via dataset.MatchSource (JetBrains LCA JSONL under
 		// the manifest directory, or the local fake for other selections).
 		matches, err := defaultMatchSource.Matches(ctx, dataset.Request{
-			ManifestDir: manifestDir,
-			Kind:        round.Matches.Kind,
-			Name:        round.Matches.Name,
-			Config:      round.Matches.Config,
-			Split:       round.Matches.Split,
-			MaxItems:    round.Matches.MaxItems,
+			ManifestDir:          manifestDir,
+			Kind:                 round.Matches.Kind,
+			Name:                 round.Matches.Name,
+			Config:               round.Matches.Config,
+			Split:                round.Matches.Split,
+			MaxItems:             round.Matches.MaxItems,
+			MaterializeCacheDir:  request.DatasetMaterializeCacheDir,
+			MaterializeRemoteURL: request.DatasetMaterializeRemoteURL,
 		})
 		if err != nil {
 			return domain.NonEmpty[domain.MatchSpec]{}, DatasetConfig{}, fmt.Errorf("resolve matches: %w", err)

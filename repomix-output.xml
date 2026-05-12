@@ -264,6 +264,8 @@ internal/
       evaluator_runtime_test.go
       evaluator.go
       example_fixtures_test.go
+      match_execution_test.go
+      match_execution.go
       match_source.go
       prepared_tools.go
       run_test.go
@@ -328,6 +330,7 @@ internal/
       doc.go
       evidence_test.go
       evidence.go
+      match_execution_record.go
       match_execution_set_test.go
       match_execution_set.go
       regression.go
@@ -8618,6 +8621,7 @@ import (
 	"sort"
 	"strings"
 
+	gitmaterialize "github.com/becker63/searchbench-go/internal/adapters/materialize/git"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 )
@@ -8629,6 +8633,7 @@ import (
 "sort"
 "strings"
 ⋮----
+gitmaterialize "github.com/becker63/searchbench-go/internal/adapters/materialize/git"
 "github.com/becker63/searchbench-go/internal/ports/dataset"
 "github.com/becker63/searchbench-go/internal/pure/domain"
 ⋮----
@@ -8641,9 +8646,13 @@ func NewSource() Source
 // applies MaxItems windowing when set.
 func (Source) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty[domain.MatchSpec], error)
 ⋮----
-var specs []domain.MatchSpec
+var tasks []domain.LCATask
 ⋮----
 var row domain.LCAHFRow
+⋮----
+var mz *gitmaterialize.Materializer
+⋮----
+var specs []domain.MatchSpec
 </file>
 
 <file path="internal/adapters/materialize/git/cache_key.go">
@@ -11948,6 +11957,12 @@ type TaskComparisonResult struct {
 // and emits a report-safe RoundReport.
 func (r Runner) Run(ctx context.Context, plan Plan) (report.RoundReport, error)
 ⋮----
+// RunWithTaskWork runs the comparison and returns ordered per-task results
+// alongside the aggregate round report.
+func (r Runner) RunWithTaskWork(ctx context.Context, plan Plan) (report.RoundReport, []TaskWorkResult, error)
+⋮----
+func (r Runner) finishRoundReport(plan Plan, taskResults []TaskWorkResult, logger Logger) (report.RoundReport, error)
+⋮----
 // Validate checks that Runner has the injected dependencies needed to
 // orchestrate a comparison.
 func (r Runner) Validate() error
@@ -12314,7 +12329,15 @@ type evaluationResolveRequest struct {
 	ParentRef          *score.ObjectiveEvidenceRef
 	ParentEvidencePath string
 	Now                func() time.Time
+
+	// DatasetMaterializeCacheDir triggers git materialization for JetBrains LCA
+	// datasets during match resolution when non-empty.
+	DatasetMaterializeCacheDir  domain.HostPath
+	DatasetMaterializeRemoteURL string
 }
+⋮----
+// DatasetMaterializeCacheDir triggers git materialization for JetBrains LCA
+// datasets during match resolution when non-empty.
 ⋮----
 // Plan is the canonical app-layer evaluation projection used by execution.
 type Plan struct {
@@ -12519,6 +12542,7 @@ func resolveRoundMatches(
 	cfg config.RoundSpec,
 	round *config.RoundManifest,
 	parent *pureround.Continuation,
+	request evaluationResolveRequest,
 ) (domain.NonEmpty[domain.MatchSpec], DatasetConfig, error)
 ⋮----
 // Materialize matches via dataset.MatchSource (JetBrains LCA JSONL under
@@ -12793,6 +12817,7 @@ type Result struct {
 	RoundEvidence       score.RoundEvidenceDocument
 	ObjectiveResult     *score.ObjectiveResult
 	EvaluatorExecutions []EvaluatorExecution
+	MatchExecutions     []report.MatchExecutionRecord
 }
 </file>
 
@@ -12887,7 +12912,7 @@ evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake
 run "github.com/becker63/searchbench-go/internal/pure/execution"
 "github.com/becker63/searchbench-go/internal/pure/report"
 ⋮----
-func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, error)
+func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, []report.MatchExecutionRecord, error)
 ⋮----
 type evaluatorExecutor struct {
 	modelFactory EvaluatorModelFactory
@@ -12947,6 +12972,52 @@ func TestWriteExampleRoundFixtures(t *testing.T)
 func resetExampleBundleDir(t *testing.T, path string)
 ⋮----
 func scriptedExampleOptimizerFactory() OptimizerModelFactory
+</file>
+
+<file path="internal/app/round/match_execution_test.go">
+package round
+⋮----
+import (
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+func TestMatchExecutionRecordsFromTaskWorkPreservesOrder(t *testing.T)
+</file>
+
+<file path="internal/app/round/match_execution.go">
+package round
+⋮----
+import (
+	"cmp"
+	"fmt"
+	"slices"
+
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+)
+⋮----
+"cmp"
+"fmt"
+"slices"
+⋮----
+"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+"github.com/becker63/searchbench-go/internal/pure/report"
+⋮----
+func matchExecutionRecordsFromTaskWork(matches domain.NonEmpty[domain.MatchSpec], work []compare.TaskWorkResult) ([]report.MatchExecutionRecord, error)
 </file>
 
 <file path="internal/app/round/match_source.go">
@@ -13074,9 +13145,11 @@ package round
 ⋮----
 import (
 	"context"
+	"strings"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 	"github.com/becker63/searchbench-go/internal/games/codelocalization"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/game"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	pureround "github.com/becker63/searchbench-go/internal/pure/round"
@@ -13084,9 +13157,11 @@ import (
 )
 ⋮----
 "context"
+"strings"
 ⋮----
 bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 "github.com/becker63/searchbench-go/internal/games/codelocalization"
+"github.com/becker63/searchbench-go/internal/pure/domain"
 "github.com/becker63/searchbench-go/internal/pure/game"
 "github.com/becker63/searchbench-go/internal/pure/report"
 pureround "github.com/becker63/searchbench-go/internal/pure/round"
@@ -13192,7 +13267,15 @@ type Input struct {
 	EvaluatorModelFactory EvaluatorModelFactory
 	EvaluatorToolFactory  EvaluatorToolFactory
 	OptimizerModelFactory OptimizerModelFactory
+
+	// DatasetMaterializeCacheDir triggers JetBrains LCA git materialization during
+	// manifest resolution when non-empty.
+	DatasetMaterializeCacheDir  string
+	DatasetMaterializeRemoteURL string
 }
+⋮----
+// DatasetMaterializeCacheDir triggers JetBrains LCA git materialization during
+// manifest resolution when non-empty.
 ⋮----
 // Resolved is the normalized round contract before match execution.
 type Resolved struct {
@@ -13208,6 +13291,7 @@ type MatchRecords struct {
 	Plan                Plan
 	RoundReport         report.RoundReport
 	EvaluatorExecutions []EvaluatorExecution
+	MatchExecutions     []report.MatchExecutionRecord
 }
 ⋮----
 // Record is the completed round workflow outcome.
@@ -13354,7 +13438,20 @@ type Request struct {
 	Config      string
 	Split       string
 	MaxItems    *int
+
+	// MaterializeCacheDir, when non-empty, asks JetBrains LCA adapters to git
+	// materialize each task's repo into this cache root before returning MatchSpec rows.
+	MaterializeCacheDir HostPath
+	// MaterializeRemoteURL optionally overrides the default GitHub HTTPS remote.
+	MaterializeRemoteURL string
 }
+⋮----
+// MaterializeCacheDir, when non-empty, asks JetBrains LCA adapters to git
+// materialize each task's repo into this cache root before returning MatchSpec rows.
+⋮----
+// MaterializeRemoteURL optionally overrides the default GitHub HTTPS remote.
+⋮----
+// HostPath is re-exported so dataset callers do not import domain only for paths.
 ⋮----
 // MatchSource is the port rounds use to materialize the match list. Adapters
 // must return at least one match.
@@ -15112,6 +15209,41 @@ var (
 // BuildRoundEvidence projects a round report into the pure round evidence
 // document used by artifact serialization and objective layers.
 func BuildRoundEvidence(roundReport RoundReport) (score.RoundEvidenceDocument, error)
+</file>
+
+<file path="internal/pure/report/match_execution_record.go">
+package report
+⋮----
+import (
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+// RoleExecutionOutcome captures one policy role outcome for a single match.
+type RoleExecutionOutcome struct {
+	Scored *score.ScoredRun
+	Failed *run.RunFailure
+}
+⋮----
+// NewRoleExecutionOutcome constructs an outcome from mutually exclusive pointers.
+func NewRoleExecutionOutcome(scored *score.ScoredRun, failed *run.RunFailure) RoleExecutionOutcome
+⋮----
+// MatchExecutionRecord aligns one planned match with incumbent/challenger outcomes.
+//
+// It preserves task index order via construction from ordered compare.TaskWorkResult
+// slices and is the durable seam for downstream localization evidence builders.
+type MatchExecutionRecord struct {
+	MatchID     domain.MatchID       `json:"match_id"`
+	Task        domain.MatchSpec     `json:"task"`
+	Incumbent   RoleExecutionOutcome `json:"incumbent"`
+	Challenger  RoleExecutionOutcome `json:"challenger"`
+	Regressions []Regression         `json:"regressions,omitempty"`
+}
 </file>
 
 <file path="internal/pure/report/match_execution_set_test.go">

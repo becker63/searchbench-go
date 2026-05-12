@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	gitmaterialize "github.com/becker63/searchbench-go/internal/adapters/materialize/git"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 )
@@ -49,7 +50,7 @@ func (Source) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty
 	config := strings.TrimSpace(req.Config)
 	split := strings.TrimSpace(req.Split)
 
-	var specs []domain.MatchSpec
+	var tasks []domain.LCATask
 	for _, raw := range rawRows {
 		if err := ctx.Err(); err != nil {
 			return domain.NonEmpty[domain.MatchSpec]{}, err
@@ -62,12 +63,38 @@ func (Source) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty
 		if err != nil {
 			return domain.NonEmpty[domain.MatchSpec]{}, fmt.Errorf("lca adapter: normalize task: %w", err)
 		}
-		specs = append(specs, task.MatchSpec())
+		tasks = append(tasks, task)
 	}
 
-	sort.Slice(specs, func(i, j int) bool {
-		return string(specs[i].ID) < string(specs[j].ID)
+	sort.Slice(tasks, func(i, j int) bool {
+		return string(tasks[i].MatchID()) < string(tasks[j].MatchID())
 	})
+
+	var mz *gitmaterialize.Materializer
+	if string(req.MaterializeCacheDir) != "" {
+		mz = &gitmaterialize.Materializer{}
+	}
+
+	var specs []domain.MatchSpec
+	for _, task := range tasks {
+		if err := ctx.Err(); err != nil {
+			return domain.NonEmpty[domain.MatchSpec]{}, err
+		}
+		t := task
+		if mz != nil {
+			mreq := gitmaterialize.MaterializeRequest{
+				Task:      t,
+				CacheDir:  req.MaterializeCacheDir,
+				RemoteURL: strings.TrimSpace(req.MaterializeRemoteURL),
+			}
+			res, err := mz.Materialize(ctx, mreq)
+			if err != nil {
+				return domain.NonEmpty[domain.MatchSpec]{}, fmt.Errorf("lca adapter: materialize %s: %w", t.MatchID(), err)
+			}
+			t = t.WithRepo(res.RootPath)
+		}
+		specs = append(specs, t.MatchSpec())
+	}
 
 	if req.MaxItems != nil {
 		if *req.MaxItems <= 0 {

@@ -2,9 +2,11 @@ package round
 
 import (
 	"context"
+	"strings"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 	"github.com/becker63/searchbench-go/internal/games/codelocalization"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/game"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	pureround "github.com/becker63/searchbench-go/internal/pure/round"
@@ -81,10 +83,12 @@ func ResolveGame(_ context.Context, _ Input) (game.Contract, error) {
 // ResolveRound loads and normalizes the caller's round manifest.
 func ResolveRound(ctx context.Context, resolvedGame game.Contract, input Input) (Resolved, error) {
 	roundPlan, err := resolveEvaluation(ctx, evaluationResolveRequest{
-		ManifestPath:       input.EvaluationManifestPath,
-		BundleRootOverride: roundBundleRoot(input.BundleRootOverride),
-		BundleID:           input.RoundID,
-		Now:                input.Now,
+		ManifestPath:                input.EvaluationManifestPath,
+		BundleRootOverride:          roundBundleRoot(input.BundleRootOverride),
+		BundleID:                    input.RoundID,
+		Now:                         input.Now,
+		DatasetMaterializeCacheDir:  domain.HostPath(strings.TrimSpace(input.DatasetMaterializeCacheDir)),
+		DatasetMaterializeRemoteURL: strings.TrimSpace(input.DatasetMaterializeRemoteURL),
 	})
 	if err != nil {
 		return Resolved{}, err
@@ -111,7 +115,7 @@ func EvaluateMatches(ctx context.Context, resolved Resolved, input Input) (Match
 	runCtx, cancel := withEvaluatorTimeout(ctx, plan)
 	defer cancel()
 
-	roundReport, executions, err := runComparison(runCtx, plan, evaluationRequestFromInput(input))
+	roundReport, executions, matchExec, err := runComparison(runCtx, plan, evaluationRequestFromInput(input))
 	if err != nil {
 		return MatchRecords{}, &Error{Phase: PhaseComparisonFailed, Err: err}
 	}
@@ -119,6 +123,7 @@ func EvaluateMatches(ctx context.Context, resolved Resolved, input Input) (Match
 		Plan:                plan,
 		RoundReport:         roundReport,
 		EvaluatorExecutions: executions,
+		MatchExecutions:     matchExec,
 	}, nil
 }
 
@@ -183,16 +188,19 @@ func buildResult(
 		RoundEvidence:       evidence,
 		ObjectiveResult:     objective,
 		EvaluatorExecutions: matches.EvaluatorExecutions,
+		MatchExecutions:     matches.MatchExecutions,
 	}
 }
 
 func evaluationRequestFromInput(input Input) evaluationRequest {
 	return evaluationRequest{
 		Resolve: evaluationResolveRequest{
-			ManifestPath:       input.EvaluationManifestPath,
-			BundleRootOverride: roundBundleRoot(input.BundleRootOverride),
-			BundleID:           input.RoundID,
-			Now:                input.Now,
+			ManifestPath:                input.EvaluationManifestPath,
+			BundleRootOverride:          roundBundleRoot(input.BundleRootOverride),
+			BundleID:                    input.RoundID,
+			Now:                         input.Now,
+			DatasetMaterializeCacheDir:  domain.HostPath(strings.TrimSpace(input.DatasetMaterializeCacheDir)),
+			DatasetMaterializeRemoteURL: strings.TrimSpace(input.DatasetMaterializeRemoteURL),
 		},
 		DisableRenderReport:   input.DisableRenderReport,
 		EvaluatorModelFactory: input.EvaluatorModelFactory,

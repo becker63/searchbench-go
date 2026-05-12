@@ -54,7 +54,7 @@ func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationReq
 	runCtx, cancel := withEvaluatorTimeout(ctx, plan)
 	defer cancel()
 
-	roundReport, executions, err := runComparison(runCtx, plan, request)
+	roundReport, executions, matchExec, err := runComparison(runCtx, plan, request)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseComparisonFailed, Err: err}
 	}
@@ -82,6 +82,7 @@ func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationReq
 		RoundEvidence:       evidence,
 		ObjectiveResult:     objective,
 		EvaluatorExecutions: executions,
+		MatchExecutions:     matchExec,
 	}, nil
 }
 

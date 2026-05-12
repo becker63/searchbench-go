@@ -20,7 +20,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/report"
 )
 
-func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, error) {
+func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, []report.MatchExecutionRecord, error) {
 	allowedTools := make(map[string]struct{}, len(plan.Evaluator.ToolPolicy.EffectiveAllowed))
 	for _, name := range plan.Evaluator.ToolPolicy.EffectiveAllowed {
 		allowedTools[name] = struct{}{}
@@ -67,12 +67,16 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 		},
 		Parallelism: plan.Parallelism,
 	}
-	out, err := runner.Run(ctx, plan.ComparePlan())
+	out, taskWork, err := runner.RunWithTaskWork(ctx, plan.ComparePlan())
 	if err != nil {
-		return report.RoundReport{}, nil, err
+		return report.RoundReport{}, nil, nil, err
+	}
+	matchExec, err := matchExecutionRecordsFromTaskWork(plan.Matches, taskWork)
+	if err != nil {
+		return report.RoundReport{}, nil, nil, err
 	}
 	out.CreatedAt = plan.CreatedAt
-	return out, executor.executions(), nil
+	return out, executor.executions(), matchExec, nil
 }
 
 type evaluatorExecutor struct {
