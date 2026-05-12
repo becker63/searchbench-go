@@ -52,10 +52,12 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 	}
 
 	runner := compare.Runner{
-		Executor:      executor,
-		GraphProvider: evaluatorfake.NewGraphProvider(),
-		Scorer:        evaluatorfake.NewScorer(),
-		Decider:       evaluatorfake.NewDecider(),
+		Executor: executor,
+		GraphProvider: NewTreesitterGraphProvider(
+			evaluatorfake.NewGraphProvider(),
+		),
+		Scorer:  NewLocalizationGraphScorer(evaluatorfake.NewScorer()),
+		Decider: evaluatorfake.NewDecider(),
 		NewRunID: func(role domain.Role, task domain.MatchSpec, system domain.SystemRef) domain.RunID {
 			return domain.RunID(fmt.Sprintf("%s-%s-%s", role, task.ID, system.ID))
 		},

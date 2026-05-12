@@ -130,6 +130,7 @@ internal/
     codegraph/
       treesitter/
         doc.go
+        errors.go
         index_test.go
         index.go
         stub.go
@@ -267,12 +268,16 @@ internal/
       example_fixtures_test.go
       localization_evidence_test.go
       localization_evidence.go
+      localization_graph_scorer_test.go
+      localization_graph_scorer.go
       match_execution_test.go
       match_execution.go
       match_source.go
       prepared_tools.go
       run_test.go
       run.go
+      treesitter_graph_provider_test.go
+      treesitter_graph_provider.go
       types.go
   architecture/
     imports_test.go
@@ -8269,6 +8274,16 @@ func hasCompleteMarker(dir string) bool
 package treesitter
 </file>
 
+<file path="internal/adapters/codegraph/treesitter/errors.go">
+package treesitter
+⋮----
+import "errors"
+⋮----
+// ErrCGODisabled is returned by [BuildDirectory] when the package was compiled
+// without CGO (stub implementation).
+var ErrCGODisabled = errors.New("codegraph/treesitter: tree-sitter indexer requires CGO_ENABLED=1")
+</file>
+
 <file path="internal/adapters/codegraph/treesitter/index_test.go">
 //go:build cgo
 ⋮----
@@ -8369,17 +8384,10 @@ func buildFuncNode(decl sitter.Node, src []byte, file domain.RepoRelPath, id cod
 package treesitter
 ⋮----
 import (
-	"errors"
-
 	"github.com/becker63/searchbench-go/internal/pure/codegraph"
 )
 ⋮----
-"errors"
-⋮----
 "github.com/becker63/searchbench-go/internal/pure/codegraph"
-⋮----
-// ErrCGODisabled indicates the tree-sitter indexer was compiled without CGO.
-var ErrCGODisabled = errors.New("codegraph/treesitter: tree-sitter indexer requires CGO_ENABLED=1")
 ⋮----
 // BuildDirectory is unavailable without CGO.
 func BuildDirectory(absRepoRoot string) (*codegraph.Store, error)
@@ -13091,6 +13099,71 @@ func countPredictionMisses(out report.RoleExecutionOutcome, gold []domain.RepoRe
 func predictionMissesGold(pred domain.Prediction, gold []domain.RepoRelPath) bool
 </file>
 
+<file path="internal/app/round/localization_graph_scorer_test.go">
+package round
+⋮----
+import (
+	"context"
+	"testing"
+	"time"
+
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"context"
+"testing"
+"time"
+⋮----
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+"github.com/becker63/searchbench-go/internal/pure/codegraph"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+func TestLocalizationGraphScorer_OverridesHopMetricsWhenPathExists(t *testing.T)
+</file>
+
+<file path="internal/app/round/localization_graph_scorer.go">
+package round
+⋮----
+import (
+	"context"
+	"errors"
+
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"context"
+"errors"
+⋮----
+"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+"github.com/becker63/searchbench-go/internal/pure/codegraph"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+const graphHopExplanation = "call-graph hops via tree-sitter index (MinCallHopsAcrossFiles)"
+⋮----
+// LocalizationGraphScorer recomputes hop-distance metrics from the indexed graph
+// when predictions and oracle gold files participate in a non-empty call graph.
+// Other metrics are preserved from Fallback (typically [evaluatorfake.Scorer]).
+type LocalizationGraphScorer struct {
+	Fallback compare.Scorer
+}
+⋮----
+// NewLocalizationGraphScorer wraps the fallback scorer.
+func NewLocalizationGraphScorer(fallback compare.Scorer) LocalizationGraphScorer
+⋮----
+// Score satisfies [compare.Scorer].
+func (s LocalizationGraphScorer) Score(ctx context.Context, input score.Input) (score.ScoreSet, error)
+⋮----
+var goldHop, issueHop score.HopDistance
+</file>
+
 <file path="internal/app/round/match_execution_test.go">
 package round
 ⋮----
@@ -13345,6 +13418,77 @@ func buildResult(
 ) Result
 ⋮----
 func evaluationRequestFromInput(input Input) evaluationRequest
+</file>
+
+<file path="internal/app/round/treesitter_graph_provider_test.go">
+package round
+⋮----
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	tsgraph "github.com/becker63/searchbench-go/internal/adapters/codegraph/treesitter"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"errors"
+"os"
+"path/filepath"
+"testing"
+⋮----
+tsgraph "github.com/becker63/searchbench-go/internal/adapters/codegraph/treesitter"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestTreesitterGraphProvider_DelegatesWhenRepoPathEmpty(t *testing.T)
+⋮----
+func TestTreesitterGraphProvider_RealIndexWhenAvailable(t *testing.T)
+</file>
+
+<file path="internal/app/round/treesitter_graph_provider.go">
+package round
+⋮----
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"strings"
+
+	tsgraph "github.com/becker63/searchbench-go/internal/adapters/codegraph/treesitter"
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+	"github.com/becker63/searchbench-go/internal/pure/codegraph"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"errors"
+"path/filepath"
+"strings"
+⋮----
+tsgraph "github.com/becker63/searchbench-go/internal/adapters/codegraph/treesitter"
+"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+"github.com/becker63/searchbench-go/internal/pure/codegraph"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// TreesitterGraphProvider builds code graphs from materialized repositories when
+// [domain.MatchSpec.Repo.Path] is non-empty and tree-sitter indexing succeeds.
+// On missing paths, CGO-disabled stubs, or indexer failures it delegates to
+// Fallback so offline CI and fake-local rounds stay deterministic.
+type TreesitterGraphProvider struct {
+	Fallback compare.GraphProvider
+}
+⋮----
+// NewTreesitterGraphProvider returns a non-nil provider using fallback when the
+// repository path is unusable.
+func NewTreesitterGraphProvider(fallback compare.GraphProvider) *TreesitterGraphProvider
+⋮----
+// GraphForTask satisfies [compare.GraphProvider].
+func (p *TreesitterGraphProvider) GraphForTask(ctx context.Context, task domain.MatchSpec) (codegraph.Graph, error)
 </file>
 
 <file path="internal/app/round/types.go">
@@ -20912,7 +21056,9 @@ To run the same CLI surface against **live MCP tool servers** and **real chat mo
 | Provider secrets / URLs | Resolved by [`internal/adapters/providers/evaluatormodel`](internal/adapters/providers/evaluatormodel) (OpenAI-compatible providers). |
 | `LANGSMITH_API_KEY` | Optional LangSmith export; traces are **not** authoritative for scoring or decisions. |
 
-Round compare still uses **deterministic fake graph/scorer/decider** scaffolding for localization-distance metrics in local demos; evaluator tool runs, Pkl objectives, and bundle artifacts carry the durable truth for a round.
+Round compare prefers **tree-sitter indexing** for hop-distance scoring when `MatchSpec.Repo.Path` points at a materialized checkout **and** CGO is enabled (`internal/app/round/treesitter_graph_provider.go`, `localization_graph_scorer.go`). Without a usable index it falls back to the deterministic fake graph from `internal/agents/evaluator/fake`; hop metrics then follow that fake graph unless predictions and gold files yield call-graph paths in whatever graph was loaded.
+
+Token/cost/composite scalars still originate from the same fallback scorer family (`LocalizationGraphScorer` merges graph-derived hops into the baseline metric set).
 
 **GitHub issue batches:** see [`docs/engineering/issue-wave-manifest.md`](docs/engineering/issue-wave-manifest.md) (`nix run .#publish-issue-wave`).
 

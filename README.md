@@ -102,7 +102,9 @@ To run the same CLI surface against **live MCP tool servers** and **real chat mo
 | Provider secrets / URLs | Resolved by [`internal/adapters/providers/evaluatormodel`](internal/adapters/providers/evaluatormodel) (OpenAI-compatible providers). |
 | `LANGSMITH_API_KEY` | Optional LangSmith export; traces are **not** authoritative for scoring or decisions. |
 
-Round compare still uses **deterministic fake graph/scorer/decider** scaffolding for localization-distance metrics in local demos; evaluator tool runs, Pkl objectives, and bundle artifacts carry the durable truth for a round.
+Round compare prefers **tree-sitter indexing** for hop-distance scoring when `MatchSpec.Repo.Path` points at a materialized checkout **and** CGO is enabled (`internal/app/round/treesitter_graph_provider.go`, `localization_graph_scorer.go`). Without a usable index it falls back to the deterministic fake graph from `internal/agents/evaluator/fake`; hop metrics then follow that fake graph unless predictions and gold files yield call-graph paths in whatever graph was loaded.
+
+Token/cost/composite scalars still originate from the same fallback scorer family (`LocalizationGraphScorer` merges graph-derived hops into the baseline metric set).
 
 **GitHub issue batches:** see [`docs/engineering/issue-wave-manifest.md`](docs/engineering/issue-wave-manifest.md) (`nix run .#publish-issue-wave`).
 
