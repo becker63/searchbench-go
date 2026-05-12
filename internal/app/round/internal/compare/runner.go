@@ -96,11 +96,18 @@ type TaskComparisonResult struct {
 // summarizes metric comparisons, asks the Decider for a decision,
 // and emits a report-safe RoundReport.
 func (r Runner) Run(ctx context.Context, plan Plan) (report.RoundReport, error) {
+	out, _, err := r.RunWithTaskWork(ctx, plan)
+	return out, err
+}
+
+// RunWithTaskWork runs the comparison and returns ordered per-task results
+// alongside the aggregate round report.
+func (r Runner) RunWithTaskWork(ctx context.Context, plan Plan) (report.RoundReport, []TaskWorkResult, error) {
 	if err := plan.Validate(); err != nil {
-		return report.RoundReport{}, err
+		return report.RoundReport{}, nil, err
 	}
 	if err := r.Validate(); err != nil {
-		return report.RoundReport{}, err
+		return report.RoundReport{}, nil, err
 	}
 
 	parallelism := r.normalizedParallelism()
@@ -116,9 +123,17 @@ func (r Runner) Run(ctx context.Context, plan Plan) (report.RoundReport, error) 
 
 	taskResults, err := r.RunTasks(ctx, plan)
 	if err != nil {
-		return report.RoundReport{}, err
+		return report.RoundReport{}, nil, err
 	}
 
+	out, err := r.finishRoundReport(plan, taskResults, logger)
+	if err != nil {
+		return report.RoundReport{}, taskResults, err
+	}
+	return out, taskResults, nil
+}
+
+func (r Runner) finishRoundReport(plan Plan, taskResults []TaskWorkResult, logger Logger) (report.RoundReport, error) {
 	results := NewResults(plan.Matches.Len())
 	for _, taskResult := range taskResults {
 		results.AddTaskResult(taskResult.Result)

@@ -18,6 +18,11 @@ type evaluationResolveRequest struct {
 	ParentRef          *score.ObjectiveEvidenceRef
 	ParentEvidencePath string
 	Now                func() time.Time
+
+	// DatasetMaterializeCacheDir triggers git materialization for JetBrains LCA
+	// datasets during match resolution when non-empty.
+	DatasetMaterializeCacheDir  domain.HostPath
+	DatasetMaterializeRemoteURL string
 }
 
 // Plan is the canonical app-layer evaluation projection used by execution.

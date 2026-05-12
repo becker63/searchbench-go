@@ -20,7 +20,16 @@ type Request struct {
 	Config      string
 	Split       string
 	MaxItems    *int
+
+	// MaterializeCacheDir, when non-empty, asks JetBrains LCA adapters to git
+	// materialize each task's repo into this cache root before returning MatchSpec rows.
+	MaterializeCacheDir HostPath
+	// MaterializeRemoteURL optionally overrides the default GitHub HTTPS remote.
+	MaterializeRemoteURL string
 }
+
+// HostPath is re-exported so dataset callers do not import domain only for paths.
+type HostPath = domain.HostPath
 
 // MatchSource is the port rounds use to materialize the match list. Adapters
 // must return at least one match.

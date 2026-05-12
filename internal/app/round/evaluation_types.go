@@ -47,4 +47,5 @@ type Result struct {
 	RoundEvidence       score.RoundEvidenceDocument
 	ObjectiveResult     *score.ObjectiveResult
 	EvaluatorExecutions []EvaluatorExecution
+	MatchExecutions     []report.MatchExecutionRecord
 }

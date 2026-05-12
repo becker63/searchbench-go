@@ -26,6 +26,11 @@ type Input struct {
 	EvaluatorModelFactory EvaluatorModelFactory
 	EvaluatorToolFactory  EvaluatorToolFactory
 	OptimizerModelFactory OptimizerModelFactory
+
+	// DatasetMaterializeCacheDir triggers JetBrains LCA git materialization during
+	// manifest resolution when non-empty.
+	DatasetMaterializeCacheDir  string
+	DatasetMaterializeRemoteURL string
 }
 
 // Resolved is the normalized round contract before match execution.
@@ -42,6 +47,7 @@ type MatchRecords struct {
 	Plan                Plan
 	RoundReport         report.RoundReport
 	EvaluatorExecutions []EvaluatorExecution
+	MatchExecutions     []report.MatchExecutionRecord
 }
 
 // Record is the completed round workflow outcome.
