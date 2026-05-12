@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	executoreino "github.com/becker63/searchbench-go/internal/adapters/executor/eino"
+	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -55,7 +55,7 @@ func RunResolved(ctx context.Context, plan Plan, request Request) (Record, error
 		validator = defaultValidateProposal
 	}
 
-	optimizerExecutor, err := executoreino.NewOptimizer(executoreino.OptimizerConfig{
+	optimizerExecutor, err := optimizereino.NewOptimizer(optimizereino.OptimizerConfig{
 		Model:            request.Model,
 		RenderPrompt:     request.RenderPrompt,
 		ValidateProposal: validator,

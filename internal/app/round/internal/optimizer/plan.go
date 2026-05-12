@@ -5,7 +5,7 @@ import (
 
 	"github.com/cloudwego/eino/components/model"
 
-	executoreino "github.com/becker63/searchbench-go/internal/adapters/executor/eino"
+	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -23,8 +23,8 @@ type Request struct {
 	Resolve ResolveRequest
 
 	Model            model.ToolCallingChatModel
-	ValidateProposal executoreino.ValidateProposalFunc
-	RenderPrompt     executoreino.RenderOptimizerPromptFunc
+	ValidateProposal optimizereino.ValidateProposalFunc
+	RenderPrompt     optimizereino.RenderOptimizerPromptFunc
 	RetryPolicy      *pureoptimizer.RetryPolicy
 }
 

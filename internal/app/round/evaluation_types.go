@@ -5,7 +5,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-	executoreino "github.com/becker63/searchbench-go/internal/adapters/executor/eino"
+	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
@@ -35,7 +35,7 @@ type EvaluatorExecution struct {
 	Role    domain.Role
 	MatchID domain.MatchID
 	RunID   domain.RunID
-	Result  executoreino.Result
+	Result  evaluatoreino.Result
 }
 
 // Result is the completed manifest-driven local evaluation run.

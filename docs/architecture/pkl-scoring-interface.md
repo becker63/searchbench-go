@@ -1,5 +1,7 @@
 # Pkl Scoring Interface
 
+**Related docs:** [Architecture](./architecture.md) · [Package boundaries](./package-boundaries.md)
+
 ## Status
 
 This document defines the visible Pkl-based objective scoring interface in SearchBench-Go.

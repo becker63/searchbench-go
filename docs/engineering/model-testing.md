@@ -1,5 +1,7 @@
 # SearchBench-Go Model Testing
 
+**Docs hub:** [Documentation index](../README.md) · [Package boundaries](../architecture/package-boundaries.md)
+
 ## Purpose
 
 SearchBench-Go has deterministic model-testing infrastructure under:

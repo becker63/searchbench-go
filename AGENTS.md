@@ -12,12 +12,16 @@ A round compares an `IncumbentPolicy` and a `ChallengerPolicy` over the same mat
 
 Read these files first when working in the repo:
 
-- `architecture.md`
-- `visualization.md`
+- `docs/README.md` (documentation index)
+- `docs/architecture/architecture.md`
+- `docs/architecture/visualization.md`
+- `docs/architecture/integration-shape.md`
 - `docs/architecture/package-boundaries.md`
 - `docs/engineering/agentic-development-flow.md`
 - `configs/schema/SearchBenchRound.pkl`
 - `internal/app/round`
+- `internal/agents/evaluator`
+- `internal/agents/optimizer`
 - `internal/pure/report`
 - `internal/pure/score`
 - `internal/pure/optimizer`
@@ -26,7 +30,7 @@ Read these files first when working in the repo:
 
 ## Boundaries
 
-Keep deterministic SearchBench model code in `internal/pure`. Keep orchestration in `internal/app`. Keep filesystem, Pkl, Eino, pipeline, and other effectful integrations in `internal/adapters`. Keep CLI and terminal rendering in `internal/surface`.
+Keep deterministic SearchBench model code in `internal/pure`. Keep round lifecycle orchestration in `internal/app`. Colocate evaluator- and optimizer-specific behavior under `internal/agents` (prompt + Eino + agent-local persistence/fakes). Keep shared filesystem, Pkl, pipeline, and other non-agent integrations in `internal/adapters`. Keep CLI and terminal rendering in `internal/surface`.
 
 Do not add real MCP, LangSmith, provider execution, dataset materialization, or visualization UI unless the current task explicitly asks for it.
 

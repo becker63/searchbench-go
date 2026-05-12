@@ -1,5 +1,7 @@
 # Agentic Development Flow
 
+**Docs hub:** [Documentation index](../README.md) · [Package boundaries](../architecture/package-boundaries.md) · [Architecture](../architecture/architecture.md)
+
 ## Purpose
 
 This document describes the development loop used for SearchBench-Go when working with coding agents.

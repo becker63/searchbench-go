@@ -1,5 +1,7 @@
 # SearchBench-Go Issue Style Guide
 
+**Docs hub:** [Documentation index](../README.md) · [Agentic development flow](./agentic-development-flow.md)
+
 ## Purpose
 
 SearchBench-Go issues are implementation contracts.
@@ -291,7 +293,7 @@ Current decision:
 
 Expected shape:
 
-    internal/pure/prompts/evaluator/
+    internal/agents/evaluator/prompt/
       input.go
       prompt.templ
       render.go
@@ -397,13 +399,13 @@ Use language like:
 
     Prefer using the existing project structure. If no better location already exists, a reasonable shape is:
 
-        internal/pure/prompts/evaluator/
+        internal/agents/evaluator/prompt/
           input.go
           prompt.templ
           render.go
           prompt_test.go
 
-        internal/adapters/executor/eino/
+        internal/agents/evaluator/eino/
           evaluator.go
           finalizer.go
           errors.go

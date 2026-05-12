@@ -11,7 +11,7 @@ import (
 	"time"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-	"github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+	pkl "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
@@ -23,11 +23,11 @@ func TestLocalManifestCanBeLoadedAndValidated(t *testing.T) {
 	requirePkl(t)
 
 	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl")
-	roundSpec, err := config.ResolveFromPath(context.Background(), manifestPath)
+	roundSpec, err := pkl.ResolveFromPath(context.Background(), manifestPath)
 	if err != nil {
 		t.Fatalf("ResolveFromPath() error = %v", err)
 	}
-	if err := config.Validate(roundSpec); err != nil {
+	if err := pkl.Validate(roundSpec); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }

@@ -4,25 +4,24 @@ import (
 	"context"
 	"path/filepath"
 
-	optimizerfs "github.com/becker63/searchbench-go/internal/adapters/optimizer/fs"
-	pythonpolicy "github.com/becker63/searchbench-go/internal/adapters/policy/python"
+	optimizebundle "github.com/becker63/searchbench-go/internal/agents/optimizer/bundle"
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
-// defaultValidateProposal delegates to the python policy adapter.
-var defaultValidateProposal = pythonpolicy.Validate
+// defaultValidateProposal delegates to the Python-policy validator bundled with the optimizer agent.
+var defaultValidateProposal = optimizepolicy.Validate
 
-// writeBundle delegates to the optimizer/fs adapter, projecting the in-memory
-// Plan into the adapter's manifest-derived ResolvedDocument so the adapter
-// holds the only fs-side ownership.
+// writeBundle delegates to optimizer-owned bundle persistence, projecting the in-memory
+// Plan into manifest-derived ResolvedDocument metadata.
 func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.NextChallengerRecord) (string, error) {
-	return optimizerfs.WriteBundle(ctx, optimizerfs.Request{
+	return optimizebundle.WriteBundle(ctx, optimizebundle.Request{
 		BundleCollection: plan.BundleCollection,
 		BundleID:         plan.BundleID,
 		CreatedAt:        plan.CreatedAt,
 		ParentBundle:     string(plan.ParentBundle.BundlePath),
 		OutputArtifact:   plan.Target.OutputName,
-		Resolved: optimizerfs.ResolvedDocument{
+		Resolved: optimizebundle.ResolvedDocument{
 			ManifestPath:     plan.ManifestPath,
 			RoundName:        plan.RoundName,
 			Mode:             "optimization",

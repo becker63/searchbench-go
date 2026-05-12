@@ -1,5 +1,7 @@
 # Pkl Round Manifests
 
+**Related docs:** [Documentation index](../README.md) · [Architecture](./architecture.md) · [Package boundaries](./package-boundaries.md)
+
 ## Status
 
 SearchBench-Go uses Pkl here as a human-authored round surface, not as the source of truth for runtime semantics.

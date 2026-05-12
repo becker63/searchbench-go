@@ -1,5 +1,7 @@
 # Expanding the Pure Center
 
+**Docs hub:** [Documentation index](../README.md) · [Package boundaries](../architecture/package-boundaries.md) · [Architecture](../architecture/architecture.md)
+
 SearchBench-Go keeps its stable product model in deterministic packages and pushes world-touching behavior to adapter edges.
 
 The product model is:
@@ -25,9 +27,10 @@ internal/pure/score
 internal/pure/report
 internal/pure/optimizer
 internal/pure/codegraph
-internal/pure/prompts
 internal/pure/usage
 ```
+
+Evaluator and optimizer prompts render from `internal/agents/*/prompt`; they intentionally stay out of `internal/pure` so the pure layer never pulls Eino.
 
 These packages answer stable questions:
 

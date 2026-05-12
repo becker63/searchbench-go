@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -226,11 +227,21 @@ func requirePkl(t *testing.T) {
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
-	if err != nil {
-		t.Fatalf("filepath.Abs(repo root) error = %v", err)
+	_, path, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
 	}
-	return root
+	dir := filepath.Dir(path)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found from test file location")
+		}
+		dir = parent
+	}
 }
 
 func mustReadFile(t *testing.T, path string) []byte {

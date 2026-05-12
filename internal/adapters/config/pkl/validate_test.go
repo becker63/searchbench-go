@@ -326,7 +326,8 @@ func TestPurePackagesDoNotImportPkl(t *testing.T) {
 		filepath.Join(repoRoot, "internal", "pure", "score"),
 		filepath.Join(repoRoot, "internal", "pure", "report"),
 		filepath.Join(repoRoot, "internal", "pure", "codegraph"),
-		filepath.Join(repoRoot, "internal", "pure", "prompts"),
+		filepath.Join(repoRoot, "internal", "agents", "evaluator", "prompt"),
+		filepath.Join(repoRoot, "internal", "agents", "optimizer", "prompt"),
 		filepath.Join(repoRoot, "internal", "pure", "usage"),
 	}
 
