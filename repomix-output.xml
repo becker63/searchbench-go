@@ -12295,7 +12295,9 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 
 	evaluatormodel "github.com/becker63/searchbench-go/internal/adapters/providers/evaluatormodel"
+	langsmithtrace "github.com/becker63/searchbench-go/internal/adapters/trace/langsmith"
 	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
+	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/agents/evaluator/eino/callbacks"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
@@ -12312,7 +12314,9 @@ import (
 "github.com/cloudwego/eino/components/tool"
 ⋮----
 evaluatormodel "github.com/becker63/searchbench-go/internal/adapters/providers/evaluatormodel"
+langsmithtrace "github.com/becker63/searchbench-go/internal/adapters/trace/langsmith"
 evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
+evaluatorcallbacks "github.com/becker63/searchbench-go/internal/agents/evaluator/eino/callbacks"
 evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 "github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 "github.com/becker63/searchbench-go/internal/pure/domain"
@@ -12331,6 +12335,8 @@ type evaluatorExecutor struct {
 func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
 ⋮----
 // Defensive: runComparison normally injects evaluatormodel.NewFactory.
+⋮----
+var callbackFactories []evaluatorcallbacks.Factory
 ⋮----
 func (e *evaluatorExecutor) recordExecution(spec run.Spec, result evaluatoreino.Result)
 ⋮----
@@ -17667,6 +17673,7 @@ require (
 	github.com/apple/pkl-go v0.13.2
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cloudwego/eino v0.8.11
+	github.com/cloudwego/eino-ext/callbacks/langsmith v0.0.0-20260509111509-dbda66119839
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/hmdsefi/gograph v0.7.0

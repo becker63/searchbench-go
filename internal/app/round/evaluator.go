@@ -10,7 +10,9 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 
 	evaluatormodel "github.com/becker63/searchbench-go/internal/adapters/providers/evaluatormodel"
+	langsmithtrace "github.com/becker63/searchbench-go/internal/adapters/trace/langsmith"
 	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
+	evaluatorcallbacks "github.com/becker63/searchbench-go/internal/agents/evaluator/eino/callbacks"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
@@ -112,17 +114,33 @@ func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.Exe
 	}
 	tools = filtered
 
+	var callbackFactories []evaluatorcallbacks.Factory
+	langsmithFactory, lsErr := langsmithtrace.HandlerFactoryFromEnv()
+	if lsErr != nil {
+		return run.ExecutedRun{}, fmt.Errorf("langsmith trace callback: %w", lsErr)
+	}
+	if langsmithFactory != nil {
+		callbackFactories = append(callbackFactories, evaluatorcallbacks.Factory(langsmithFactory))
+	}
+
 	evaluator, err := evaluatoreino.New(evaluatoreino.Config{
-		Model:       model,
-		Tools:       tools,
-		WorkDir:     string(spec.Match.Repo.Path),
-		RetryPolicy: &e.retryPolicy,
+		Model:             model,
+		Tools:             tools,
+		WorkDir:           string(spec.Match.Repo.Path),
+		RetryPolicy:       &e.retryPolicy,
+		CallbackFactories: callbackFactories,
 	})
 	if err != nil {
 		return run.ExecutedRun{}, fmt.Errorf("construct evaluator executor: %w", err)
 	}
 
-	result := evaluator.Run(ctx, spec)
+	runCtx := langsmithtrace.AugmentContext(ctx, langsmithtrace.ContextLabels{
+		MatchID: spec.Match.ID.String(),
+		RunID:   spec.ID.String(),
+		Role:    string(roleForSpec(spec)),
+	})
+
+	result := evaluator.Run(runCtx, spec)
 	e.recordExecution(spec, result)
 	if result.Failure != nil {
 		return run.ExecutedRun{}, result.Failure
