@@ -57,7 +57,7 @@ Use the flake for a reproducible toolchain, pre-commit hooks, and `searchbench-*
 | Stage | What runs |
 | --- | --- |
 | **`git commit` (pre-commit)** | Fast repo-local checks: formatting (Go/Nix/shell), hygiene, **golangci-lint** (includes **staticcheck** via `.golangci.yml`), **govet**, architecture + prompt contract tests, Pkl/templ generated-file checks, **Repomix** snapshot (`repomix-output.xml` regenerated and staged) |
-| **`git push` (pre-push)** | **`go test ./...`**, root **e2e**, **searchbench-check-generated**, **go mod tidy** check, **standalone staticcheck** (`searchbench-staticcheck`), **standalone golangci-lint**, **`nix flake check`** |
+| **`git push` (pre-push)** | **`go test ./...`**, root **e2e**, **searchbench-check-generated**, **go mod tidy** check, **standalone staticcheck** (`searchbench-staticcheck`), **standalone golangci-lint**, **`nix flake check`**, **Repomix freshness** (regenerate `repomix-output.xml`; **fail the push** if it differs from what is committed — commit or amend the snapshot, then push again; hooks never auto-amend) |
 
 Hook staging avoids duplicate **staticcheck** on the same stage: pre-commit uses **golangci-lint** with `staticcheck` enabled in `.golangci.yml`. Pre-push runs **explicit** `searchbench-staticcheck` and `searchbench-golangci` as a fuller proof pass. Manual `nix develop -c searchbench-staticcheck` / `searchbench-golangci` are for reproducing hook failures only — not a separate “daily routine” tier.
 
@@ -66,9 +66,10 @@ Hook staging avoids duplicate **staticcheck** on the same stage: pre-commit uses
 | `nix develop` | Dev shell: Go, Pkl, golangci-lint, hooks, `searchbench-*` tools |
 | `nix develop -c pre-commit run --all-files` | Full dev hook run (same family as `git commit`) |
 | `nix flake check` | Sandboxed, **non-mutating** checks — formatting / Nix / shell / lightweight gates; **no** full Go module graph over the network in the default sandbox |
-| `nix develop -c searchbench-update-repomix` | Regenerate `repomix-output.xml` and `git add` it (normally the pre-commit Repomix hook handles this) |
+| `nix develop -c searchbench-update-repomix` | Regenerate `repomix-output.xml` and `git add` it (same as the pre-commit hook; use when debugging that hook) |
+| `nix develop -c searchbench-repomix-fresh-check` | Regenerate Repomix, then **fail** if `repomix-output.xml` is not already committed at HEAD (same logic as pre-push; use to reproduce a blocked push) |
 
-**Repomix:** This repository intentionally commits `repomix-output.xml` so the current tree can be shared quickly with AI assistants for architectural review.
+**Repomix:** This repository **intentionally commits** `repomix-output.xml` — unusual hygiene elsewhere, but here it is a deliberate AI-review artifact. **`repomix.config.json` excludes `repomix-output.*` so the pack never recursively includes the snapshot.** The hook uses **`--no-git-sort-by-changes`** and omits **git diffs** / **git logs** in the committed pack so output is **reproducible** and the pre-push freshness check can compare bytes. For a richer one-off pack (diffs or history), run **`repomix`** manually with `--include-diffs` / `--include-logs`. On **`git commit`**, the pre-commit hook regenerates and **stages** the file. On **`git push`**, **`searchbench-repomix-fresh-check`** regenerates again and **blocks the push** if the working tree or index differs from **HEAD** (meaning you forgot to commit an updated snapshot after changing sources). The hook does **not** amend commits; follow the printed instructions to **`git add`** and **`commit`** or **`commit --amend`**, then push again.
 
 **Go dependencies:** There is no checked-in `vendor/` tree. Hooks that load the full module graph run in `nix develop` and on **pre-commit** / **pre-push**, not inside the default **`nix flake check`** sandbox (no network there).
 
@@ -82,6 +83,8 @@ Hook staging avoids duplicate **staticcheck** on the same stage: pre-commit uses
 
 | Command | Purpose |
 | --- | --- |
+| `nix develop -c searchbench-update-repomix` | Regenerate + `git add` `repomix-output.xml` (same as pre-commit hook) |
+| `nix develop -c searchbench-repomix-fresh-check` | Same as **pre-push** Repomix gate: regenerate, **fail** if snapshot not committed |
 | `nix develop -c searchbench-staticcheck` | `staticcheck ./...` |
 | `nix develop -c searchbench-golangci` | `golangci-lint run ./...` (uses `.golangci.yml`) |
 | `nix develop -c searchbench-go-mod-tidy-check` | Fail if `go mod tidy` would change `go.mod` / `go.sum` |
@@ -95,3 +98,4 @@ Hook staging avoids duplicate **staticcheck** on the same stage: pre-commit uses
 | `nix develop -c searchbench-e2e` | Root package integration tests |
 | `nix develop -c searchbench-go-test-all` | `go test ./...` |
 | `nix develop -c searchbench-nix-flake-check` | `nix flake check` (same as pre-push sandbox step) |
+| `nix develop -c searchbench-openai-netwatch` | Optional HTTPS connection diagnostics helper |

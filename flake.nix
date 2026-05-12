@@ -154,6 +154,14 @@
             pass_filenames = false;
             stages = [ "pre-push" ];
           };
+
+          searchbench-repomix-fresh-check-push = {
+            enable = true;
+            name = "Repomix snapshot fresh (pre-push)";
+            entry = "${tools.searchbench-repomix-fresh-check}/bin/searchbench-repomix-fresh-check";
+            pass_filenames = false;
+            stages = [ "pre-push" ];
+          };
         };
 
         devHooks =
@@ -187,6 +195,7 @@
           searchbench-check-templ-generated
           searchbench-check-generated
           searchbench-update-repomix
+          searchbench-repomix-fresh-check
           searchbench-nix-flake-check
           searchbench-vocabulary-check
           searchbench-staticcheck

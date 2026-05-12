@@ -315,7 +315,7 @@ For the toolchain and automation, use the flake-backed workflow in [`AGENTS.md`]
 - **`nix develop`** installs Git hooks; routine validation is **`git commit`** and **`git push`**, not a mental checklist of `searchbench-*` commands.
 - **`nix develop -c pre-commit run --all-files`** reproduces the pre-commit hook set.
 - **`nix flake check`** is a fast, sandboxed, **non-mutating** gate (no network) — not a substitute for the full dev-shell hooks.
-- **Repomix** (`repomix-output.xml`) — see [`AGENTS.md`](../../AGENTS.md).
+- **Repomix** (`repomix-output.xml`) — deliberately committed for AI review; **`git commit`** (pre-commit) regenerates and stages it, **`git push`** (pre-push) regenerates again and **fails** if the snapshot is not already committed — see [`AGENTS.md`](../../AGENTS.md).
 - **Worktrees, task routing, and merge orchestration** for coding agents live in the **external meta harness**, not in this repository.
 
 Project automation lives in `nix/tools/` (wired from `flake.nix`); do not add a loose `scripts/` directory for SearchBench tooling.

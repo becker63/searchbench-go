@@ -3,8 +3,8 @@
     "filePath": "repomix-output.xml",
     "style": "xml",
     "compress": true,
-    "includeDiffs": true,
-    "includeLogs": true,
+    "includeDiffs": false,
+    "includeLogs": false,
     "includeLogsCount": 10
   },
   "ignore": {
