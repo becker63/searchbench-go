@@ -10,17 +10,14 @@ import (
 	"time"
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
-// defaultMatchSource is the deterministic local match source used when the
-// caller does not inject a real dataset adapter. It is wired through the
-// MatchSource port so a real adapter can be substituted without touching
-// resolveEvaluation.
-var defaultMatchSource dataset.MatchSource = evaluatorfake.NewMatchSource()
+// defaultMatchSource wires JetBrains LCA JSONL loading (manifest-local datasets)
+// and falls back to the evaluator fake for non-JetBrains match selections.
+var defaultMatchSource dataset.MatchSource = newDefaultMatchSource()
 
 // selectionPolicyV1DefaultSymbol is the runtime callable used for policy
 // artifacts that implement iterative_context.selection_policy.v1.

@@ -48,12 +48,20 @@ cmd/
 configs/
   rounds/
     local-ic-vs-jcodemunch/
+      datasets/
+        JetBrains-Research_lca-bug-localization/
+          py/
+            dev.jsonl
       policies/
         challenger_policy.py
       scoring/
         localization-objective.pkl
       round.pkl
     optimize-ic/
+      datasets/
+        JetBrains-Research_lca-bug-localization/
+          py/
+            dev.jsonl
       round.pkl
   schema/
     core/
@@ -106,6 +114,12 @@ internal/
         round_spec.go
         validate_test.go
         validate.go
+    dataset/
+      lca/
+        load.go
+        names.go
+        source_test.go
+        source.go
     materialize/
       git/
         cache_key.go
@@ -213,6 +227,7 @@ internal/
       evaluation_types.go
       evaluator.go
       example_fixtures_test.go
+      match_source.go
       run_test.go
       run.go
       types.go
@@ -380,6 +395,16 @@ import (
 func main()
 </file>
 
+<file path="configs/rounds/local-ic-vs-jcodemunch/datasets/JetBrains-Research_lca-bug-localization/py/dev.jsonl">
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"1111111111111111111111111111111111111111","issue_title":"Bug one","issue_body":"First repro","issue_url":"https://example.test/issues/01","changed_files":["src/one.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"2222222222222222222222222222222222222222","issue_title":"Bug two","issue_body":"Second repro","issue_url":"https://example.test/issues/02","changed_files":["src/two.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"3333333333333333333333333333333333333333","issue_title":"Bug three","issue_body":"Third repro","issue_url":"https://example.test/issues/03","changed_files":["src/three.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"4444444444444444444444444444444444444444","issue_title":"Bug four","issue_body":"Fourth repro","issue_url":"https://example.test/issues/04","changed_files":["src/four.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"5555555555555555555555555555555555555555","issue_title":"Bug five","issue_body":"Fifth repro","issue_url":"https://example.test/issues/05","changed_files":["src/five.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"6666666666666666666666666666666666666666","issue_title":"Bug six","issue_body":"Sixth repro","issue_url":"https://example.test/issues/06","changed_files":["src/six.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"7777777777777777777777777777777777777777","issue_title":"Bug seven","issue_body":"Seventh repro","issue_url":"https://example.test/issues/07","changed_files":["src/seven.go"]}
+</file>
+
 <file path="configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py">
 def score(match)
 </file>
@@ -453,6 +478,16 @@ round = (game.defineFromScratch("round-001")) {
   evaluator = game.fakeEvaluator()
   scoring = game.objective("scoring/localization-objective.pkl")
 }
+</file>
+
+<file path="configs/rounds/optimize-ic/datasets/JetBrains-Research_lca-bug-localization/py/dev.jsonl">
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"1111111111111111111111111111111111111111","issue_title":"Bug one","issue_body":"First repro","issue_url":"https://example.test/issues/01","changed_files":["src/one.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"2222222222222222222222222222222222222222","issue_title":"Bug two","issue_body":"Second repro","issue_url":"https://example.test/issues/02","changed_files":["src/two.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"3333333333333333333333333333333333333333","issue_title":"Bug three","issue_body":"Third repro","issue_url":"https://example.test/issues/03","changed_files":["src/three.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"4444444444444444444444444444444444444444","issue_title":"Bug four","issue_body":"Fourth repro","issue_url":"https://example.test/issues/04","changed_files":["src/four.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"5555555555555555555555555555555555555555","issue_title":"Bug five","issue_body":"Fifth repro","issue_url":"https://example.test/issues/05","changed_files":["src/five.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"6666666666666666666666666666666666666666","issue_title":"Bug six","issue_body":"Sixth repro","issue_url":"https://example.test/issues/06","changed_files":["src/six.go"]}
+{"repo_owner":"demo","repo_name":"alpha","base_sha":"7777777777777777777777777777777777777777","issue_title":"Bug seven","issue_body":"Seventh repro","issue_url":"https://example.test/issues/07","changed_files":["src/seven.go"]}
 </file>
 
 <file path="configs/rounds/optimize-ic/round.pkl">
@@ -7661,6 +7696,127 @@ func validateSystemPrompt(fieldPath string, prompt *string) error
 func containsParentPath(path string) bool
 </file>
 
+<file path="internal/adapters/dataset/lca/load.go">
+package lca
+⋮----
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+⋮----
+"bufio"
+"bytes"
+"encoding/json"
+"fmt"
+"os"
+"path/filepath"
+"strings"
+⋮----
+func safePathSegment(label, value string) (string, error)
+⋮----
+// ResolveJetBrainsLCASlicePath returns the JSONL path for one config/split under
+// manifestDir/datasets/<slug(name)>/<config>/<split>.jsonl .
+func ResolveJetBrainsLCASlicePath(manifestDir, datasetName, config, split string) (string, error)
+⋮----
+func loadRowsJSONL(path string) ([]json.RawMessage, error)
+⋮----
+var rows []json.RawMessage
+</file>
+
+<file path="internal/adapters/dataset/lca/names.go">
+package lca
+⋮----
+import (
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+)
+⋮----
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+⋮----
+// JetBrainsLCADatasetName is the Hugging Face id for the LCA benchmark slice.
+const JetBrainsLCADatasetName = "JetBrains-Research/lca-bug-localization"
+⋮----
+// IsJetBrainsDataset reports whether req selects the JetBrains LCA dataset.
+func IsJetBrainsDataset(r dataset.Request) bool
+⋮----
+func normalizeDatasetName(value string) string
+⋮----
+func slugDatasetName(name string) string
+</file>
+
+<file path="internal/adapters/dataset/lca/source_test.go">
+package lca
+⋮----
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"os"
+"path/filepath"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestSourceMatchesSortsAndWindows(t *testing.T)
+⋮----
+func TestIsJetBrainsDatasetNameCaseInsensitive(t *testing.T)
+</file>
+
+<file path="internal/adapters/dataset/lca/source.go">
+package lca
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"encoding/json"
+"fmt"
+"os"
+"sort"
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+type Source struct{}
+⋮----
+// NewSource returns a MatchSource that reads JetBrains LCA JSONL fixtures.
+func NewSource() Source
+⋮----
+// Matches loads manifest-local JSONL, normalizes rows, sorts by MatchID, and
+// applies MaxItems windowing when set.
+func (Source) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty[domain.MatchSpec], error)
+⋮----
+var specs []domain.MatchSpec
+⋮----
+var row domain.LCAHFRow
+</file>
+
 <file path="internal/adapters/materialize/git/cache_key.go">
 package gitmaterialize
 ⋮----
@@ -11320,6 +11476,9 @@ func resolveRoundMatches(
 	parent *pureround.Continuation,
 ) (domain.NonEmpty[domain.MatchSpec], DatasetConfig, error)
 ⋮----
+// Materialize matches via dataset.MatchSource (JetBrains LCA JSONL under
+// the manifest directory, or the local fake for other selections).
+⋮----
 func resolveRoundEvaluator(round *config.RoundManifest, parent *pureround.Continuation) (EvaluatorConfig, domain.ModelSpec, EvaluatorBoundsConfig, int, error)
 ⋮----
 func resolveRoundScoring(
@@ -11427,7 +11586,6 @@ import (
 	"time"
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/score"
@@ -11442,16 +11600,13 @@ import (
 "time"
 ⋮----
 config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 "github.com/becker63/searchbench-go/internal/ports/dataset"
 "github.com/becker63/searchbench-go/internal/pure/domain"
 "github.com/becker63/searchbench-go/internal/pure/score"
 ⋮----
-// defaultMatchSource is the deterministic local match source used when the
-// caller does not inject a real dataset adapter. It is wired through the
-// MatchSource port so a real adapter can be substituted without touching
-// resolveEvaluation.
-var defaultMatchSource dataset.MatchSource = evaluatorfake.NewMatchSource()
+// defaultMatchSource wires JetBrains LCA JSONL loading (manifest-local datasets)
+// and falls back to the evaluator fake for non-JetBrains match selections.
+var defaultMatchSource dataset.MatchSource = newDefaultMatchSource()
 ⋮----
 // selectionPolicyV1DefaultSymbol is the runtime callable used for policy
 // artifacts that implement iterative_context.selection_policy.v1.
@@ -11687,6 +11842,35 @@ func TestWriteExampleRoundFixtures(t *testing.T)
 func resetExampleBundleDir(t *testing.T, path string)
 ⋮----
 func scriptedExampleOptimizerFactory() OptimizerModelFactory
+</file>
+
+<file path="internal/app/round/match_source.go">
+package round
+⋮----
+import (
+	"context"
+
+	lcaadapter "github.com/becker63/searchbench-go/internal/adapters/dataset/lca"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+⋮----
+lcaadapter "github.com/becker63/searchbench-go/internal/adapters/dataset/lca"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+type compositeMatchSource struct {
+	jetBrainsLCA dataset.MatchSource
+	localFake    dataset.MatchSource
+}
+⋮----
+func newDefaultMatchSource() dataset.MatchSource
+⋮----
+func (c compositeMatchSource) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty[domain.MatchSpec], error)
 </file>
 
 <file path="internal/app/round/run_test.go">

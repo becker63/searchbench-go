@@ -43,6 +43,9 @@ func TestResolveFromScratchManifest(t *testing.T) {
 	if got, want := out.Output.ResolvedPolicyPaths.Challenger, filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py")); got != want {
 		t.Fatalf("Resolved challenger policy path = %q, want %q", got, want)
 	}
+	if got, want := out.Matches.Len(), 5; got != want {
+		t.Fatalf("matches Len() = %d, want %d", got, want)
+	}
 }
 
 func TestResolveContinuationManifestInheritsParentContext(t *testing.T) {
@@ -51,6 +54,19 @@ func TestResolveContinuationManifestInheritsParentContext(t *testing.T) {
 	requirePkl(t)
 
 	root := t.TempDir()
+	dstDataset := filepath.Join(root, "datasets", "JetBrains-Research_lca-bug-localization", "py", "dev.jsonl")
+	if err := os.MkdirAll(filepath.Dir(dstDataset), 0o755); err != nil {
+		t.Fatalf("MkdirAll(dataset dir) error = %v", err)
+	}
+	srcDataset := filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "datasets", "JetBrains-Research_lca-bug-localization", "py", "dev.jsonl")
+	srcData, err := os.ReadFile(srcDataset)
+	if err != nil {
+		t.Fatalf("ReadFile(continuation dataset fixture) error = %v", err)
+	}
+	if err := os.WriteFile(dstDataset, srcData, 0o644); err != nil {
+		t.Fatalf("WriteFile(temp dataset) error = %v", err)
+	}
+
 	policiesDir := filepath.Join(root, "policies")
 	if err := os.MkdirAll(policiesDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(policies) error = %v", err)
