@@ -29,6 +29,21 @@ The Go implementation keeps deterministic model code and artifact semantics expl
 | [Go 1.26.2](https://go.dev/dl/) | Matches [`go.mod`](go.mod). |
 | [Pkl](https://pkl-lang.org/) CLI | Needed on `PATH` to evaluate example `*.pkl` manifests (`pkl`). |
 | *(optional)* | Real model providers/backends once you graduate past the bundled fake-local path. |
+| [Nix](https://nixos.org/) with flakes *(optional)* | `nix develop` for the full toolchain, pre-commit, and `searchbench-*` commands; `nix flake check` for sandboxed CI-like checks. |
+
+---
+
+## Nix workflow (optional)
+
+```bash
+nix develop              # shell with Go, Pkl, hooks, searchbench-* tools
+nix develop -c pre-commit run --all-files
+nix flake check
+nix run .#e2e             # root package integration tests
+nix run .#update-repomix  # refresh committed repomix-output.xml
+```
+
+See [`AGENTS.md`](AGENTS.md) for Repomix rationale, `nix/vendor` (root `vendor` symlink), and hook layout.
 
 ---
 

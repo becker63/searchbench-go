@@ -50,7 +50,17 @@ go build -o searchbench ./cmd/searchbench
 ./searchbench round run --manifest=configs/rounds/<manifest>.pkl
 ```
 
-## Key Concepts
+### Nix (optional, recommended for agents)
+
+```bash
+nix develop                    # dev shell + pre-commit + searchbench-* tools
+nix flake check                # sandboxed checks (uses checked-in nix/vendor + root vendor symlink)
+nix develop -c searchbench-e2e
+```
+
+See the root [`AGENTS.md`](../../AGENTS.md) for `searchbench-agent-start`, Repomix, and hook details.
+
+---
 
 - **Game:** The ruleset/domain (e.g., Code Localization)
 - **Round:** A single contest comparing IncumbentPolicy vs ChallengerPolicy

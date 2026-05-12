@@ -307,3 +307,14 @@ The workflow is successful when every implementation result either:
 The point is not just to get code written.
 
 The point is to steadily convert hard-earned project understanding into contracts that agents can execute without owning the architecture.
+
+## Nix rails (worktrees and checks)
+
+For day-to-day and parallel agent work, prefer the flake-backed workflow documented in [`AGENTS.md`](../../AGENTS.md).
+
+- `nix develop` — installs pre-commit (generated config is gitignored) and exposes commands such as `searchbench-update-repomix`, `searchbench-e2e`, `searchbench-agent-start`, `searchbench-agent-check`, `searchbench-agent-pack`, and `searchbench-agent-merge-check`.
+- `nix develop -c pre-commit run --all-files` — full hook pass including the Repomix snapshot hook in the dev set.
+- `nix flake check` — fast, sandboxed checks without mutating the tree; uses checked-in `nix/vendor/` (Go sees it via the root `vendor` symlink) for offline Go tooling.
+- Intentionally committed `repomix-output.xml` — see [`AGENTS.md`](../../AGENTS.md) for why this file is not ignored.
+
+Project automation lives in `nix/*.nix` (for example `nix/dev-tools.nix`); do not add a loose `scripts/` directory for SearchBench tooling.

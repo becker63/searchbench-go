@@ -19,42 +19,51 @@
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        tools = import ./nix/dev-tools.nix { inherit pkgs; };
+        tools = import ./nix/tools { inherit pkgs; };
+
+        # Modules live under nix/vendor/; root vendor/ is a symlink for Go.
+        vendorExcludes = [
+          "^nix/vendor/"
+          "^vendor/"
+        ];
 
         commonHooks = {
           gofmt = {
             enable = true;
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           govet = {
             enable = true;
             extraPackages = [ pkgs.go ];
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           golangci-lint = {
             enable = true;
             extraPackages = [ pkgs.go ];
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           nixfmt-rfc-style = {
             enable = true;
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           deadnix = {
             enable = true;
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           statix = {
             enable = true;
-            settings.ignore = [ "vendor/**" ];
+            settings.ignore = [
+              "nix/vendor/**"
+              "vendor/**"
+            ];
           };
           shellcheck = {
             enable = true;
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           shfmt = {
             enable = true;
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           trim-trailing-whitespace = {
             enable = true;
@@ -62,8 +71,8 @@
               "^repomix-output\\.xml$"
               "^configs/rounds/.*/artifacts/"
               "^attached_assets/"
-              "^vendor/"
-            ];
+            ]
+            ++ vendorExcludes;
           };
           end-of-file-fixer = {
             enable = true;
@@ -72,13 +81,13 @@
               "^testdata/"
               "^configs/rounds/.*/artifacts/"
               "^attached_assets/"
-              "^vendor/"
-            ];
+            ]
+            ++ vendorExcludes;
           };
           check-merge-conflicts.enable = true;
           check-added-large-files = {
             enable = true;
-            excludes = [ "^vendor/" ];
+            excludes = vendorExcludes;
           };
           check-symlinks.enable = true;
           check-json.enable = true;
