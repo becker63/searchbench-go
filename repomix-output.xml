@@ -106,6 +106,15 @@ internal/
         round_spec.go
         validate_test.go
         validate.go
+    materialize/
+      git/
+        cache_key.go
+        doc.go
+        errors.go
+        materialize_test.go
+        materialize.go
+        runner.go
+        types.go
     pipeline/
       exec/
         doc.go
@@ -7650,6 +7659,271 @@ func validateToolPolicy(prefix string, policy AgentToolPolicy) error
 func validateSystemPrompt(fieldPath string, prompt *string) error
 ⋮----
 func containsParentPath(path string) bool
+</file>
+
+<file path="internal/adapters/materialize/git/cache_key.go">
+package gitmaterialize
+⋮----
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"path/filepath"
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// CacheKey returns the deterministic cache segment for one repo@sha (owner,
+// name, base SHA normalized like domain identity tokens).
+func CacheKey(owner, name, baseSHA string) string
+⋮----
+// CacheKeyFromTask delegates to identity fields on the LCA task.
+func CacheKeyFromTask(t domain.LCATask) string
+</file>
+
+<file path="internal/adapters/materialize/git/doc.go">
+// Package gitmaterialize materializes GitHub-backed LCA repository tasks into
+// local working trees keyed deterministically by owner, name,
+// and base SHA (GitHub issue becker63/searchbench-go#10).
+package gitmaterialize
+</file>
+
+<file path="internal/adapters/materialize/git/errors.go">
+package gitmaterialize
+⋮----
+import (
+	"errors"
+	"fmt"
+)
+⋮----
+"errors"
+"fmt"
+⋮----
+// FailureKind classifies git materialization faults.
+type FailureKind string
+⋮----
+const (
+	FailureInvalidRepoURL  FailureKind = "invalid_repo_url"
+	FailureCloneFailed     FailureKind = "clone_failed"
+	FailureFetchFailed     FailureKind = "fetch_failed"
+	FailureCheckoutFailed  FailureKind = "checkout_failed"
+	FailureMissingBaseSHA  FailureKind = "missing_base_sha"
+	FailureCachePermission FailureKind = "cache_permission_failed"
+	FailureInvalidTaskRepo FailureKind = "invalid_task_repo"
+	FailureFilesystemError FailureKind = "filesystem_error"
+)
+⋮----
+// MaterializeError wraps a typed materialization failure.
+type MaterializeError struct {
+	Kind FailureKind
+	Err  error
+}
+⋮----
+func (e *MaterializeError) Error() string
+⋮----
+func (e *MaterializeError) Unwrap() error
+⋮----
+// AsFailureKind unwraps Kind from a [*MaterializeError], if any.
+func AsFailureKind(err error) (FailureKind, bool)
+⋮----
+var me *MaterializeError
+⋮----
+func newErr(kind FailureKind, err error) error
+</file>
+
+<file path="internal/adapters/materialize/git/materialize_test.go">
+package gitmaterialize
+⋮----
+import (
+	"context"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"net/url"
+"os"
+"os/exec"
+"path/filepath"
+"strings"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestMaterialize_LocalRepo_CheckoutSHA_AndReuse(t *testing.T)
+⋮----
+func TestMaterialize_InvalidSHA_CheckoutFails(t *testing.T)
+⋮----
+func TestMaterialize_InvalidTask(t *testing.T)
+⋮----
+func TestMaterialize_InvalidRemoteURL(t *testing.T)
+⋮----
+func TestCacheKey_FromTask(t *testing.T)
+⋮----
+func TestMaterialize_ResultFields(t *testing.T)
+⋮----
+func bootstrapOneCommitRepo(t *testing.T) string
+⋮----
+func fixtureTask(t *testing.T, owner, name, sha string) domain.LCATask
+⋮----
+func assertFileReadable(t *testing.T, path string)
+⋮----
+func runGit(t *testing.T, dir string, args ...string)
+⋮----
+func revParseHEAD(t *testing.T, repo string) string
+⋮----
+func writeFile(t *testing.T, path, content string)
+⋮----
+func fileURL(t *testing.T, path string) string
+</file>
+
+<file path="internal/adapters/materialize/git/materialize.go">
+package gitmaterialize
+⋮----
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"context"
+"fmt"
+"io/fs"
+"net/url"
+"os"
+"path/filepath"
+"strings"
+"time"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// Materializer prepares local checkouts for LCA tasks.
+type Materializer struct {
+	Git GitRunner
+}
+⋮----
+// Materialize clones or reuses a bare mirror and checks out ref (base SHA) into
+// a deterministic per-(owner,name,sha) working tree under [MaterializeRequest.CacheDir].
+func (m *Materializer) Materialize(ctx context.Context, req MaterializeRequest) (MaterializedRepo, error)
+⋮----
+func buildResult(task domain.LCATask, remote, key, checkoutPath string) MaterializedRepo
+⋮----
+func mirrorDirName(owner, name string) string
+⋮----
+func pathSegment(s string) string
+⋮----
+var b strings.Builder
+⋮----
+func validateRemoteURL(raw string) error
+⋮----
+func ensureMirror(ctx context.Context, runner GitRunner, remote, mirrorPath string) error
+⋮----
+func ensureSHAInMirror(ctx context.Context, runner GitRunner, mirrorPath string, remote, sha string) error
+⋮----
+func shaExistsBare(ctx context.Context, runner GitRunner, bareDir string, sha string) bool
+⋮----
+func cacheHit(ctx context.Context, runner GitRunner, checkoutPath string, wantSHA string) (bool, error)
+⋮----
+func checkoutAtSHA(ctx context.Context, runner GitRunner, checkoutPath string, sha string) error
+⋮----
+func markWorktreeReadOnly(root string) error
+⋮----
+func removePathIfExists(p string) error
+</file>
+
+<file path="internal/adapters/materialize/git/runner.go">
+package gitmaterialize
+⋮----
+import (
+	"bytes"
+	"context"
+	"os/exec"
+)
+⋮----
+"bytes"
+"context"
+"os/exec"
+⋮----
+// GitRunner runs `git` subprocesses. Production code uses [ExecGitRunner];
+// tests may inject a fake runner.
+type GitRunner interface {
+	RunGit(ctx context.Context, workDir string, args ...string) (stdout, stderr string, exitCode int, err error)
+}
+⋮----
+// ExecGitRunner implements [GitRunner] with os/exec.
+type ExecGitRunner struct{}
+⋮----
+func (ExecGitRunner) RunGit(ctx context.Context, workDir string, args ...string) (stdout, stderr string, exitCode int, err error)
+⋮----
+var sout, serr bytes.Buffer
+</file>
+
+<file path="internal/adapters/materialize/git/types.go">
+package gitmaterialize
+⋮----
+import (
+	"strings"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"strings"
+"time"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+// MaterializeRequest describes one materialization using existing domain shapes.
+type MaterializeRequest struct {
+	Task domain.LCATask
+
+	// CacheDir is the root directory for mirrors and checkouts.
+	CacheDir domain.HostPath
+
+	// RemoteURL overrides the default https://github.com/{owner}/{name}.git URL.
+⋮----
+// CacheDir is the root directory for mirrors and checkouts.
+⋮----
+// RemoteURL overrides the default https://github.com/{owner}/{name}.git URL.
+⋮----
+// MaterializedRepo is the durable outcome of materializing one task.
+type MaterializedRepo struct {
+	TaskID domain.MatchID
+
+	RepoOwner string
+	RepoName  string
+	BaseSHA   string
+
+	RepoURL string
+
+	RootPath domain.HostPath
+
+	CacheKey string
+
+	MaterializedAt time.Time
+}
+⋮----
+// NewMaterializeRequest builds a request from an LCA task and cache directory.
+func NewMaterializeRequest(task domain.LCATask, cacheDir domain.HostPath, forceRefresh bool) MaterializeRequest
+⋮----
+// DefaultGitHubRemoteURL resolves the canonical GitHub HTTPS remote for the task identity.
+func DefaultGitHubRemoteURL(id domain.LCATaskIdentity) string
 </file>
 
 <file path="internal/adapters/pipeline/exec/doc.go">
