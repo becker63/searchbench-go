@@ -130,7 +130,7 @@ func EvaluateMatches(ctx context.Context, resolved Resolved, input Input) (Match
 // BuildEvidence projects the durable round evidence from the match records.
 // It must not write any bundle artifacts.
 func BuildEvidence(_ game.Contract, _ Resolved, matches MatchRecords) (score.RoundEvidenceDocument, error) {
-	evidence, err := buildEvidenceFromReport(matches.Plan, matches.RoundReport)
+	evidence, err := projectRoundEvidence(matches.Plan, matches.RoundReport, matches.MatchExecutions)
 	if err != nil {
 		return score.RoundEvidenceDocument{}, &Error{Phase: PhaseRoundEvidenceFailed, Err: err}
 	}

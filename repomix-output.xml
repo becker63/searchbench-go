@@ -264,6 +264,8 @@ internal/
       evaluator_runtime_test.go
       evaluator.go
       example_fixtures_test.go
+      localization_evidence_test.go
+      localization_evidence.go
       match_execution_test.go
       match_execution.go
       match_source.go
@@ -12182,6 +12184,8 @@ func withEvaluatorTimeout(ctx context.Context, plan Plan) (context.Context, cont
 ⋮----
 func buildEvidenceFromReport(plan Plan, roundReport report.RoundReport) (score.RoundEvidenceDocument, error)
 ⋮----
+func projectRoundEvidence(plan Plan, roundReport report.RoundReport, matchExec []report.MatchExecutionRecord) (score.RoundEvidenceDocument, error)
+⋮----
 func evaluateObjectiveForPlan(ctx context.Context, plan Plan, evidence score.RoundEvidenceDocument, request evaluationRequest) (*score.ObjectiveResult, error)
 ⋮----
 func writeRoundBundle(
@@ -12972,6 +12976,56 @@ func TestWriteExampleRoundFixtures(t *testing.T)
 func resetExampleBundleDir(t *testing.T, path string)
 ⋮----
 func scriptedExampleOptimizerFactory() OptimizerModelFactory
+</file>
+
+<file path="internal/app/round/localization_evidence_test.go">
+package round
+⋮----
+import (
+	"testing"
+	"time"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"testing"
+"time"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+"github.com/becker63/searchbench-go/internal/pure/report"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+func TestEnrichLocalizationEvidenceCountsPredictionMisses(t *testing.T)
+⋮----
+func TestProjectRoundEvidenceLeavesUsageUnavailableWhenRunsOmitUsage(t *testing.T)
+⋮----
+func scoredRunForLocalizationTestRole(t *testing.T, task domain.MatchSpec, role domain.Role, pred domain.Prediction) score.ScoredRun
+⋮----
+func scoredRunForLocalizationTestNoUsage(t *testing.T, task domain.MatchSpec, sys domain.SystemSpec, role domain.Role, pred domain.Prediction) score.ScoredRun
+</file>
+
+<file path="internal/app/round/localization_evidence.go">
+package round
+⋮----
+import (
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+"github.com/becker63/searchbench-go/internal/pure/report"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+func enrichLocalizationEvidence(evidence *score.RoundEvidenceDocument, records []report.MatchExecutionRecord)
+⋮----
+func countPredictionMisses(out report.RoleExecutionOutcome, gold []domain.RepoRelPath) int
+⋮----
+func predictionMissesGold(pred domain.Prediction, gold []domain.RepoRelPath) bool
 </file>
 
 <file path="internal/app/round/match_execution_test.go">
