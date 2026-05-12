@@ -1,6 +1,8 @@
 package round
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -76,6 +78,13 @@ func buildContinuation(
 			ObjectiveFrom: "continuation",
 			EvaluatorFrom: "continuation",
 		},
+		Dataset: pureround.ContinuationDataset{
+			Kind:     plan.Dataset.Kind,
+			Name:     plan.Dataset.Name,
+			Config:   plan.Dataset.Config,
+			Split:    plan.Dataset.Split,
+			MaxItems: plan.Dataset.MaxItems,
+		},
 		Matches: plan.Matches,
 		Evaluator: pureround.ContinuationEvaluator{
 			Model: pureround.ContinuationModel{
@@ -115,6 +124,44 @@ func buildContinuation(
 	}
 	_ = roundReport
 	return continuation
+}
+
+func buildContinuationPKLInput(plan Plan) (*bundlefs.ContinuationPKLInput, error) {
+	schemaPath, helpersPath, err := resolveGameSchemaPaths(plan.ManifestPath, plan.Game.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &bundlefs.ContinuationPKLInput{
+		Name:        plan.Round.ID + "-continuation",
+		SchemaPath:  schemaPath,
+		HelpersPath: helpersPath,
+	}, nil
+}
+
+func resolveGameSchemaPaths(manifestPath string, gameID string) (string, string, error) {
+	if strings.TrimSpace(manifestPath) == "" {
+		return "", "", fmt.Errorf("resolve continuation schema paths: manifest path is required")
+	}
+	if strings.TrimSpace(gameID) == "" {
+		return "", "", fmt.Errorf("resolve continuation schema paths: game id is required")
+	}
+	startDir := filepath.Dir(manifestPath)
+	schemaRelPath := filepath.Join("configs", "schema", "games", gameID+".pkl")
+	helpersRelPath := filepath.Join("configs", "schema", "games", gameID+"-helpers.pkl")
+	for dir := startDir; ; dir = filepath.Dir(dir) {
+		schemaPath := filepath.Join(dir, schemaRelPath)
+		helpersPath := filepath.Join(dir, helpersRelPath)
+		if _, err := os.Stat(schemaPath); err == nil {
+			if _, helperErr := os.Stat(helpersPath); helperErr == nil {
+				return filepath.Clean(schemaPath), filepath.Clean(helpersPath), nil
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+	}
+	return "", "", fmt.Errorf("resolve continuation schema paths: schema files not found for game %q", gameID)
 }
 
 func continuationSurvivorRole(plan Plan) domain.Role {

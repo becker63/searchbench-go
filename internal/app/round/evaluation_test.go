@@ -2,8 +2,10 @@ package round
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,6 +38,7 @@ func TestRunFromScratchWritesContinuationBundle(t *testing.T) {
 		"decision.json",
 		"objective.json",
 		"continuation.json",
+		"continuation.pkl",
 		"metadata.json",
 		"COMPLETE",
 		filepath.Join("policies", "challenger_policy.py"),
@@ -52,4 +55,44 @@ func TestRunFromScratchWritesContinuationBundle(t *testing.T) {
 	if got, want := continuation.SurvivingCandidate.Role, domainSystemRoleChallenger(); got != want {
 		t.Fatalf("SurvivingCandidate.Role = %q, want %q", got, want)
 	}
+
+	continuationPKLPath := filepath.Join(string(result.Bundle.Path), "continuation.pkl")
+	continuationPKL := string(mustReadBundleFile(t, continuationPKLPath))
+	for _, needle := range []string{
+		`amends "`,
+		`code-localization.pkl"`,
+		`import "`,
+		`code-localization-helpers.pkl" as game`,
+		`round = (game.continueFrom(".")) {`,
+	} {
+		if !strings.Contains(continuationPKL, needle) {
+			t.Fatalf("continuation.pkl missing %q:\n%s", needle, continuationPKL)
+		}
+	}
+
+	var metadata bundlefs.BundleMetadata
+	if err := json.Unmarshal(mustReadBundleFile(t, filepath.Join(string(result.Bundle.Path), "metadata.json")), &metadata); err != nil {
+		t.Fatalf("Unmarshal(metadata.json) error = %v", err)
+	}
+	if !metadataHasPath(metadata, "continuation.pkl") {
+		t.Fatalf("metadata files = %#v, want continuation.pkl present", metadata.Files)
+	}
+}
+
+func mustReadBundleFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", path, err)
+	}
+	return data
+}
+
+func metadataHasPath(metadata bundlefs.BundleMetadata, want string) bool {
+	for _, file := range metadata.Files {
+		if file.Path == want {
+			return true
+		}
+	}
+	return false
 }

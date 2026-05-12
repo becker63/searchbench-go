@@ -141,6 +141,10 @@ func writeRoundBundle(
 	}
 	additionalFiles, policyPaths := roundBundleArtifacts(plan)
 	continuation := buildContinuation(plan, roundReport, objective, policyPaths)
+	continuationPKL, err := buildContinuationPKLInput(plan)
+	if err != nil {
+		return bundlefs.BundleRef{}, &Error{Phase: PhaseBundleWriteFailed, Err: err}
+	}
 	bundleRef, err := bundlefs.WriteBundle(ctx, bundlefs.RoundBundleInput{
 		RootPath:        plan.Output.BundleWriterRoot,
 		BundleID:        plan.Bundle.ID,
@@ -150,6 +154,7 @@ func writeRoundBundle(
 		ObjectiveResult: objective,
 		RenderedReport:  rendered,
 		Continuation:    continuation,
+		ContinuationPKL: continuationPKL,
 		AdditionalFiles: additionalFiles,
 		CreatedAt:       plan.CreatedAt,
 	})

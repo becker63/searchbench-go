@@ -37,6 +37,24 @@ function iterativeContext(policyPath: String): schema.RoundChallenger =
     }
   }
 
+function iterativeContextPolicy(policyPath: String): schema.RoundPolicy =
+  new schema.RoundPolicy {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy"
+      kind = "policy"
+      path = policyPath
+      implements = new schema.Interface {
+        id = "iterative_context.selection_policy.v1"
+      }
+    }
+  }
+
 function lca(datasetConfig: String, datasetSplit: String, datasetMaxItems: Int): schema.Dataset =
   new schema.Dataset {
     kind = "lca"

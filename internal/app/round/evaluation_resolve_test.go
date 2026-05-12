@@ -31,7 +31,7 @@ func TestResolveFromScratchManifest(t *testing.T) {
 		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
 
-	if got, want := out.RoundName, "local-ic-vs-jcodemunch-round-001"; got != want {
+	if got, want := out.RoundName, "example-local-ic-vs-jcodemunch-round-001"; got != want {
 		t.Fatalf("RoundName = %q, want %q", got, want)
 	}
 	if got, want := out.CandidateInterfaceID, "iterative_context.selection_policy.v1"; got != want {
@@ -50,7 +50,34 @@ func TestResolveContinuationManifestInheritsParentContext(t *testing.T) {
 
 	requirePkl(t)
 
-	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "continue-ic-from-local", "round.pkl")
+	root := t.TempDir()
+	policiesDir := filepath.Join(root, "policies")
+	if err := os.MkdirAll(policiesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(policies) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(policiesDir, "challenger_policy.py"), []byte("def score(match):\n    return []\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(policy) error = %v", err)
+	}
+
+	manifestPath := filepath.Join(root, "round.pkl")
+	manifest := `amends "` + filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "artifacts", "games", "code-localization", "rounds", "round-001", "continuation.pkl")) + `"
+import "` + filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "schema", "games", "code-localization-helpers.pkl")) + `" as game
+
+name = "temp-continuation-round-002"
+
+round {
+  id = "round-002"
+
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-002"
+    }
+  }
+}
+`
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0o644); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
+	}
 	out, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts"),

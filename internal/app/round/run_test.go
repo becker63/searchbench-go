@@ -26,7 +26,7 @@ func TestRunGeneratedContinuationEvaluatesCurrentRound(t *testing.T) {
 	)
 
 	result, err := Run(context.Background(), Input{
-		EvaluationManifestPath: filepath.Join(repoRoot(t), "configs", "rounds", "generate-ic-from-local", "round.pkl"),
+		EvaluationManifestPath: filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl"),
 		BundleRootOverride:     filepath.Join(t.TempDir(), "artifacts"),
 		RoundID:                "round-002",
 		Now: func() time.Time {
@@ -51,6 +51,11 @@ func TestRunGeneratedContinuationEvaluatesCurrentRound(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(result.RoundBundle, "policies", "next_challenger_policy.round-002.py")); err != nil {
 		t.Fatalf("generated challenger artifact missing from round bundle: %v", err)
+	}
+	for _, name := range []string{"continuation.json", "continuation.pkl", "metadata.json", "COMPLETE"} {
+		if _, err := os.Stat(filepath.Join(result.RoundBundle, name)); err != nil {
+			t.Fatalf("generated continuation bundle missing %q: %v", name, err)
+		}
 	}
 }
 

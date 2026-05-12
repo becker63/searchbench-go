@@ -27,46 +27,8 @@ func TestLoadLocalManifest(t *testing.T) {
 	if roundSpec.Round.Continues != nil {
 		t.Fatalf("roundSpec.Round.Continues = %#v, want nil for from-scratch round", roundSpec.Round.Continues)
 	}
-}
-
-func TestLoadContinuationManifest(t *testing.T) {
-	t.Parallel()
-
-	requirePkl(t)
-
-	path := filepath.Join("..", "..", "..", "..", "configs", "rounds", "continue-ic-from-local", "round.pkl")
-	roundSpec, err := LoadFromPath(context.Background(), path)
-	if err != nil {
-		t.Fatalf("LoadFromPath() error = %v", err)
-	}
-
-	if roundSpec.Round == nil {
-		t.Fatal("roundSpec.Round is nil")
-	}
-	if roundSpec.Round.Continues == nil {
-		t.Fatal("roundSpec.Round.Continues is nil")
-	}
-	if got, want := *roundSpec.Round.Continues, "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001"; got != want {
-		t.Fatalf("roundSpec.Round.Continues = %q, want %q", got, want)
-	}
-}
-
-func TestLoadGeneratedContinuationManifest(t *testing.T) {
-	t.Parallel()
-
-	requirePkl(t)
-
-	path := filepath.Join("..", "..", "..", "..", "configs", "rounds", "generate-ic-from-local", "round.pkl")
-	roundSpec, err := LoadFromPath(context.Background(), path)
-	if err != nil {
-		t.Fatalf("LoadFromPath() error = %v", err)
-	}
-
-	if roundSpec.Round == nil || roundSpec.Round.Challenger.Generate == nil {
-		t.Fatalf("roundSpec.Round = %#v, want generated challenger config", roundSpec.Round)
-	}
-	if got, want := roundSpec.Round.Challenger.Generate.ArtifactName, "next_challenger_policy.round-002.py"; got != want {
-		t.Fatalf("artifactName = %q, want %q", got, want)
+	if got, want := roundSpec.Name, "example-local-ic-vs-jcodemunch-round-001"; got != want {
+		t.Fatalf("roundSpec.Name = %q, want %q", got, want)
 	}
 }
 
@@ -84,11 +46,17 @@ func TestLoadOptimizeICManifest(t *testing.T) {
 	if roundSpec.Round == nil || roundSpec.Round.Challenger.Generate == nil {
 		t.Fatalf("roundSpec.Round = %#v, want generated challenger config", roundSpec.Round)
 	}
-	if got, want := roundSpec.Name, "optimize-ic-round-002"; got != want {
+	if got, want := roundSpec.Name, "example-optimize-ic-round-002"; got != want {
 		t.Fatalf("roundSpec.Name = %q, want %q", got, want)
 	}
 	if got, want := roundSpec.Round.Id, "round-002"; got != want {
 		t.Fatalf("roundSpec.Round.Id = %q, want %q", got, want)
+	}
+	if got, want := roundSpec.Round.Challenger.Generate.ArtifactName, "next_challenger_policy.round-002.py"; got != want {
+		t.Fatalf("artifactName = %q, want %q", got, want)
+	}
+	if roundSpec.Round.Continues == nil || *roundSpec.Round.Continues != "." {
+		t.Fatalf("roundSpec.Round.Continues = %#v, want inherited \".\"", roundSpec.Round.Continues)
 	}
 }
 

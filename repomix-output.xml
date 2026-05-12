@@ -47,12 +47,6 @@ cmd/
     main.go
 configs/
   rounds/
-    continue-ic-from-local/
-      policies/
-        challenger_policy.py
-      round.pkl
-    generate-ic-from-local/
-      round.pkl
     local-ic-vs-jcodemunch/
       policies/
         challenger_policy.py
@@ -60,10 +54,6 @@ configs/
         localization-objective.pkl
       round.pkl
     optimize-ic/
-      policies/
-        challenger_policy.py
-      scoring/
-        localization-objective.pkl
       round.pkl
   schema/
     core/
@@ -99,6 +89,8 @@ internal/
     bundle/
       fs/
         bundle.go
+        continuation_pkl.go
+        continuation_test.go
         continuation.go
         errors.go
         evidence_pkl.go
@@ -211,6 +203,7 @@ internal/
       evaluation_test.go
       evaluation_types.go
       evaluator.go
+      example_fixtures_test.go
       run_test.go
       run.go
       types.go
@@ -349,6 +342,7 @@ e2e_test.go
 flake.lock
 flake.nix
 go.mod
+prompts.md
 README.md
 replit.md
 repomix.config.json
@@ -375,46 +369,6 @@ import (
 "github.com/becker63/searchbench-go/internal/surface/cli"
 ⋮----
 func main()
-</file>
-
-<file path="configs/rounds/continue-ic-from-local/policies/challenger_policy.py">
-def score(task)
-⋮----
-files = task.get("candidate_files", [])
-</file>
-
-<file path="configs/rounds/continue-ic-from-local/round.pkl">
-amends "../../schema/games/code-localization.pkl"
-import "../../schema/games/code-localization-helpers.pkl" as game
-
-name = "continue-ic-from-local-round-002"
-
-round = (game.continueFrom("../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001")) {
-  id = "round-002"
-  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
-    selectionPolicy {
-      id = "challenger-policy-round-002"
-    }
-  }
-}
-</file>
-
-<file path="configs/rounds/generate-ic-from-local/round.pkl">
-amends "../../schema/games/code-localization.pkl"
-import "../../schema/games/code-localization-helpers.pkl" as game
-
-name = "generate-ic-from-local-round-002"
-
-round = (game.continueFrom("../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001")) {
-  id = "round-002"
-
-  challenger {
-    generate {
-      optimizer = game.fakeOptimizer()
-      artifactName = "next_challenger_policy.round-002.py"
-    }
-  }
-}
 </file>
 
 <file path="configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py">
@@ -477,7 +431,7 @@ bounds = new ObjectiveBounds {
 amends "../../schema/games/code-localization.pkl"
 import "../../schema/games/code-localization-helpers.pkl" as game
 
-name = "local-ic-vs-jcodemunch-round-001"
+name = "example-local-ic-vs-jcodemunch-round-001"
 
 round = (game.defineFromScratch("round-001")) {
   incumbent = game.jcodemunch()
@@ -492,69 +446,13 @@ round = (game.defineFromScratch("round-001")) {
 }
 </file>
 
-<file path="configs/rounds/optimize-ic/policies/challenger_policy.py">
-def score(match)
-</file>
-
-<file path="configs/rounds/optimize-ic/scoring/localization-objective.pkl">
-amends "../../../schema/SearchBenchObjective.pkl"
-import "../../../schema/SearchBenchObjectiveHelpers.pkl" as helpers
-
-local maxHop = 12.0
-local tokenBudget = 20000.0
-
-objectiveId = "localization-v1"
-
-local challengerQuality =
-  1.0 - (if (current.localizationDistance.goldHop.challenger < maxHop) current.localizationDistance.goldHop.challenger else maxHop) / maxHop
-
-local parentChallengerQuality =
-  if (parent != null)
-    1.0 - (if (parent.localizationDistance.goldHop.challenger < maxHop) parent.localizationDistance.goldHop.challenger else maxHop) / maxHop
-  else
-    challengerQuality
-
-local improvementVsParent = challengerQuality - parentChallengerQuality
-
-local tokenEfficiency =
-  1.0 - (if (current.challengerUsage.totalTokens < tokenBudget) current.challengerUsage.totalTokens else tokenBudget) / tokenBudget
-
-local base = (challengerQuality * 0.8) + (tokenEfficiency * 0.2)
-
-local regressionPenalty =
-  if (current.regressions.severeCount > 0) 0.0 else 1.0
-
-local invalidPredictionPenalty =
-  if (current.invalidPredictions.known && current.invalidPredictions.count > 0) 0.0 else 1.0
-
-local finalScore = base * regressionPenalty * invalidPredictionPenalty
-
-values = new {
-  helpers.intermediate("challengerQuality", challengerQuality)
-  helpers.intermediate("parentChallengerQuality", parentChallengerQuality)
-  helpers.intermediate("improvementVsParent", improvementVsParent)
-  helpers.intermediate("tokenEfficiency", tokenEfficiency)
-  helpers.intermediate("base", base)
-  helpers.penalty("regressionPenalty", regressionPenalty)
-  helpers.penalty("invalidPredictionPenalty", invalidPredictionPenalty)
-  helpers.finalValue("final", finalScore)
-}
-
-final = "final"
-
-bounds = new ObjectiveBounds {
-  min = 0.0
-  max = 1.0
-}
-</file>
-
 <file path="configs/rounds/optimize-ic/round.pkl">
-amends "../../schema/games/code-localization.pkl"
+amends "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/continuation.pkl"
 import "../../schema/games/code-localization-helpers.pkl" as game
 
-name = "optimize-ic-round-002"
+name = "example-optimize-ic-round-002"
 
-round = (game.continueFrom("../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001")) {
+round {
   id = "round-002"
 
   challenger {
@@ -604,6 +502,24 @@ function jcodemunch(): schema.RoundPolicy =
 
 function iterativeContext(policyPath: String): schema.RoundChallenger =
   new schema.RoundChallenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy"
+      kind = "policy"
+      path = policyPath
+      implements = new schema.Interface {
+        id = "iterative_context.selection_policy.v1"
+      }
+    }
+  }
+
+function iterativeContextPolicy(policyPath: String): schema.RoundPolicy =
+  new schema.RoundPolicy {
     system {
       id = "iterative-context"
       name = "Iterative Context"
@@ -821,6 +737,22 @@ local function jcodemunch(): RoundPolicy =
 
 local function iterativeContext(policyPath: String): RoundChallenger =
   new RoundChallenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy"
+      kind = "policy"
+      path = policyPath
+      implements = interfaces.iterativeContextSelectionPolicyV1
+    }
+  }
+
+local function iterativeContextPolicy(policyPath: String): RoundPolicy =
+  new RoundPolicy {
     system {
       id = "iterative-context"
       name = "Iterative Context"
@@ -3931,47 +3863,85 @@ bundle, not by rewriting the previous manifest in place.
 
 ## Manifest Shape
 
-The first manifest shape is intentionally small:
+The current round manifest surface is continuation-backed:
 
 - `name`
-- `mode`
-- `dataset`
-- `policies`
-- `evaluator`
-- `scoring`
+- `round.id`
+- `round.incumbent`, when defining a round from scratch
+- `round.challenger`
+- `round.matches`, when defining a round from scratch
+- `round.evaluator`, when defining a round from scratch
+- `round.scoring`, when defining a round from scratch
 
-`outputConfig` is spelled that way because `pkl-go` code generation cannot use a top-level module property literally named `output` without colliding with Pkl's built-in module `output` property.
+From-scratch rounds usually amend a game schema module and use helper
+constructors:
 
-The manifest answers:
+```pkl
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
 
-- what round is this
-- what dataset and split are used
-- what policies are being compared
-- what evaluator model and bounds apply
-- which scoring objective file is referenced
-- what output and tracing preferences are requested
+name = "example-local-ic-vs-jcodemunch-round-001"
 
-The local example is intentionally self-contained under one round folder:
+round = (game.defineFromScratch("round-001")) {
+  incumbent = game.jcodemunch()
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-001"
+    }
+  }
+  matches = game.lca("py", "dev", 5)
+  scoring = game.objective("scoring/localization-objective.pkl")
+  evaluator = game.fakeEvaluator()
+}
+```
+
+Continued rounds usually amend the previous bundle's `continuation.pkl` and
+only patch the new round id plus the next challenger:
+
+```pkl
+amends "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/continuation.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "example-optimize-ic-round-002"
+
+round {
+  id = "round-002"
+
+  challenger {
+    generate {
+      optimizer = game.fakeOptimizer()
+      artifactName = "next_challenger_policy.round-002.py"
+    }
+  }
+}
+```
+
+The checked-in examples are:
 
 - `configs/rounds/local-ic-vs-jcodemunch/round.pkl`
 - `configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl`
 - `configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py`
 - `configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/`
+- `configs/rounds/optimize-ic/round.pkl`
+- `configs/rounds/optimize-ic/artifacts/games/code-localization/rounds/`
 
-That keeps the manifest, local scoring file, local policy artifact, and local bundle root together instead of spreading them across the repo with `../` path traversal.
+That keeps the from-scratch example, the continued generated-challenger example,
+and their bundle roots in obvious places instead of spreading them across the
+repo with extra example directories.
 
 ## Evaluator And Next-Challenger Separation
 
 The evaluator owns bounded model/tool execution only.
 
-The optimizer owns next-challenger proposal behavior.
+The optimizer owns next-challenger proposal behavior inside a normal round.
 
-That separation is explicit in the manifest shape:
+That separation is explicit in the round surface:
 
-- `evaluator` has model, bounds, and retry settings
-- `optimizer` has model, bounds, and tool policy
+- `round.evaluator` owns evaluation behavior
+- `round.challenger.generate.optimizer` owns challenger materialization
 
-There is deliberately no `pipeline` block under `evaluator`.
+There is deliberately no return to `mode = "optimization"` or a separate
+top-level optimization manifest shape.
 
 ## Scoring Boundary
 
@@ -4008,40 +3978,52 @@ That command currently uses the safe local/fake comparison seam in
 canonical round semantics now live in `internal/app/evaluation`. It does
 not call real IC MCP, jCodeMunch MCP, or provider APIs in tests.
 
-## Lineage Direction
+## Continuation Artifacts
 
-The current direction for optimization lineage is:
+Every completed round bundle writes both:
 
-- optimization history should be artifact history
-- previous evidence should be explicit in the manifest/scoring seam
-- previous evidence should become part of the Pkl value graph
-- Pkl `amends` plus direct artifact/module references is the preferred first
-  mechanism for round-to-round lineage
+- `continuation.json`
+- `continuation.pkl`
 
-This means a future optimizer round should more naturally look like:
+The split is intentional:
 
-- a new Pkl module
-- optionally `amends` a shared schema or prior-round shape
-- explicitly references prior `evidence.pkl` or related artifacts
-- produces a new immutable bundle
+- `continuation.json` is machine authority
+- `continuation.pkl` is amendable human lineage
 
-It should not rely on hidden Go optimizer state to thread previous score
-evidence, and it should not start with a bespoke content-addressed lookup
-system.
+Go still validates continuation by requiring an explicit completed bundle with:
+
+- `COMPLETE`
+- `continuation.json`
+
+`continuation.pkl` exists so the next human-authored round can preserve Pkl
+`amends` semantics without turning Pkl into the execution engine.
+
+The preferred authoring direction is:
+
+- write a completed round bundle
+- amend that bundle's `continuation.pkl`
+- let Go resolve and validate the parent bundle through `continuation.json`
+
+This keeps lineage explicit and bundle-scoped. It does not rely on hidden
+"latest round" discovery or a separate optimizer workflow graph.
 
 ## Manifest-Relative Paths
 
 These manifest fields resolve relative to the directory containing
 `round.pkl` unless they are already absolute:
 
-- `scoring.objective`
-- `policies.incumbent.policy.path`, when present later
-- `policies.challenger.policy.path`
-- `outputConfig.bundleRoot`
+- `round.scoring.objective`
+- `round.incumbent.selectionPolicy.path`
+- `round.challenger.selectionPolicy.path`
 
 CLI-only overrides are separate from manifest-relative resolution. For example,
 `searchbench round run --bundle-root ...` resolves from the caller environment rather
 than from the manifest directory.
+
+When a continued manifest amends a parent bundle's `continuation.pkl`, inherited
+defaults may contain absolute file paths. That is expected: the bundle-local
+continuation surface is readable lineage, while Go still verifies the explicit
+bundle continuation via `continuation.json`.
 
 ## Produced Artifacts
 
@@ -4056,6 +4038,10 @@ bundle root:
   - Pkl-readable round evidence projected from `round-report.json`
 - `objective.json`
   - validated result of evaluating the configured objective against `evidence.pkl`
+- `continuation.json`
+  - machine-stable continuation record validated by Go
+- `continuation.pkl`
+  - amendable continuation surface for the next human-authored round
 - `metadata.json`
   - deterministic artifact inventory
 - `round-report.txt`
@@ -6968,6 +6954,7 @@ type RoundBundleInput struct {
 	ObjectiveResult *score.ObjectiveResult
 	RenderedReport  *RenderedReport
 	Continuation    *pureround.Continuation
+	ContinuationPKL *ContinuationPKLInput
 	AdditionalFiles []BundleArtifact
 	CreatedAt       time.Time
 }
@@ -7005,6 +6992,14 @@ type BundleArtifact struct {
 	Content   []byte
 }
 ⋮----
+// ContinuationPKLInput describes the adapter-level inputs required to render
+// an amendable continuation.pkl beside continuation.json.
+type ContinuationPKLInput struct {
+	Name        string
+	SchemaPath  string
+	HelpersPath string
+}
+⋮----
 // BundleMetadata is the deterministic inventory written into metadata.json.
 type BundleMetadata struct {
 	SchemaVersion string       `json:"schema_version"`
@@ -7012,6 +7007,70 @@ type BundleMetadata struct {
 	CreatedAt     time.Time    `json:"created_at"`
 	Files         []BundleFile `json:"files"`
 }
+</file>
+
+<file path="internal/adapters/bundle/fs/continuation_pkl.go">
+package bundlefs
+⋮----
+import (
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
+)
+⋮----
+"fmt"
+"path/filepath"
+"slices"
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+pureround "github.com/becker63/searchbench-go/internal/pure/round"
+⋮----
+const continuationPKLFileName = "continuation.pkl"
+⋮----
+func renderContinuationPKL(bundleDir string, continuation pureround.Continuation, input ContinuationPKLInput) ([]byte, error)
+⋮----
+func renderContinuationIncumbent(bundleDir string, continuation pureround.Continuation) ([]string, error)
+⋮----
+func renderContinuationChallenger(continuation pureround.Continuation) ([]string, error)
+⋮----
+func renderContinuationMatches(continuation pureround.Continuation) (string, error)
+⋮----
+func renderContinuationEvaluator(continuation pureround.Continuation) (string, error)
+⋮----
+func sameStrings(got []string, want []string) bool
+⋮----
+func relativeBundlePath(bundleDir string, target string) (string, error)
+⋮----
+func pklQuoted(value string) string
+</file>
+
+<file path="internal/adapters/bundle/fs/continuation_test.go">
+package bundlefs
+⋮----
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"errors"
+"os"
+"path/filepath"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+func TestLoadContinuationRequiresContinuationJSONEvenWhenPKLExists(t *testing.T)
+⋮----
+func TestLoadContinuationRequiresCompleteMarkerEvenWhenPKLExists(t *testing.T)
 </file>
 
 <file path="internal/adapters/bundle/fs/continuation.go">
@@ -7350,17 +7409,18 @@ func newWriter() writer
 func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (RoundBundleRef, error)
 ⋮----
 const (
-		phaseValidate     = "validate_bundle_request"
-		phasePrepare      = "prepare_bundle_directory"
-		phaseResolved     = "serialize_resolved_round"
-		phaseReport       = "serialize_report"
-		phaseEvidence     = "serialize_round_evidence"
-		phaseObjective    = "serialize_objective_result"
-		phaseDecision     = "serialize_decision"
-		phaseArtifacts    = "serialize_bundle_artifacts"
-		phaseContinuation = "serialize_continuation"
-		phaseMetadata     = "serialize_metadata"
-		phaseFinalize     = "finalize_bundle"
+		phaseValidate        = "validate_bundle_request"
+		phasePrepare         = "prepare_bundle_directory"
+		phaseResolved        = "serialize_resolved_round"
+		phaseReport          = "serialize_report"
+		phaseEvidence        = "serialize_round_evidence"
+		phaseObjective       = "serialize_objective_result"
+		phaseDecision        = "serialize_decision"
+		phaseArtifacts       = "serialize_bundle_artifacts"
+		phaseContinuation    = "serialize_continuation"
+		phaseContinuationPKL = "serialize_continuation_pkl"
+		phaseMetadata        = "serialize_metadata"
+		phaseFinalize        = "finalize_bundle"
 	)
 ⋮----
 func (w writer) writeArtifact(dir string, name string, data []byte) error
@@ -7414,10 +7474,6 @@ import (
 "testing"
 ⋮----
 func TestLoadLocalManifest(t *testing.T)
-⋮----
-func TestLoadContinuationManifest(t *testing.T)
-⋮----
-func TestLoadGeneratedContinuationManifest(t *testing.T)
 ⋮----
 func TestLoadOptimizeICManifest(t *testing.T)
 ⋮----
@@ -10479,6 +10535,8 @@ func (r Runner) ExecuteAndScore(
 package round
 ⋮----
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -10489,6 +10547,8 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 ⋮----
+"fmt"
+"os"
 "path/filepath"
 "strings"
 ⋮----
@@ -10506,6 +10566,10 @@ func buildContinuation(
 	objective *score.ObjectiveResult,
 	policyPaths map[domain.Role]string,
 ) *pureround.Continuation
+⋮----
+func buildContinuationPKLInput(plan Plan) (*bundlefs.ContinuationPKLInput, error)
+⋮----
+func resolveGameSchemaPaths(manifestPath string, gameID string) (string, string, error)
 ⋮----
 func continuationSurvivorRole(plan Plan) domain.Role
 </file>
@@ -10966,6 +11030,14 @@ var (
 		parentEvidencePath string
 	)
 ⋮----
+func resolveContinuationBundlePath(manifestPath string, manifestDir string, continues string) (string, error)
+⋮----
+func parentBundlePathFromAmends(manifestPath string) (string, bool, error)
+⋮----
+func pklQuotedPath(value string) (string, bool)
+⋮----
+func bundlefsContinuationPKLFileName() string
+⋮----
 func resolveRoundMatches(
 	ctx context.Context,
 	manifestDir string,
@@ -11158,8 +11230,10 @@ package round
 ⋮----
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -11167,14 +11241,22 @@ import (
 )
 ⋮----
 "context"
+"encoding/json"
 "os"
 "path/filepath"
+"strings"
 "testing"
 "time"
 ⋮----
 bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 ⋮----
 func TestRunFromScratchWritesContinuationBundle(t *testing.T)
+⋮----
+var metadata bundlefs.BundleMetadata
+⋮----
+func mustReadBundleFile(t *testing.T, path string) []byte
+⋮----
+func metadataHasPath(metadata bundlefs.BundleMetadata, want string) bool
 </file>
 
 <file path="internal/app/round/evaluation_types.go">
@@ -11297,6 +11379,40 @@ func mergeEvaluatorAppendix(spec run.Spec, appendix run.EvaluatorRunAppendix) ru
 func filterToolsByAllowSet(ctx context.Context, tools []tool.BaseTool, allow map[string]struct
 ⋮----
 var out []tool.BaseTool
+</file>
+
+<file path="internal/app/round/example_fixtures_test.go">
+package round
+⋮----
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
+
+	"github.com/becker63/searchbench-go/internal/testing/modeltest"
+)
+⋮----
+"context"
+"os"
+"path/filepath"
+"testing"
+"time"
+⋮----
+"github.com/cloudwego/eino/components/model"
+"github.com/cloudwego/eino/schema"
+⋮----
+"github.com/becker63/searchbench-go/internal/testing/modeltest"
+⋮----
+func TestWriteExampleRoundFixtures(t *testing.T)
+⋮----
+func resetExampleBundleDir(t *testing.T, path string)
+⋮----
+func scriptedExampleOptimizerFactory() OptimizerModelFactory
 </file>
 
 <file path="internal/app/round/run_test.go">
@@ -13577,6 +13693,7 @@ type Continuation struct {
 	CandidateInterface  ContinuationInterface             `json:"candidate_interface"`
 	SurvivingCandidate  ContinuationCandidate             `json:"surviving_candidate"`
 	DefaultContinuation ContinuationDefaults              `json:"default_continuation"`
+	Dataset             ContinuationDataset               `json:"dataset,omitempty"`
 	Matches             domain.NonEmpty[domain.MatchSpec] `json:"matches"`
 	Evaluator           ContinuationEvaluator             `json:"evaluator"`
 	Scoring             ContinuationScoring               `json:"scoring"`
@@ -13607,6 +13724,14 @@ type ContinuationDefaults struct {
 	MatchesFrom   string `json:"matches_from"`
 	ObjectiveFrom string `json:"objective_from"`
 	EvaluatorFrom string `json:"evaluator_from"`
+}
+⋮----
+type ContinuationDataset struct {
+	Kind     string `json:"kind,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Config   string `json:"config,omitempty"`
+	Split    string `json:"split,omitempty"`
+	MaxItems *int   `json:"max_items,omitempty"`
 }
 ⋮----
 type ContinuationEvaluator struct {
@@ -15657,18 +15782,9 @@ let
     name = "searchbench-refresh-pkl-example-fixtures";
     text = ''
       root="$(pwd)"
-      local_dir="$root/configs/rounds/local-ic-vs-jcodemunch"
-      optimize_dir="$root/configs/rounds/optimize-ic"
-      mkdir -p "$optimize_dir/policies" "$optimize_dir/scoring" "$optimize_dir/artifacts/games/code-localization/rounds"
-      cp "$local_dir/policies/challenger_policy.py" "$optimize_dir/policies/challenger_policy.py"
-      cp "$local_dir/scoring/localization-objective.pkl" "$optimize_dir/scoring/localization-objective.pkl"
-      rm -rf "$local_dir/artifacts/games/code-localization/rounds/example-round-001"
       mkdir -p "$root/.tmp"
-      GOCACHE="$root/.tmp/go-cache" go run ./cmd/searchbench run \
-        --manifest "$local_dir/round.pkl" \
-        --bundle-root "$local_dir/artifacts/games/code-localization/rounds" \
-        --bundle-id example-round-001
-      touch "$optimize_dir/artifacts/games/code-localization/rounds/.gitkeep"
+      GOCACHE="$root/.tmp/go-cache" SEARCHBENCH_WRITE_EXAMPLE_FIXTURES=1 \
+        go test ./internal/app/round -run TestWriteExampleRoundFixtures -count=1
     '';
     runtimeInputs = [
       pkgs.go
@@ -16610,6 +16726,295 @@ require (
 	golang.org/x/sys v0.34.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+</file>
+
+<file path="prompts.md">
+You are operating as the GitHub coordination/control-plane agent for this repository.
+
+Your job is NOT to implement product code. Your job is to inspect the provided materials, understand the current architecture and issue plan, then create a clean GitHub Issues control plane for the next implementation wave.
+
+You will be given a second prompt/spec after this one. Treat that second prompt as the source of truth for the actual issue set, wave structure, dependencies, and adapter priorities.
+
+Do not begin creating issues until you have read and reconciled:
+
+1. This control-plane prompt.
+2. The second overview/spec prompt.
+3. The current repository state.
+4. Existing open GitHub issues.
+
+## Role
+
+You are the GitHub issue/branch publishing operator.
+
+You may:
+
+- inspect the repo
+- inspect existing issues
+- create missing labels
+- create parent tracking issues
+- create child implementation issues
+- add issue comments
+- create linked branches for parallel-safe issues
+
+You must not:
+
+- implement product code
+- make large source changes
+- modify pure modeling semantics
+- create hidden automation
+- create agent lifecycle/worktree orchestration inside the repo
+- duplicate existing issues
+- create branches for unclear or shared-core tasks unless explicitly safe
+
+## Architecture context
+
+This project has largely completed its pure modeling phase. The next phase is adapter/integration buildout.
+
+Preserve this boundary:
+
+- Pure core/model/scoring code should remain stable.
+- Effectful adapters should be built at the edges.
+- GitHub Issues are the control plane.
+- Branches are implementation lanes.
+- PRs/commits are implementation evidence.
+- The repo itself should not own agent lifecycle, worktree lifecycle, or parallel-agent orchestration.
+- Parallel agents should only be assigned to isolated conflict domains.
+
+The second prompt will describe the actual desired issue set. Use it to decide what to create.
+
+## Initial checks
+
+Use the current checked-out repository.
+
+First run:
+
+```bash
+gh auth status
+gh repo view --json nameWithOwner,defaultBranchRef
+git status --short
+git branch --show-current
+````
+
+If authentication is missing or the repo cannot be identified, stop and report exactly what is missing.
+
+Do not continue if the working tree has uncommitted changes that could be confused with your own work. Report the dirty state and ask the human to resolve it.
+
+## Inspect current repo shape
+
+Before creating issues, inspect the repository enough to avoid hallucinating file paths or package names.
+
+Run commands like:
+
+```bash
+find . -maxdepth 3 -type f | sort | sed 's#^\./##' | head -300
+
+grep -R "type .*Task\|type .*Score\|type .*Report\|package .*model\|package .*scoring\|package .*artifact\|package .*adapter" \
+  -n . --include='*.go' | head -150
+
+go list ./... 2>/dev/null || true
+```
+
+Use actual paths/packages discovered from the repo in issue bodies.
+
+Do not invent package names if the repo does not contain them yet. In that case, phrase paths as proposed locations and make that explicit.
+
+## Inspect existing issues
+
+Before creating anything, inspect open issues:
+
+```bash
+gh issue list --state open --limit 100 --json number,title,labels,url
+```
+
+Also inspect labels:
+
+```bash
+gh label list --limit 200
+```
+
+Avoid duplicates.
+
+If an existing open issue is equivalent to one requested by the second prompt, reuse it. You may comment on it or include it in the parent tracking issue instead of creating a duplicate.
+
+## Label taxonomy
+
+Create missing labels only. Do not duplicate existing labels with slightly different names.
+
+Use the second prompt to refine the label list, but start from this baseline taxonomy:
+
+* `kind/adapter`
+* `kind/integration`
+* `kind/contract`
+* `kind/tooling`
+* `area/dataset`
+* `area/mcp`
+* `area/eino`
+* `area/telemetry`
+* `area/artifacts`
+* `area/cli`
+* `area/github-control-plane`
+* `parallel-safe`
+* `blocked`
+* `risk/shared-core`
+
+Use reasonable colors and descriptions.
+
+Keep the taxonomy small. Do not create labels for every tiny subtopic.
+
+## Parent issue
+
+Create or reuse one parent tracking issue for the next implementation phase.
+
+The exact title and body should be derived from the second prompt, but it should generally communicate:
+
+* the project is moving from pure modeling to adapter/integration buildout
+* GitHub Issues are the control plane
+* parallel agents should be assigned by conflict domain
+* shared-core changes should be serialized
+* adapter work should be isolated and reviewable
+* first real e2e runs are the milestone
+
+The parent issue should include:
+
+* wave plan
+* child issue checklist
+* dependency notes
+* parallelization notes
+* validation expectations
+* explicit non-goals
+
+After child issues are created or identified, update the parent issue body or add a comment with links to the child issues.
+
+## Child issue creation
+
+The second prompt/spec controls the actual issue list.
+
+For each issue requested by the second prompt:
+
+1. Search existing open issues for an equivalent issue.
+2. Reuse equivalent issues instead of duplicating them.
+3. Create missing issues with precise, implementation-ready bodies.
+4. Add appropriate labels.
+5. Include dependency/blocked notes.
+6. Include parallel-safety notes.
+7. Include a suggested branch name.
+8. Include validation commands.
+
+Each child issue must include:
+
+* Goal
+* Background
+* Scope
+* Explicit non-goals
+* Expected files/packages, based on actual repo inspection
+* Acceptance criteria
+* Validation commands
+* Parallelization/conflict-domain notes
+* Suggested branch name
+* Agent instructions
+
+Every child issue must tell the future implementation agent to:
+
+* read the issue with `gh issue view <number>`
+* create/use the suggested branch
+* keep changes small
+* avoid pure-core semantic changes unless the issue explicitly allows them
+* run validation before reporting done
+* commit with a message referencing the issue number
+* report any architectural mismatch instead of papering over it
+
+## Branch creation
+
+Create linked branches only for issues that are clearly parallel-safe.
+
+Prefer:
+
+```bash
+gh issue develop <issue-number> --name <branch-name> --base <default-branch>
+```
+
+Use branch names derived from the issue title and number, for example:
+
+```text
+adapter/lca-dataset-issue-123
+adapter/artifact-bundle-issue-124
+adapter/telemetry-callbacks-issue-125
+adapter/jcodemunch-mcp-issue-126
+adapter/iterative-context-mcp-issue-127
+```
+
+Do not checkout branches unless necessary.
+
+Do not make implementation commits.
+
+If `gh issue develop` fails, fall back to recording the suggested branch name in the issue body or a comment. Do not manually create branches unless you are confident the repo policy allows it.
+
+## Dependency handling
+
+Mark issues as `blocked` when they depend on unresolved adapter contracts or shared integration work.
+
+Do not create linked branches for blocked integration issues unless the second prompt explicitly says they are safe to start.
+
+Parallel-safe adapter issues should have clear conflict domains.
+
+Examples of conflict domains:
+
+* dataset loading / task materialization
+* artifact rendering / bundle writing
+* callback telemetry / token accounting
+* baseline MCP adapter
+* candidate MCP adapter
+* CLI integration
+* provider/model config
+
+## Validation commands
+
+Use validation commands discovered from the repo.
+
+Prefer commands like:
+
+```bash
+nix develop --command go test ./...
+nix flake check
+go test ./...
+golangci-lint run
+```
+
+Only include commands that appear appropriate for the repository. If unsure, include the conservative baseline and note that the agent should adapt based on repo tooling.
+
+## Safety and correctness rules
+
+Do not claim something exists unless you inspected it.
+
+Do not claim an issue, label, or branch was created unless the command succeeded.
+
+Do not silently skip requested issues. If you skip one, explain why.
+
+Do not create duplicate issues.
+
+Do not create broad vague issues like “finish integrations.” Split by adapter boundary and conflict domain.
+
+Do not create issues that require multiple parallel agents to edit the same core files at the same time.
+
+Do not mutate product code.
+
+Do not create a custom agent orchestrator inside the SearchBench-Go repo unless the second prompt explicitly asks for coordination tooling, and even then keep it separate from product runtime code.
+
+## Final report
+
+At the end, report:
+
+* parent issue number and URL
+* child issue numbers and URLs
+* which requested issues were created
+* which requested issues were reused
+* labels created or reused
+* branches created or skipped
+* blocked/dependent issues
+* any commands that failed
+* any assumptions made because repo structure was ambiguous
+
+Do not over-explain. The final report should be operationally useful to the human who will launch Cursor/Codex agents against these issues.
 </file>
 
 <file path="README.md">

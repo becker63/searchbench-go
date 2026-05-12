@@ -51,17 +51,18 @@ func newWriter() writer {
 
 func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (RoundBundleRef, error) {
 	const (
-		phaseValidate     = "validate_bundle_request"
-		phasePrepare      = "prepare_bundle_directory"
-		phaseResolved     = "serialize_resolved_round"
-		phaseReport       = "serialize_report"
-		phaseEvidence     = "serialize_round_evidence"
-		phaseObjective    = "serialize_objective_result"
-		phaseDecision     = "serialize_decision"
-		phaseArtifacts    = "serialize_bundle_artifacts"
-		phaseContinuation = "serialize_continuation"
-		phaseMetadata     = "serialize_metadata"
-		phaseFinalize     = "finalize_bundle"
+		phaseValidate        = "validate_bundle_request"
+		phasePrepare         = "prepare_bundle_directory"
+		phaseResolved        = "serialize_resolved_round"
+		phaseReport          = "serialize_report"
+		phaseEvidence        = "serialize_round_evidence"
+		phaseObjective       = "serialize_objective_result"
+		phaseDecision        = "serialize_decision"
+		phaseArtifacts       = "serialize_bundle_artifacts"
+		phaseContinuation    = "serialize_continuation"
+		phaseContinuationPKL = "serialize_continuation_pkl"
+		phaseMetadata        = "serialize_metadata"
+		phaseFinalize        = "finalize_bundle"
 	)
 
 	if err := ctx.Err(); err != nil {
@@ -183,6 +184,16 @@ func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (Roun
 		}
 		files = append(files, fileRecord("continuation", "continuation.json", "application/json", sha256Bytes(continuationBytes)))
 	}
+	if request.ContinuationPKL != nil {
+		continuationPKLBytes, err := renderContinuationPKL(finalDir, *request.Continuation, *request.ContinuationPKL)
+		if err != nil {
+			return RoundBundleRef{}, &Error{Phase: phaseContinuationPKL, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
+		}
+		if err := w.writeArtifact(stageDir, continuationPKLFileName, continuationPKLBytes); err != nil {
+			return RoundBundleRef{}, &Error{Phase: phaseContinuationPKL, Kind: FailureKindFilesystemFailed, Path: stageDir, Err: err}
+		}
+		files = append(files, fileRecord("continuation_pkl", continuationPKLFileName, "text/plain", sha256Bytes(continuationPKLBytes)))
+	}
 
 	completeBytes := []byte(completeMarkerContent)
 	metadataFiles := append([]BundleFile(nil), files...)
@@ -303,6 +314,17 @@ func validateRequest(request RoundBundleInput) error {
 	if request.Continuation != nil {
 		if err := request.Continuation.Validate(); err != nil {
 			return fmt.Errorf("continuation: %w", err)
+		}
+	}
+	if request.ContinuationPKL != nil {
+		if request.Continuation == nil {
+			return errors.New("continuation.pkl requires continuation.json")
+		}
+		if strings.TrimSpace(request.ContinuationPKL.SchemaPath) == "" {
+			return errors.New("continuation.pkl schema path is required")
+		}
+		if strings.TrimSpace(request.ContinuationPKL.HelpersPath) == "" {
+			return errors.New("continuation.pkl helpers path is required")
 		}
 	}
 	for _, artifact := range request.AdditionalFiles {

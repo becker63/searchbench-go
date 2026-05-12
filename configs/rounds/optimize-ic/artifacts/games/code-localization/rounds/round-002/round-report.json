@@ -1,28 +1,9 @@
 {
-  "id": "report-round-001",
-  "created_at": "2026-05-12T13:00:00Z",
+  "id": "report-round-002",
+  "created_at": "2026-05-12T14:00:00Z",
   "spec": {
     "policies": {
       "incumbent": {
-        "id": "jcodemunch",
-        "name": "jCodeMunch",
-        "backend": "jcodemunch",
-        "model": {
-          "provider": "fake",
-          "name": "fake-evaluator"
-        },
-        "prompt_bundle": {
-          "name": "default",
-          "version": "dev"
-        },
-        "runtime": {
-          "max_steps": 8,
-          "max_tool_calls": 24,
-          "max_output_tokens": 2000
-        },
-        "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
-      },
-      "challenger": {
         "id": "iterative-context",
         "name": "Iterative Context",
         "backend": "iterative-context",
@@ -46,6 +27,31 @@
           "max_output_tokens": 2000
         },
         "fingerprint": "4ea7846a1cc6a42d7582a1d3600a8825b02f0732d04f03e35daf004f7fd3bed6"
+      },
+      "challenger": {
+        "id": "iterative-context",
+        "name": "Iterative Context",
+        "backend": "iterative-context",
+        "model": {
+          "provider": "fake",
+          "name": "fake-evaluator"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "policy": {
+          "id": "next-challenger-round-002",
+          "language": "python",
+          "sha256": "2efb9f6d3b22aec2fcceaac3a63e7a0817dbd74a62f7668b0c41335375ad0d72",
+          "entrypoint": "score"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "62950679ec126add2e522f5aead71052d6a4f28d1fcd392ba7718194450f5ce6"
       }
     },
     "matches": [
@@ -55,7 +61,7 @@
         "repo": {
           "name": "searchbench/local-fake",
           "sha": "0000000",
-          "path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/fake-repo"
+          "path": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/fake-repo"
         },
         "input": {
           "title": "Fake py/dev match",
@@ -76,38 +82,38 @@
           "session_id": "eino-local",
           "prediction": {
             "files": [
-              "src/incumbent_guess.go"
+              "src/search_target.go"
             ],
-            "reasoning": "incumbent stayed conservative after the fake structural lookup"
+            "reasoning": "challenger used the fake structural lookup to narrow onto the search target"
           },
           "usage": {
             "input_tokens": 213,
-            "output_tokens": 12,
-            "total_tokens": 225
+            "output_tokens": 16,
+            "total_tokens": 229
           },
-          "started_at": "2026-05-12T17:38:51.667606253Z",
-          "finished_at": "2026-05-12T17:38:51.668300002Z"
+          "started_at": "2026-05-12T17:38:52.796364953Z",
+          "finished_at": "2026-05-12T17:38:52.796722661Z"
         },
         "scores": {
           "gold_hop": {
             "name": "gold_hop",
-            "value": 6
+            "value": 2
           },
           "issue_hop": {
             "name": "issue_hop",
-            "value": 7
+            "value": 3
           },
           "token_efficiency": {
             "name": "token_efficiency",
-            "value": 0.35
+            "value": 0.85
           },
           "cost": {
             "name": "cost",
-            "value": 0.6
+            "value": 0.15
           },
           "composite": {
             "name": "composite",
-            "value": 0.3
+            "value": 0.9
           }
         }
       }
@@ -127,8 +133,8 @@
             "output_tokens": 16,
             "total_tokens": 229
           },
-          "started_at": "2026-05-12T17:38:51.668372043Z",
-          "finished_at": "2026-05-12T17:38:51.668660126Z"
+          "started_at": "2026-05-12T17:38:52.796763452Z",
+          "finished_at": "2026-05-12T17:38:52.796971327Z"
         },
         "scores": {
           "gold_hop": {
@@ -162,38 +168,38 @@
   "comparisons": [
     {
       "metric": "gold_hop",
-      "incumbent": 6,
+      "incumbent": 2,
       "challenger": 2,
-      "delta": -4
+      "delta": 0
     },
     {
       "metric": "issue_hop",
-      "incumbent": 7,
+      "incumbent": 3,
       "challenger": 3,
-      "delta": -4
+      "delta": 0
     },
     {
       "metric": "token_efficiency",
-      "incumbent": 0.35,
+      "incumbent": 0.85,
       "challenger": 0.85,
-      "delta": 0.5
+      "delta": 0
     },
     {
       "metric": "cost",
-      "incumbent": 0.6,
+      "incumbent": 0.15,
       "challenger": 0.15,
-      "delta": -0.44999999999999996
+      "delta": 0
     },
     {
       "metric": "composite",
-      "incumbent": 0.3,
+      "incumbent": 0.9,
       "challenger": 0.9,
-      "delta": 0.6000000000000001
+      "delta": 0
     }
   ],
   "regressions": null,
   "decision": {
-    "decision": "PROMOTE_CHALLENGER",
-    "reason": "challenger improves the composite score in local fake comparison"
+    "decision": "REVIEW",
+    "reason": "challenger did not improve the composite score in local fake comparison"
   }
 }

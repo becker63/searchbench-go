@@ -1,47 +1,53 @@
 {
   "schema_version": "searchbench.bundle.v1",
-  "bundle_id": "round-001",
-  "created_at": "2026-05-12T13:00:00Z",
+  "bundle_id": "round-002",
+  "created_at": "2026-05-12T14:00:00Z",
   "files": [
     {
       "kind": "resolved_round",
       "path": "resolved-round.json",
       "media_type": "application/json",
-      "sha256": "79cf6a2310501155305eca228f070d2fd61a17afaa9ffba203d0a3cb44f35f1b"
+      "sha256": "be72cbc463fae6c558c61e4a357c12894cdc48b8cb892cb294ed8a452d0b4cb7"
     },
     {
       "kind": "round_report",
       "path": "round-report.json",
       "media_type": "application/json",
-      "sha256": "e6ec17cde1d68a8b0d2591a63e97e944697539e48df0ec4bc1620ba4951600ad"
+      "sha256": "ecd5180e0a3abc47d4f9d8ecc139787c44b1da500b814ec8a0186a7a213bf1a0"
     },
     {
       "kind": "rendered_report",
       "path": "round-report.txt",
       "media_type": "text/plain",
-      "sha256": "bb56ee234e95e6f8942cc786d3d9b4c215281fed00a1cea719847169e1e54ae0"
+      "sha256": "e083998eff8cd42c7bf6032abcb83328eed538514090a7429fc566774f1e1525"
     },
     {
       "kind": "round_evidence",
       "path": "evidence.pkl",
       "media_type": "text/plain",
-      "sha256": "a7856df31772d8c1f51fc26ed804e36bf0fd82685bdc6a0e5372c68bdd96e856"
+      "sha256": "43651c6d12d594fcffec8db4fa8f98e70560de854e57cdcdfb93f0928facdff1"
     },
     {
       "kind": "decision",
       "path": "decision.json",
       "media_type": "application/json",
-      "sha256": "14446b3dce9ec0b30e48596fc332f00bd3a87d9c2519963489ee824816510f72"
+      "sha256": "69bbf179f75f1d7e52f89bc6d98db89d4e1be3ad39c1ca339157e0d24d6742ad"
     },
     {
       "kind": "objective",
       "path": "objective.json",
       "media_type": "application/json",
-      "sha256": "58580ccf967fe98140a7b7802fbb027b8d268c79e6cfcf4a28f4bf43157a2593"
+      "sha256": "395cf371c10d809d96801e34a19e54351c9958fe7d46058d03586307115dea40"
     },
     {
       "kind": "policy",
-      "path": "policies/challenger_policy.py",
+      "path": "policies/incumbent_policy.py",
+      "media_type": "text/x-python",
+      "sha256": "2efb9f6d3b22aec2fcceaac3a63e7a0817dbd74a62f7668b0c41335375ad0d72"
+    },
+    {
+      "kind": "policy",
+      "path": "policies/next_challenger_policy.round-002.py",
       "media_type": "text/x-python",
       "sha256": "2efb9f6d3b22aec2fcceaac3a63e7a0817dbd74a62f7668b0c41335375ad0d72"
     },
@@ -49,13 +55,13 @@
       "kind": "continuation",
       "path": "continuation.json",
       "media_type": "application/json",
-      "sha256": "86d5329d87e1fc2af79a8574de081e1679b474ca21c2dfd02069bc813f9f487b"
+      "sha256": "6f35f6450b09ad9f867d3e4f5a2f6a0b4e30fa8722b15f00db588d87785627a9"
     },
     {
       "kind": "continuation_pkl",
       "path": "continuation.pkl",
       "media_type": "text/plain",
-      "sha256": "d819a672466ce9f1772ef57aaf84b369943c788211481fd717b5c977e8cd8f43"
+      "sha256": "f0899257ea2deafaac61ae941e80d40061423b8282d368a539e3025d38abc36e"
     },
     {
       "kind": "metadata",

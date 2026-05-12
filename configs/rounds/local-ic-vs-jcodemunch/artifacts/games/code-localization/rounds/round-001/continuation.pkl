@@ -1,0 +1,23 @@
+amends "../../../../../../../schema/games/code-localization.pkl"
+import "../../../../../../../schema/games/code-localization-helpers.pkl" as game
+
+name = "round-001-continuation"
+
+round = (game.continueFrom(".")) {
+  id = "round-001"
+  incumbent = (game.iterativeContextPolicy("/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-001"
+    }
+  }
+  challenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+  }
+  matches = game.lca("py", "dev", 5)
+  scoring = game.objective("/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl")
+  evaluator = game.fakeEvaluator()
+}

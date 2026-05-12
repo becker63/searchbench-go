@@ -57,7 +57,7 @@ func resolveRoundManifest(ctx context.Context, cfg config.RoundSpec, manifestPat
 		parentEvidencePath string
 	)
 	if round.Continues != nil && strings.TrimSpace(*round.Continues) != "" {
-		parentBundlePath, err = resolveExistingManifestPath(manifestDir, *round.Continues)
+		parentBundlePath, err = resolveContinuationBundlePath(manifestPath, manifestDir, *round.Continues)
 		if err != nil {
 			return Plan{}, fmt.Errorf("resolve continuation bundle path: %w", err)
 		}
@@ -172,6 +172,61 @@ func resolveRoundManifest(ctx context.Context, cfg config.RoundSpec, manifestPat
 	return plan, nil
 }
 
+func resolveContinuationBundlePath(manifestPath string, manifestDir string, continues string) (string, error) {
+	if strings.TrimSpace(continues) == "." {
+		if parentBundlePath, ok, err := parentBundlePathFromAmends(manifestPath); err != nil {
+			return "", err
+		} else if ok {
+			return parentBundlePath, nil
+		}
+	}
+	return resolveExistingManifestPath(manifestDir, continues)
+}
+
+func parentBundlePathFromAmends(manifestPath string) (string, bool, error) {
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return "", false, err
+	}
+	for _, rawLine := range strings.Split(string(data), "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if !strings.HasPrefix(line, "amends ") {
+			return "", false, nil
+		}
+		target, ok := pklQuotedPath(line[len("amends "):])
+		if !ok {
+			return "", false, nil
+		}
+		resolved, err := resolveExistingManifestPath(filepath.Dir(manifestPath), target)
+		if err != nil {
+			return "", false, err
+		}
+		if filepath.Base(resolved) != bundlefsContinuationPKLFileName() {
+			return "", false, nil
+		}
+		return filepath.Dir(resolved), true, nil
+	}
+	return "", false, nil
+}
+
+func pklQuotedPath(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if len(value) < 2 || value[0] != '"' || value[len(value)-1] != '"' {
+		return "", false
+	}
+	inner := value[1 : len(value)-1]
+	inner = strings.ReplaceAll(inner, `\"`, `"`)
+	inner = strings.ReplaceAll(inner, `\\`, `\`)
+	return inner, true
+}
+
+func bundlefsContinuationPKLFileName() string {
+	return "continuation.pkl"
+}
+
 func resolveRoundMatches(
 	ctx context.Context,
 	manifestDir string,
@@ -200,7 +255,13 @@ func resolveRoundMatches(
 		}, nil
 	}
 	if parent != nil {
-		return parent.Matches, DatasetConfig{}, nil
+		return parent.Matches, DatasetConfig{
+			Kind:     parent.Dataset.Kind,
+			Name:     parent.Dataset.Name,
+			Config:   parent.Dataset.Config,
+			Split:    parent.Dataset.Split,
+			MaxItems: parent.Dataset.MaxItems,
+		}, nil
 	}
 	return domain.NonEmpty[domain.MatchSpec]{}, DatasetConfig{}, fmt.Errorf("resolve matches: missing from-scratch match selection")
 }

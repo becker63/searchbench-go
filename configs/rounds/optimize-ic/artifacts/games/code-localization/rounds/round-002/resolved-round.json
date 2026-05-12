@@ -1,13 +1,13 @@
 {
-  "manifest_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/round.pkl",
-  "round_name": "example-local-ic-vs-jcodemunch-round-001",
+  "manifest_path": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/round.pkl",
+  "round_name": "example-optimize-ic-round-002",
   "mode": "round",
   "game": {
     "id": "code-localization",
     "kind": "code_localization"
   },
   "round": {
-    "id": "round-001"
+    "id": "round-002"
   },
   "dataset": {
     "kind": "lca",
@@ -18,25 +18,6 @@
   },
   "policies": {
     "incumbent": {
-      "id": "jcodemunch",
-      "name": "jCodeMunch",
-      "backend": "jcodemunch",
-      "model": {
-        "provider": "fake",
-        "name": "fake-evaluator"
-      },
-      "prompt_bundle": {
-        "name": "default",
-        "version": "dev"
-      },
-      "runtime": {
-        "max_steps": 8,
-        "max_tool_calls": 24,
-        "max_output_tokens": 2000
-      },
-      "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
-    },
-    "challenger": {
       "id": "iterative-context",
       "name": "Iterative Context",
       "backend": "iterative-context",
@@ -60,6 +41,31 @@
         "max_output_tokens": 2000
       },
       "fingerprint": "4ea7846a1cc6a42d7582a1d3600a8825b02f0732d04f03e35daf004f7fd3bed6"
+    },
+    "challenger": {
+      "id": "iterative-context",
+      "name": "Iterative Context",
+      "backend": "iterative-context",
+      "model": {
+        "provider": "fake",
+        "name": "fake-evaluator"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "policy": {
+        "id": "next-challenger-round-002",
+        "language": "python",
+        "sha256": "2efb9f6d3b22aec2fcceaac3a63e7a0817dbd74a62f7668b0c41335375ad0d72",
+        "entrypoint": "score"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      },
+      "fingerprint": "62950679ec126add2e522f5aead71052d6a4f28d1fcd392ba7718194450f5ce6"
     }
   },
   "matches": [
@@ -69,7 +75,7 @@
       "repo": {
         "name": "searchbench/local-fake",
         "sha": "0000000",
-        "path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/fake-repo"
+        "path": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/fake-repo"
       },
       "input": {
         "title": "Fake py/dev match",
@@ -121,25 +127,64 @@
       "policy_sha256": "e5e49e7158ee499ed19d75239557e52ff6f40dc1216aa688c7da9ac20453de7e"
     }
   },
+  "optimizer": {
+    "agent": {
+      "model": {
+        "provider": "fake",
+        "name": "fake-optimizer",
+        "max_output_tokens": 4000
+      },
+      "bounds": {
+        "max_model_turns": 8,
+        "max_tool_calls": 16,
+        "timeout_seconds": 300
+      },
+      "tools": {
+        "allow": [
+          "read_parent_bundle",
+          "read_score_evidence",
+          "read_objective_result",
+          "read_report_summary",
+          "read_artifact",
+          "write_artifact_proposal"
+        ],
+        "deny": [
+          "run_evaluator",
+          "shell",
+          "go_test",
+          "write_manifest",
+          "network"
+        ]
+      },
+      "system_prompt": "Improve the Iterative Context selection policy using only the provided parent-run evidence.\n\nPrefer small, inspectable changes.\nPreserve the declared policy interface.\nDo not overfit to hidden labels or oracle files.\nEmit exactly one replacement policy proposal."
+    }
+  },
   "scoring": {
     "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",
     "current_evidence": {
       "name": "current",
+      "bundle_path": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/artifacts/games/code-localization/rounds/round-002",
+      "evidence_path": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/artifacts/games/code-localization/rounds/round-002/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/artifacts/games/code-localization/rounds/round-002/round-report.json"
+    },
+    "parent_evidence": {
+      "name": "parent",
       "bundle_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001",
       "evidence_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/evidence.pkl",
       "report_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/round-report.json"
     }
   },
   "output": {
-    "bundle_root": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds",
-    "bundle_writer_root": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts",
+    "bundle_root": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/artifacts/games/code-localization/rounds",
+    "bundle_writer_root": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/artifacts",
     "report_formats": [
       "json",
       "text"
     ],
     "render_human_report": true,
     "resolved_policy_path": {
-      "challenger": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py"
+      "incumbent": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/policies/challenger_policy.py",
+      "challenger": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/artifacts/games/code-localization/rounds/round-002/policies/next_challenger_policy.round-002.py"
     }
   },
   "report_options": {
@@ -149,12 +194,26 @@
     ]
   },
   "bundle": {
-    "id": "round-001"
+    "id": "round-002"
   },
-  "lineage": {},
+  "lineage": {
+    "continues": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001"
+  },
   "challenger_materialization": {
-    "mode": "checked_in"
+    "mode": "generated",
+    "artifact_name": "next_challenger_policy.round-002.py",
+    "included_evidence": [
+      "report_summary",
+      "round_evidence",
+      "objective_result",
+      "challenger_policy"
+    ],
+    "denied_evidence": [
+      "gold_labels",
+      "oracle_files",
+      "raw_dataset_answers"
+    ]
   },
-  "report_id": "report-round-001",
-  "created_at": "2026-05-12T13:00:00Z"
+  "report_id": "report-round-002",
+  "created_at": "2026-05-12T14:00:00Z"
 }

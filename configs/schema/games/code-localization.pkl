@@ -118,5 +118,21 @@ local function iterativeContext(policyPath: String): RoundChallenger =
     }
   }
 
+local function iterativeContextPolicy(policyPath: String): RoundPolicy =
+  new RoundPolicy {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy"
+      kind = "policy"
+      path = policyPath
+      implements = interfaces.iterativeContextSelectionPolicyV1
+    }
+  }
+
 local function generate(): GeneratedChallenger =
   new GeneratedChallenger {}

@@ -161,18 +161,9 @@ let
     name = "searchbench-refresh-pkl-example-fixtures";
     text = ''
       root="$(pwd)"
-      local_dir="$root/configs/rounds/local-ic-vs-jcodemunch"
-      optimize_dir="$root/configs/rounds/optimize-ic"
-      mkdir -p "$optimize_dir/policies" "$optimize_dir/scoring" "$optimize_dir/artifacts/games/code-localization/rounds"
-      cp "$local_dir/policies/challenger_policy.py" "$optimize_dir/policies/challenger_policy.py"
-      cp "$local_dir/scoring/localization-objective.pkl" "$optimize_dir/scoring/localization-objective.pkl"
-      rm -rf "$local_dir/artifacts/games/code-localization/rounds/example-round-001"
       mkdir -p "$root/.tmp"
-      GOCACHE="$root/.tmp/go-cache" go run ./cmd/searchbench run \
-        --manifest "$local_dir/round.pkl" \
-        --bundle-root "$local_dir/artifacts/games/code-localization/rounds" \
-        --bundle-id example-round-001
-      touch "$optimize_dir/artifacts/games/code-localization/rounds/.gitkeep"
+      GOCACHE="$root/.tmp/go-cache" SEARCHBENCH_WRITE_EXAMPLE_FIXTURES=1 \
+        go test ./internal/app/round -run TestWriteExampleRoundFixtures -count=1
     '';
     runtimeInputs = [
       pkgs.go

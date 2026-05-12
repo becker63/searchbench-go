@@ -1,0 +1,30 @@
+SearchBench Round Report  report-round-002
+
+Decision                                                                   
+╭─────────────────────────────────────────────────────────────────────────╮
+│ REVIEW                                                                  │
+│ challenger did not improve the composite score in local fake comparison │
+╰─────────────────────────────────────────────────────────────────────────╯
+
+Systems                                                                                        
+Incumbent  iterative-context  fake/fake-evaluator  iterative-context  4ea7846a1cc6  default:dev
+Challenger iterative-context  fake/fake-evaluator  iterative-context  62950679ec12  default:dev
+Policy      python:score  2efb9f6d3b22                                                         
+
+Execution Summary                 
+Incumbent   1 succeeded   0 failed
+Challenger  1 succeeded   0 failed
+
+Metrics                                                           
+Metric              Incumbent   Challenger  Delta       Result    
+gold_hop            2.00        2.00        +0.00       same      
+issue_hop           3.00        3.00        +0.00       same      
+token_efficiency    0.85        0.85        +0.00       same      
+cost                0.15        0.15        +0.00       same      
+composite           0.90        0.90        +0.00       same      
+
+Regressions
+none       
+
+Failures
+none    

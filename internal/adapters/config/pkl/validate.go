@@ -40,7 +40,6 @@ var (
 	ErrChallengerSelectionPolicyArtifactMismatch  = errors.New("config: evaluation.challenger.uses.selectionPolicy must reference artifacts.challengerPolicy")
 	ErrChallengerSelectionPolicyInterfaceMismatch = errors.New("config: challenger selection policy must implement interfaces.iterativeContextSelectionPolicyV1")
 	ErrPolicyArtifactPathRequired                 = errors.New("config: policy artifact path is required")
-	ErrPolicyArtifactPathMustBeRelative           = errors.New("config: policy artifact path must be relative")
 	ErrNextChallengerArtifactNameRequired         = errors.New("config: next challenger artifact name is required")
 	ErrNextChallengerArtifactNameInvalid          = errors.New("config: next challenger artifact name must be relative and must not contain '..'")
 	ErrCompletedBundleArtifactPathRequired        = errors.New("config: completed round bundle path is required")
@@ -190,9 +189,6 @@ func validatePolicyArtifact(artifact PolicyArtifact) error {
 	path := strings.TrimSpace(artifact.Path)
 	if path == "" {
 		return ErrPolicyArtifactPathRequired
-	}
-	if filepath.IsAbs(path) {
-		return ErrPolicyArtifactPathMustBeRelative
 	}
 	return nil
 }

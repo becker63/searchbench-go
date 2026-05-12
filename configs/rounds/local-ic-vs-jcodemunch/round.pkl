@@ -1,7 +1,7 @@
 amends "../../schema/games/code-localization.pkl"
 import "../../schema/games/code-localization-helpers.pkl" as game
 
-name = "local-ic-vs-jcodemunch-round-001"
+name = "example-local-ic-vs-jcodemunch-round-001"
 
 round = (game.defineFromScratch("round-001")) {
   incumbent = game.jcodemunch()

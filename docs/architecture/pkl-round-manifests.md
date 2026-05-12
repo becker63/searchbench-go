@@ -55,47 +55,85 @@ bundle, not by rewriting the previous manifest in place.
 
 ## Manifest Shape
 
-The first manifest shape is intentionally small:
+The current round manifest surface is continuation-backed:
 
 - `name`
-- `mode`
-- `dataset`
-- `policies`
-- `evaluator`
-- `scoring`
+- `round.id`
+- `round.incumbent`, when defining a round from scratch
+- `round.challenger`
+- `round.matches`, when defining a round from scratch
+- `round.evaluator`, when defining a round from scratch
+- `round.scoring`, when defining a round from scratch
 
-`outputConfig` is spelled that way because `pkl-go` code generation cannot use a top-level module property literally named `output` without colliding with Pkl's built-in module `output` property.
+From-scratch rounds usually amend a game schema module and use helper
+constructors:
 
-The manifest answers:
+```pkl
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
 
-- what round is this
-- what dataset and split are used
-- what policies are being compared
-- what evaluator model and bounds apply
-- which scoring objective file is referenced
-- what output and tracing preferences are requested
+name = "example-local-ic-vs-jcodemunch-round-001"
 
-The local example is intentionally self-contained under one round folder:
+round = (game.defineFromScratch("round-001")) {
+  incumbent = game.jcodemunch()
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-001"
+    }
+  }
+  matches = game.lca("py", "dev", 5)
+  scoring = game.objective("scoring/localization-objective.pkl")
+  evaluator = game.fakeEvaluator()
+}
+```
+
+Continued rounds usually amend the previous bundle's `continuation.pkl` and
+only patch the new round id plus the next challenger:
+
+```pkl
+amends "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/continuation.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "example-optimize-ic-round-002"
+
+round {
+  id = "round-002"
+
+  challenger {
+    generate {
+      optimizer = game.fakeOptimizer()
+      artifactName = "next_challenger_policy.round-002.py"
+    }
+  }
+}
+```
+
+The checked-in examples are:
 
 - `configs/rounds/local-ic-vs-jcodemunch/round.pkl`
 - `configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl`
 - `configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py`
 - `configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/`
+- `configs/rounds/optimize-ic/round.pkl`
+- `configs/rounds/optimize-ic/artifacts/games/code-localization/rounds/`
 
-That keeps the manifest, local scoring file, local policy artifact, and local bundle root together instead of spreading them across the repo with `../` path traversal.
+That keeps the from-scratch example, the continued generated-challenger example,
+and their bundle roots in obvious places instead of spreading them across the
+repo with extra example directories.
 
 ## Evaluator And Next-Challenger Separation
 
 The evaluator owns bounded model/tool execution only.
 
-The optimizer owns next-challenger proposal behavior.
+The optimizer owns next-challenger proposal behavior inside a normal round.
 
-That separation is explicit in the manifest shape:
+That separation is explicit in the round surface:
 
-- `evaluator` has model, bounds, and retry settings
-- `optimizer` has model, bounds, and tool policy
+- `round.evaluator` owns evaluation behavior
+- `round.challenger.generate.optimizer` owns challenger materialization
 
-There is deliberately no `pipeline` block under `evaluator`.
+There is deliberately no return to `mode = "optimization"` or a separate
+top-level optimization manifest shape.
 
 ## Scoring Boundary
 
@@ -132,40 +170,52 @@ That command currently uses the safe local/fake comparison seam in
 canonical round semantics now live in `internal/app/evaluation`. It does
 not call real IC MCP, jCodeMunch MCP, or provider APIs in tests.
 
-## Lineage Direction
+## Continuation Artifacts
 
-The current direction for optimization lineage is:
+Every completed round bundle writes both:
 
-- optimization history should be artifact history
-- previous evidence should be explicit in the manifest/scoring seam
-- previous evidence should become part of the Pkl value graph
-- Pkl `amends` plus direct artifact/module references is the preferred first
-  mechanism for round-to-round lineage
+- `continuation.json`
+- `continuation.pkl`
 
-This means a future optimizer round should more naturally look like:
+The split is intentional:
 
-- a new Pkl module
-- optionally `amends` a shared schema or prior-round shape
-- explicitly references prior `evidence.pkl` or related artifacts
-- produces a new immutable bundle
+- `continuation.json` is machine authority
+- `continuation.pkl` is amendable human lineage
 
-It should not rely on hidden Go optimizer state to thread previous score
-evidence, and it should not start with a bespoke content-addressed lookup
-system.
+Go still validates continuation by requiring an explicit completed bundle with:
+
+- `COMPLETE`
+- `continuation.json`
+
+`continuation.pkl` exists so the next human-authored round can preserve Pkl
+`amends` semantics without turning Pkl into the execution engine.
+
+The preferred authoring direction is:
+
+- write a completed round bundle
+- amend that bundle's `continuation.pkl`
+- let Go resolve and validate the parent bundle through `continuation.json`
+
+This keeps lineage explicit and bundle-scoped. It does not rely on hidden
+"latest round" discovery or a separate optimizer workflow graph.
 
 ## Manifest-Relative Paths
 
 These manifest fields resolve relative to the directory containing
 `round.pkl` unless they are already absolute:
 
-- `scoring.objective`
-- `policies.incumbent.policy.path`, when present later
-- `policies.challenger.policy.path`
-- `outputConfig.bundleRoot`
+- `round.scoring.objective`
+- `round.incumbent.selectionPolicy.path`
+- `round.challenger.selectionPolicy.path`
 
 CLI-only overrides are separate from manifest-relative resolution. For example,
 `searchbench round run --bundle-root ...` resolves from the caller environment rather
 than from the manifest directory.
+
+When a continued manifest amends a parent bundle's `continuation.pkl`, inherited
+defaults may contain absolute file paths. That is expected: the bundle-local
+continuation surface is readable lineage, while Go still verifies the explicit
+bundle continuation via `continuation.json`.
 
 ## Produced Artifacts
 
@@ -180,6 +230,10 @@ bundle root:
   - Pkl-readable round evidence projected from `round-report.json`
 - `objective.json`
   - validated result of evaluating the configured objective against `evidence.pkl`
+- `continuation.json`
+  - machine-stable continuation record validated by Go
+- `continuation.pkl`
+  - amendable continuation surface for the next human-authored round
 - `metadata.json`
   - deterministic artifact inventory
 - `round-report.txt`

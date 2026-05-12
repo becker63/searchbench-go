@@ -156,7 +156,7 @@ func TestPurePackagesDoNotImportPkl(t *testing.T) {
 func sampleFromScratchRound() RoundSpec {
 	prompt := "Use structural code evidence before guessing."
 	spec := RoundSpec{
-		Name: "local-ic-vs-jcodemunch-round-001",
+		Name: "example-local-ic-vs-jcodemunch-round-001",
 		Interfaces: Interfaces{
 			IterativeContextSelectionPolicyV1: Interface{Id: "iterative_context.selection_policy.v1"},
 		},
@@ -224,7 +224,7 @@ func sampleFromScratchRound() RoundSpec {
 
 func sampleContinuationRound() RoundSpec {
 	spec := sampleFromScratchRound()
-	spec.Name = "continue-ic-from-local-round-002"
+	spec.Name = "example-continue-ic-from-local-round-002"
 	spec.Round = &RoundManifest{
 		Id:        "round-002",
 		Continues: stringPtr("../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001"),
@@ -244,7 +244,7 @@ func sampleContinuationRound() RoundSpec {
 
 func sampleGeneratedContinuationRound() RoundSpec {
 	spec := sampleContinuationRound()
-	spec.Name = "generate-ic-from-local-round-002"
+	spec.Name = "example-generate-ic-from-local-round-002"
 	spec.Round.Challenger.SelectionPolicy = nil
 	spec.Round.Challenger.Generate = &GeneratedChallenger{
 		Optimizer: sampleOptimizer(),

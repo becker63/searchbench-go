@@ -32,6 +32,7 @@ type RoundBundleInput struct {
 	ObjectiveResult *score.ObjectiveResult
 	RenderedReport  *RenderedReport
 	Continuation    *pureround.Continuation
+	ContinuationPKL *ContinuationPKLInput
 	AdditionalFiles []BundleArtifact
 	CreatedAt       time.Time
 }
@@ -69,6 +70,14 @@ type BundleArtifact struct {
 	Path      string
 	MediaType string
 	Content   []byte
+}
+
+// ContinuationPKLInput describes the adapter-level inputs required to render
+// an amendable continuation.pkl beside continuation.json.
+type ContinuationPKLInput struct {
+	Name        string
+	SchemaPath  string
+	HelpersPath string
 }
 
 // BundleMetadata is the deterministic inventory written into metadata.json.

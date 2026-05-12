@@ -31,6 +31,7 @@ type Continuation struct {
 	CandidateInterface  ContinuationInterface             `json:"candidate_interface"`
 	SurvivingCandidate  ContinuationCandidate             `json:"surviving_candidate"`
 	DefaultContinuation ContinuationDefaults              `json:"default_continuation"`
+	Dataset             ContinuationDataset               `json:"dataset,omitempty"`
 	Matches             domain.NonEmpty[domain.MatchSpec] `json:"matches"`
 	Evaluator           ContinuationEvaluator             `json:"evaluator"`
 	Scoring             ContinuationScoring               `json:"scoring"`
@@ -61,6 +62,14 @@ type ContinuationDefaults struct {
 	MatchesFrom   string `json:"matches_from"`
 	ObjectiveFrom string `json:"objective_from"`
 	EvaluatorFrom string `json:"evaluator_from"`
+}
+
+type ContinuationDataset struct {
+	Kind     string `json:"kind,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Config   string `json:"config,omitempty"`
+	Split    string `json:"split,omitempty"`
+	MaxItems *int   `json:"max_items,omitempty"`
 }
 
 type ContinuationEvaluator struct {

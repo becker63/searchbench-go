@@ -1,12 +1,12 @@
 {
   "schema_version": "searchbench.continuation.v1",
-  "bundle_id": "round-001",
+  "bundle_id": "round-002",
   "game": {
     "id": "code-localization",
     "kind": "code_localization"
   },
   "round": {
-    "id": "round-001"
+    "id": "round-002"
   },
   "candidate_interface": {
     "id": "iterative_context.selection_policy.v1"
@@ -26,7 +26,7 @@
         "version": "dev"
       },
       "policy": {
-        "id": "challenger-policy-round-001",
+        "id": "next-challenger-round-002",
         "language": "python",
         "sha256": "2efb9f6d3b22aec2fcceaac3a63e7a0817dbd74a62f7668b0c41335375ad0d72",
         "entrypoint": "score",
@@ -38,7 +38,7 @@
         "max_output_tokens": 2000
       }
     },
-    "artifact_path": "policies/challenger_policy.py"
+    "artifact_path": "policies/next_challenger_policy.round-002.py"
   },
   "default_continuation": {
     "incumbent_from": "surviving_candidate",
@@ -60,7 +60,7 @@
       "repo": {
         "name": "searchbench/local-fake",
         "sha": "0000000",
-        "path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/fake-repo"
+        "path": "/home/becker/projects/searchbench-go/configs/rounds/optimize-ic/fake-repo"
       },
       "input": {
         "title": "Fake py/dev match",
