@@ -14,5 +14,6 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [Replit](guides/replit.md) | Quick environment and tech stack orientation |
 | [Roadmap](roadmap/todo.md) | High-level implementation pressure |
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
+| [Issue wave publisher](engineering/issue-wave-manifest.md) | `gh`-backed JSON manifest for batch issue creation (dev tooling) |
 
 Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.

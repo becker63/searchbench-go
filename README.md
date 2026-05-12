@@ -43,6 +43,7 @@ nix develop -c searchbench-golangci
 nix flake check
 nix run .#e2e             # root package integration tests
 nix run .#update-repomix  # refresh committed repomix-output.xml
+nix run .#publish-issue-wave -- --dry-run tooling/issue-wave.example.json  # GitHub issue wave (no writes)
 ```
 
 See [`AGENTS.md`](AGENTS.md) for the Git hook lifecycle (pre-commit vs pre-push), Repomix, and `searchbench-*` debug commands.
@@ -85,6 +86,25 @@ Useful flags (see [`internal/surface/cli/run.go`](internal/surface/cli/run.go)):
 | `--no-human-report` | Skip optional human-readable report artifact |
 
 Successful runs summarize `bundle`, `report_id`, `objective`, and final score metrics on stdout.
+
+---
+
+## Real MCP / providers (opt-in)
+
+The bundled manifest [`configs/rounds/local-ic-vs-jcodemunch/round.pkl`](configs/rounds/local-ic-vs-jcodemunch/round.pkl) and [`e2e_test.go`](e2e_test.go) exercise an **offline fake-local** path (no network).
+
+To run the same CLI surface against **live MCP tool servers** and **real chat models**:
+
+| Variable | Role |
+| --- | --- |
+| `SEARCHBENCH_JCODEMUNCH_COMMAND` | Shell command starting the jCodeMunch MCP server (stdio JSON-RPC). Required when the manifest uses that backend. |
+| `SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND` | Shell command starting the Iterative Context MCP server. Required for IC-backed policies. |
+| Provider secrets / URLs | Resolved by [`internal/adapters/providers/evaluatormodel`](internal/adapters/providers/evaluatormodel) (OpenAI-compatible providers). |
+| `LANGSMITH_API_KEY` | Optional LangSmith export; traces are **not** authoritative for scoring or decisions. |
+
+Round compare still uses **deterministic fake graph/scorer/decider** scaffolding for localization-distance metrics in local demos; evaluator tool runs, Pkl objectives, and bundle artifacts carry the durable truth for a round.
+
+**GitHub issue batches:** see [`docs/engineering/issue-wave-manifest.md`](docs/engineering/issue-wave-manifest.md) (`nix run .#publish-issue-wave`).
 
 ---
 

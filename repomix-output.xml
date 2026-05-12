@@ -83,6 +83,7 @@ docs/
   engineering/
     agentic-development-flow.md
     issue-style-guide.md
+    issue-wave-manifest.md
     model-testing.md
     pure-center.md
   guides/
@@ -400,7 +401,10 @@ nix/
     default.nix
     generated-checks.nix
     mk-in-repo.nix
+    publish-issue-wave.sh
     push-wrappers.nix
+tooling/
+  issue-wave.example.json
 .gitignore
 .gitmodules
 .golangci.yml
@@ -6068,6 +6072,64 @@ Use acceptance criteria for review.
 Use non-goals to prevent architecture drift.
 </file>
 
+<file path="docs/engineering/issue-wave-manifest.md">
+# GitHub issue wave manifest (publisher tooling)
+
+SearchBench’s **control plane** is GitHub Issues; this repository also carries a small **publisher** so operators can batch-create coordinated issues from JSON. This is **not** SearchBench runtime code and is never imported by product packages.
+
+## Manifest format
+
+JSON object:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `repo` | No | `OWNER/REPO` passed to `gh -R`. If omitted, `gh` uses the current repository context. |
+| `issues` | Yes | Non-empty array of issue entries. |
+
+Each **issue** entry:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `title` | Yes | Issue title (duplicate open titles are skipped after whitespace trim). |
+| `body` | No* | Markdown body inline. |
+| `body_file` | No* | Path to body file, **relative to the git repo root**. |
+| `labels` | No | Array of label names (must already exist on GitHub or `gh` fails). |
+| `parallel_safe` | No | Default `false`. When `true` and `--develop` is passed, runs `gh issue develop` after create. |
+| `develop_branch_name` | No | Branch name for `gh issue develop`; default `issue-<num>-develop`. |
+
+\* Provide at most one of `body` or `body_file`.
+
+## Commands
+
+From `nix develop` (or any environment with the flake tools on `PATH`):
+
+```bash
+# Preview — no GitHub writes
+nix develop -c searchbench-publish-issue-wave --dry-run tooling/issue-wave.example.json
+
+# Create missing issues (skips open duplicates by title)
+nix develop -c searchbench-publish-issue-wave tooling/my-wave.json
+
+# Optional: gh issue develop for entries with parallel_safe: true
+nix develop -c searchbench-publish-issue-wave --develop tooling/my-wave.json
+```
+
+Flake app shortcut:
+
+```bash
+nix run .#publish-issue-wave -- --dry-run tooling/issue-wave.example.json
+```
+
+## Safety notes
+
+- **`gh` authentication** is required for publish mode; dry-run still lists open issues via the API.
+- **Duplicate detection** compares trimmed titles against **open** issues only.
+- **`gh issue develop`** may fail depending on org/repo settings; the script prints a warning and continues.
+- Prefer **`--dry-run`** in CI or unfamiliar repos — there is **no hidden write mode**.
+
+See also: Issue 16 scope in `prompts.md` (original intent) and umbrella tracking issue `#38` / `#39` history on GitHub.
+</file>
+
 <file path="docs/engineering/model-testing.md">
 # SearchBench-Go Model Testing
 
@@ -6997,6 +7059,7 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [Replit](guides/replit.md) | Quick environment and tech stack orientation |
 | [Roadmap](roadmap/todo.md) | High-level implementation pressure |
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
+| [Issue wave publisher](engineering/issue-wave-manifest.md) | `gh`-backed JSON manifest for batch issue creation (dev tooling) |
 
 Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.
 </file>
@@ -17646,6 +17709,15 @@ let
     runtimeInputs = [ pkgs.go ];
   };
 
+  searchbench-publish-issue-wave = mkInRepo {
+    name = "searchbench-publish-issue-wave";
+    text = builtins.readFile ./publish-issue-wave.sh;
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.gh
+    ];
+  };
+
   searchbench-no-scripts-check = mkInRepo {
     name = "searchbench-no-scripts-check";
     text = ''
@@ -17674,6 +17746,7 @@ in
     searchbench-go-test-race
     searchbench-refresh-pkl-example-fixtures
     searchbench-go-build-root
+    searchbench-publish-issue-wave
     searchbench-no-scripts-check
     ;
 }
@@ -17797,6 +17870,174 @@ pkgs.writeShellApplication {
 }
 </file>
 
+<file path="nix/tools/publish-issue-wave.sh">
+# shellcheck shell=bash
+# Fragment included after mk-in-repo preamble (see core.nix).
+
+manifest=""
+dry_run=0
+want_develop=0
+
+usage() {
+	echo "usage: searchbench-publish-issue-wave [--dry-run] [--develop] <manifest.json>" >&2
+	echo "" >&2
+	echo "Publish GitHub issues from a JSON manifest. This is dev coordination tooling only;" >&2
+	echo "it does not touch SearchBench runtime code. Requires gh + jq and repo auth." >&2
+	echo "" >&2
+	echo "  --dry-run    Print planned actions; no gh writes." >&2
+	echo "  --develop    After each created issue with parallel_safe=true, run gh issue develop." >&2
+	exit 1
+}
+
+normalize_title() {
+	local s="$1"
+	s="${s#"${s%%[![:space:]]*}"}"
+	s="${s%"${s##*[![:space:]]}"}"
+	printf '%s' "$s"
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--dry-run) dry_run=1 ;;
+	--develop) want_develop=1 ;;
+	-h | --help) usage ;;
+	*)
+		if [[ -n $manifest ]]; then
+			usage
+		fi
+		manifest="$1"
+		;;
+	esac
+	shift
+done
+
+[[ -n $manifest ]] || usage
+[[ -f $manifest ]] || {
+	echo "searchbench-publish-issue-wave: manifest not found: $manifest" >&2
+	exit 1
+}
+
+command -v jq >/dev/null || {
+	echo "searchbench-publish-issue-wave: jq not on PATH" >&2
+	exit 1
+}
+command -v gh >/dev/null || {
+	echo "searchbench-publish-issue-wave: gh not on PATH" >&2
+	exit 1
+}
+
+repo_override=""
+repo_override=$(jq -r '.repo // empty' "$manifest")
+gh_repo=()
+if [[ -n $repo_override ]]; then
+	gh_repo=(--repo "$repo_override")
+fi
+
+count=$(jq '.issues | length' "$manifest")
+if [[ ! $count =~ ^[0-9]+$ ]]; then
+	echo "searchbench-publish-issue-wave: invalid manifest (.issues length)" >&2
+	exit 1
+fi
+
+if [[ $count -eq 0 ]]; then
+	echo "searchbench-publish-issue-wave: no issues in manifest" >&2
+	exit 1
+fi
+
+tmp_body="$(mktemp)"
+cleanup() {
+	rm -f "$tmp_body"
+}
+trap cleanup EXIT
+
+for ((i = 0; i < count; i++)); do
+	title=$(jq -r --argjson idx "$i" '.issues[$idx].title' "$manifest")
+	if [[ -z $title || $title == "null" ]]; then
+		echo "searchbench-publish-issue-wave: missing title at issues[$i]" >&2
+		exit 1
+	fi
+
+	body_inline=$(jq -r --argjson idx "$i" '.issues[$idx].body // empty' "$manifest")
+	body_file=$(jq -r --argjson idx "$i" '.issues[$idx].body_file // empty' "$manifest")
+	if [[ -n $body_inline && $body_inline != "null" && -n $body_file && $body_file != "null" ]]; then
+		echo "searchbench-publish-issue-wave: issues[$i] sets both body and body_file" >&2
+		exit 1
+	fi
+
+	: >"$tmp_body"
+	if [[ -n $body_file && $body_file != "null" ]]; then
+		if [[ ! -f $body_file ]]; then
+			echo "searchbench-publish-issue-wave: body_file not found for issues[$i]: $body_file (paths are relative to repo root)" >&2
+			exit 1
+		fi
+		cp "$body_file" "$tmp_body"
+	elif [[ -n $body_inline && $body_inline != "null" ]]; then
+		printf '%s\n' "$body_inline" >"$tmp_body"
+	fi
+
+	label_args=()
+	nlabels=$(jq --argjson idx "$i" '(.issues[$idx].labels // []) | length' "$manifest")
+	if [[ $nlabels =~ ^[0-9]+$ ]] && [[ $nlabels -gt 0 ]]; then
+		for ((j = 0; j < nlabels; j++)); do
+			lab=$(jq -r --argjson idx "$i" --argjson j "$j" '.issues[$idx].labels[$j]' "$manifest")
+			if [[ -n $lab && $lab != "null" ]]; then
+				label_args+=(--label "$lab")
+			fi
+		done
+	fi
+
+	nt="$(normalize_title "$title")"
+	dup_found=0
+	dup_url=""
+	while IFS=$'\t' read -r ot ourl; do
+		[[ "$(normalize_title "$ot")" == "$nt" ]] || continue
+		dup_found=1
+		dup_url="$ourl"
+		break
+	done < <(gh "${gh_repo[@]}" issue list --state open --limit 500 --json title,url --jq '.[] | "\(.title)\t\(.url)"')
+
+	if [[ $dup_found -eq 1 ]]; then
+		echo "skip (duplicate title): $title -> ${dup_url:-?}"
+		continue
+	fi
+
+	if [[ $dry_run -eq 1 ]]; then
+		echo "dry-run: would create issue: $title"
+		if [[ ${#label_args[@]} -gt 0 ]]; then
+			echo "         labels: ${label_args[*]}"
+		fi
+		parallel_safe=$(jq -r --argjson idx "$i" '.issues[$idx].parallel_safe // false' "$manifest")
+		if [[ $want_develop -eq 1 && $parallel_safe == "true" ]]; then
+			bn=$(jq -r --argjson idx "$i" '.issues[$idx].develop_branch_name // empty' "$manifest")
+			echo "         would run: gh issue develop <new> --name ${bn:-<auto>}"
+		fi
+		continue
+	fi
+
+	out=$(gh "${gh_repo[@]}" issue create --title "$title" --body-file "$tmp_body" "${label_args[@]}")
+	num=""
+	if [[ $out =~ issues/[0-9]+$ ]]; then
+		num="${out##*/}"
+	fi
+	if [[ -z $num ]]; then
+		echo "searchbench-publish-issue-wave: could not parse issue number from: $out" >&2
+		exit 1
+	fi
+	echo "created #$num: $title"
+
+	parallel_safe=$(jq -r --argjson idx "$i" '.issues[$idx].parallel_safe // false' "$manifest")
+	if [[ $want_develop -eq 1 && $parallel_safe == "true" ]]; then
+		bn=$(jq -r --argjson idx "$i" '.issues[$idx].develop_branch_name // empty' "$manifest")
+		if [[ -z $bn || $bn == "null" ]]; then
+			bn="issue-$num-develop"
+		fi
+		if ! gh "${gh_repo[@]}" issue develop "$num" --name "$bn"; then
+			echo "searchbench-publish-issue-wave: gh issue develop failed for #$num (set branch manually: $bn)" >&2
+		fi
+	fi
+done
+</file>
+
 <file path="nix/tools/push-wrappers.nix">
 # Thin wrappers for pre-push git-hook stages.
 {
@@ -17872,6 +18113,20 @@ pkgs.writeShellApplication {
     '';
     runtimeInputs = [ searchbench-nix-flake-check ];
   };
+}
+</file>
+
+<file path="tooling/issue-wave.example.json">
+{
+  "repo": "becker63/searchbench-go",
+  "issues": [
+    {
+      "title": "Example wave entry (use --dry-run only with this file)",
+      "body": "Replace this manifest with your wave. Labels must already exist on the repository.",
+      "labels": ["kind/tooling"],
+      "parallel_safe": false
+    }
+  ]
 }
 </file>
 
@@ -18462,6 +18717,7 @@ func repoRootDir(tb testing.TB) string
           searchbench-prompt-contract-check
           searchbench-refresh-pkl-example-fixtures
           searchbench-go-build-root
+          searchbench-publish-issue-wave
           searchbench-no-scripts-check
         ];
       in
@@ -18502,6 +18758,10 @@ func repoRootDir(tb testing.TB) string
           e2e = {
             type = "app";
             program = "${tools.searchbench-e2e}/bin/searchbench-e2e";
+          };
+          publish-issue-wave = {
+            type = "app";
+            program = "${tools.searchbench-publish-issue-wave}/bin/searchbench-publish-issue-wave";
           };
         };
       }
@@ -20592,6 +20852,7 @@ nix develop -c searchbench-golangci
 nix flake check
 nix run .#e2e             # root package integration tests
 nix run .#update-repomix  # refresh committed repomix-output.xml
+nix run .#publish-issue-wave -- --dry-run tooling/issue-wave.example.json  # GitHub issue wave (no writes)
 ```
 
 See [`AGENTS.md`](AGENTS.md) for the Git hook lifecycle (pre-commit vs pre-push), Repomix, and `searchbench-*` debug commands.
@@ -20634,6 +20895,25 @@ Useful flags (see [`internal/surface/cli/run.go`](internal/surface/cli/run.go)):
 | `--no-human-report` | Skip optional human-readable report artifact |
 
 Successful runs summarize `bundle`, `report_id`, `objective`, and final score metrics on stdout.
+
+---
+
+## Real MCP / providers (opt-in)
+
+The bundled manifest [`configs/rounds/local-ic-vs-jcodemunch/round.pkl`](configs/rounds/local-ic-vs-jcodemunch/round.pkl) and [`e2e_test.go`](e2e_test.go) exercise an **offline fake-local** path (no network).
+
+To run the same CLI surface against **live MCP tool servers** and **real chat models**:
+
+| Variable | Role |
+| --- | --- |
+| `SEARCHBENCH_JCODEMUNCH_COMMAND` | Shell command starting the jCodeMunch MCP server (stdio JSON-RPC). Required when the manifest uses that backend. |
+| `SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND` | Shell command starting the Iterative Context MCP server. Required for IC-backed policies. |
+| Provider secrets / URLs | Resolved by [`internal/adapters/providers/evaluatormodel`](internal/adapters/providers/evaluatormodel) (OpenAI-compatible providers). |
+| `LANGSMITH_API_KEY` | Optional LangSmith export; traces are **not** authoritative for scoring or decisions. |
+
+Round compare still uses **deterministic fake graph/scorer/decider** scaffolding for localization-distance metrics in local demos; evaluator tool runs, Pkl objectives, and bundle artifacts carry the durable truth for a round.
+
+**GitHub issue batches:** see [`docs/engineering/issue-wave-manifest.md`](docs/engineering/issue-wave-manifest.md) (`nix run .#publish-issue-wave`).
 
 ---
 

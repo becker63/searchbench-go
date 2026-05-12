@@ -204,6 +204,7 @@
           searchbench-prompt-contract-check
           searchbench-refresh-pkl-example-fixtures
           searchbench-go-build-root
+          searchbench-publish-issue-wave
           searchbench-no-scripts-check
         ];
       in
@@ -244,6 +245,10 @@
           e2e = {
             type = "app";
             program = "${tools.searchbench-e2e}/bin/searchbench-e2e";
+          };
+          publish-issue-wave = {
+            type = "app";
+            program = "${tools.searchbench-publish-issue-wave}/bin/searchbench-publish-issue-wave";
           };
         };
       }

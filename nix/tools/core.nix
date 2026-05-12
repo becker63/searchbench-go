@@ -179,6 +179,15 @@ let
     runtimeInputs = [ pkgs.go ];
   };
 
+  searchbench-publish-issue-wave = mkInRepo {
+    name = "searchbench-publish-issue-wave";
+    text = builtins.readFile ./publish-issue-wave.sh;
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.gh
+    ];
+  };
+
   searchbench-no-scripts-check = mkInRepo {
     name = "searchbench-no-scripts-check";
     text = ''
@@ -207,6 +216,7 @@ in
     searchbench-go-test-race
     searchbench-refresh-pkl-example-fixtures
     searchbench-go-build-root
+    searchbench-publish-issue-wave
     searchbench-no-scripts-check
     ;
 }

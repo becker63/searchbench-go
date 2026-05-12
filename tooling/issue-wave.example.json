@@ -1,0 +1,11 @@
+{
+  "repo": "becker63/searchbench-go",
+  "issues": [
+    {
+      "title": "Example wave entry (use --dry-run only with this file)",
+      "body": "Replace this manifest with your wave. Labels must already exist on the repository.",
+      "labels": ["kind/tooling"],
+      "parallel_safe": false
+    }
+  ]
+}
