@@ -21,58 +21,22 @@
         pkgs = nixpkgs.legacyPackages.${system};
         tools = import ./nix/tools { inherit pkgs; };
 
-        # Modules live under nix/vendor/; root vendor/ is a symlink for Go.
-        vendorExcludes = [
-          "^nix/vendor/"
-          "^vendor/"
-        ];
-
-        commonHooks = {
-          gofmt = {
-            enable = true;
-            excludes = vendorExcludes;
-          };
-          govet = {
-            enable = true;
-            extraPackages = [ pkgs.go ];
-            excludes = vendorExcludes;
-          };
-          golangci-lint = {
-            enable = true;
-            extraPackages = [ pkgs.go ];
-            excludes = vendorExcludes;
-          };
-          nixfmt-rfc-style = {
-            enable = true;
-            excludes = vendorExcludes;
-          };
-          deadnix = {
-            enable = true;
-            excludes = vendorExcludes;
-          };
-          statix = {
-            enable = true;
-            settings.ignore = [
-              "nix/vendor/**"
-              "vendor/**"
-            ];
-          };
-          shellcheck = {
-            enable = true;
-            excludes = vendorExcludes;
-          };
-          shfmt = {
-            enable = true;
-            excludes = vendorExcludes;
-          };
+        # Runs in `nix flake check` (sandbox, no network). Go linters, `go test`, etc. need the
+        # module proxy or a local module cache, so those hooks live only in `preCommitDev` / pre-push.
+        flakeCheckHooks = {
+          gofmt.enable = true;
+          nixfmt-rfc-style.enable = true;
+          deadnix.enable = true;
+          statix.enable = true;
+          shellcheck.enable = true;
+          shfmt.enable = true;
           trim-trailing-whitespace = {
             enable = true;
             excludes = [
               "^repomix-output\\.xml$"
               "^configs/rounds/.*/artifacts/"
               "^attached_assets/"
-            ]
-            ++ vendorExcludes;
+            ];
           };
           end-of-file-fixer = {
             enable = true;
@@ -81,25 +45,14 @@
               "^testdata/"
               "^configs/rounds/.*/artifacts/"
               "^attached_assets/"
-            ]
-            ++ vendorExcludes;
+            ];
           };
           check-merge-conflicts.enable = true;
-          check-added-large-files = {
-            enable = true;
-            excludes = vendorExcludes;
-          };
+          check-added-large-files.enable = true;
           check-symlinks.enable = true;
           check-json.enable = true;
           check-yaml.enable = true;
           check-toml.enable = true;
-
-          searchbench-architecture = {
-            enable = true;
-            name = "searchbench architecture import boundaries";
-            entry = "${tools.searchbench-architecture-check}/bin/searchbench-architecture-check";
-            pass_filenames = false;
-          };
 
           searchbench-vocabulary = {
             enable = true;
@@ -108,6 +61,25 @@
             pass_filenames = false;
           };
         };
+
+        goModuleGraphHooks = {
+          govet = {
+            enable = true;
+            extraPackages = [ pkgs.go ];
+          };
+          golangci-lint = {
+            enable = true;
+            extraPackages = [ pkgs.go ];
+          };
+          searchbench-architecture = {
+            enable = true;
+            name = "searchbench architecture import boundaries";
+            entry = "${tools.searchbench-architecture-check}/bin/searchbench-architecture-check";
+            pass_filenames = false;
+          };
+        };
+
+        commonHooks = flakeCheckHooks // goModuleGraphHooks;
 
         prePushHooks = {
           go-test-all = {
@@ -149,7 +121,7 @@
 
         preCommitCheck = git-hooks.lib.${system}.run {
           src = ./.;
-          hooks = commonHooks;
+          hooks = flakeCheckHooks;
         };
 
         preCommitDev = git-hooks.lib.${system}.run {

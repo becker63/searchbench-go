@@ -54,7 +54,7 @@ go build -o searchbench ./cmd/searchbench
 
 ```bash
 nix develop                    # dev shell + pre-commit + searchbench-* tools
-nix flake check                # sandboxed checks (uses checked-in nix/vendor + root vendor symlink)
+nix flake check                # sandboxed checks (no network — quick Nix/shell/format gate)
 nix develop -c searchbench-e2e
 ```
 

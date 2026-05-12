@@ -43,7 +43,7 @@ nix run .#e2e             # root package integration tests
 nix run .#update-repomix  # refresh committed repomix-output.xml
 ```
 
-See [`AGENTS.md`](AGENTS.md) for Repomix rationale, `nix/vendor` (root `vendor` symlink), and hook layout.
+See [`AGENTS.md`](AGENTS.md) for Repomix rationale, the flake vs full pre-commit split (no checked-in Go vendor), and hook layout.
 
 ---
 

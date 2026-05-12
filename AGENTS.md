@@ -48,19 +48,19 @@ pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl --output-pa
 
 ## Nix development (preferred)
 
-Use the flake for a reproducible toolchain, pre-commit hooks, and the `searchbench-*` helper commands (defined in `nix/dev-tools.nix`, no ad hoc `scripts/` for project automation).
+Use the flake for a reproducible toolchain, pre-commit hooks, and the `searchbench-*` helper commands (defined under `nix/tools/`, no ad hoc `scripts/` for project automation).
 
 | Command | Purpose |
 | --- | --- |
 | `nix develop` | Dev shell: Go, Pkl, golangci-lint, hooks, `searchbench-*` tools |
-| `nix develop -c pre-commit run --all-files` | Full local hook run (includes Repomix refresh in the dev hook set) |
-| `nix flake check` | Sandboxed, non-mutating checks (close to CI); uses `nix/vendor` (via root `vendor` symlink) for offline Go |
+| `nix develop -c pre-commit run --all-files` | Full hook run: Go linters, `go test` hooks, Repomix in the dev hook set, etc. |
+| `nix flake check` | Sandboxed, non-mutating checks (no network) — Nix/shell/formatting; not full Go analysis |
 | `nix develop -c searchbench-update-repomix` | Regenerate `repomix-output.xml` and `git add` it |
 
 The file `.pre-commit-config.yaml` is generated when you enter `nix develop` and is gitignored.
 
 **Repomix:** This repository intentionally commits `repomix-output.xml` so the current tree can be shared quickly with AI assistants for architectural review. That is intentional workflow hygiene for this project, not a general recommendation for every repo.
 
-**Go vendor directory:** Module sources are stored under [`nix/vendor`](nix/vendor); the repo root [`vendor`](vendor) is a symlink so `go mod vendor` and `-mod=vendor` keep working. Content is checked in so `nix flake check` can run Go hooks in a sandbox without network access. After dependency changes, run `go mod vendor` and commit the result.
+**Go dependencies:** There is no checked-in `vendor/` tree. The module cache is populated from the network (or your local cache) when you build and test. **Hooks that load the full module graph** (`govet`, `golangci-lint`, `searchbench-architecture`, pre-push Go tests) run in `nix develop` and on pre-push — not inside `nix flake check`, because that runs in a sandbox without internet ([git-hooks.nix](https://github.com/cachix/git-hooks.nix) documents this). You can run `go mod vendor` locally if you want a `./vendor` directory; it is gitignored.
 
-**Staticcheck:** The standalone `staticcheck` pre-commit hook is not enabled yet because the current tree still has a backlog of `SA*`/`U1000` findings (mostly in tests and generated-adjacent helpers). `gofmt`, `govet`, and `golangci-lint` (minimal config: `govet` only) run in CI; run `staticcheck ./...` locally when you are cleaning that backlog.
+**Staticcheck:** The standalone `staticcheck` pre-commit hook is not enabled yet because the current tree still has a backlog of `SA*`/`U1000` findings (mostly in tests and generated-adjacent helpers). `gofmt`, `govet`, and `golangci-lint` (minimal config: `govet` only) run via `nix develop` / pre-commit / pre-push; run `staticcheck ./...` locally when you are cleaning that backlog.

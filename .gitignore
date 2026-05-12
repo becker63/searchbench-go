@@ -11,3 +11,5 @@ iterative-context
 /searchbench
 /coverage.out
 /*.test
+# Local optional `go mod vendor`; not committed
+/vendor/

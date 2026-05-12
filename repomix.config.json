@@ -15,8 +15,6 @@
       ".direnv/**",
       ".pre-commit-config.yaml",
       "repomix-output.*",
-      "nix/vendor/**",
-      "vendor/**",
       "node_modules/**",
       "searchbench",
       "coverage.out",
