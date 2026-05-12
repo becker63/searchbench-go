@@ -69,32 +69,32 @@
           };
         };
 
-        goModuleGraphHooks = {
-          govet = {
-            enable = true;
-            extraPackages = [ pkgs.go ];
+        goModuleGraphHooks =
+          # Standalone git-hooks `staticcheck` is intentionally omitted: `.golangci.yml`
+          # enables staticcheck inside golangci-lint on pre-commit. Pre-push runs explicit
+          # `searchbench-staticcheck` for a full-module proof (see AGENTS.md).
+          {
+            govet = {
+              enable = true;
+              extraPackages = [ pkgs.go ];
+            };
+            golangci-lint = {
+              enable = true;
+              extraPackages = [ pkgs.go ];
+            };
+            searchbench-architecture = {
+              enable = true;
+              name = "searchbench architecture import boundaries";
+              entry = "${tools.searchbench-architecture-check}/bin/searchbench-architecture-check";
+              pass_filenames = false;
+            };
+            searchbench-prompt-contract = {
+              enable = true;
+              name = "searchbench prompt contract tests";
+              entry = "${tools.searchbench-prompt-contract-check}/bin/searchbench-prompt-contract-check";
+              pass_filenames = false;
+            };
           };
-          staticcheck = {
-            enable = true;
-            extraPackages = [ pkgs.go ];
-          };
-          golangci-lint = {
-            enable = true;
-            extraPackages = [ pkgs.go ];
-          };
-          searchbench-architecture = {
-            enable = true;
-            name = "searchbench architecture import boundaries";
-            entry = "${tools.searchbench-architecture-check}/bin/searchbench-architecture-check";
-            pass_filenames = false;
-          };
-          searchbench-prompt-contract = {
-            enable = true;
-            name = "searchbench prompt contract tests";
-            entry = "${tools.searchbench-prompt-contract-check}/bin/searchbench-prompt-contract-check";
-            pass_filenames = false;
-          };
-        };
 
         commonHooks = flakeCheckHooks // goModuleGraphHooks;
 
@@ -146,6 +146,14 @@
             pass_filenames = false;
             stages = [ "pre-push" ];
           };
+
+          searchbench-nix-flake-check-push = {
+            enable = true;
+            name = "nix flake check (pre-push)";
+            entry = "${tools.searchbench-nix-flake-check-push}/bin/searchbench-nix-flake-check-push";
+            pass_filenames = false;
+            stages = [ "pre-push" ];
+          };
         };
 
         devHooks =
@@ -188,11 +196,6 @@
           searchbench-refresh-pkl-example-fixtures
           searchbench-go-build-root
           searchbench-no-scripts-check
-          searchbench-openai-netwatch
-          searchbench-agent-start
-          searchbench-agent-check
-          searchbench-agent-pack
-          searchbench-agent-merge-check
         ];
       in
       {
@@ -232,14 +235,6 @@
           e2e = {
             type = "app";
             program = "${tools.searchbench-e2e}/bin/searchbench-e2e";
-          };
-          agent-check = {
-            type = "app";
-            program = "${tools.searchbench-agent-check}/bin/searchbench-agent-check";
-          };
-          agent-merge-check = {
-            type = "app";
-            program = "${tools.searchbench-agent-merge-check}/bin/searchbench-agent-merge-check";
           };
         };
       }

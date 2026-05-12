@@ -60,7 +60,7 @@ nix develop -c searchbench-golangci
 nix develop -c searchbench-e2e
 ```
 
-See the root [`AGENTS.md`](../../AGENTS.md) for hook tiers, `searchbench-agent-merge-check`, Repomix, and the full command list.
+See the root [`AGENTS.md`](../../AGENTS.md) for Git hook stages (**`git commit`** / **`git push`**), Repomix, and **`searchbench-*`** commands (debugging failed hooks only).
 
 ---
 

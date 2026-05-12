@@ -40,7 +40,9 @@ Use `Game`, `Round`, `Match`, `IncumbentPolicy`, `ChallengerPolicy`, `Evidence`,
 
 ## Validation
 
-Run `go test ./...` before handing off code changes. For schema changes, regenerate Pkl bindings with:
+The routine gate is Git-driven: use `nix develop`, then rely on **`git commit`** and **`git push`** to run hooks.
+
+For schema changes, regenerate Pkl bindings with:
 
 ```sh
 pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl --output-path=. configs/schema/SearchBenchRound.pkl
@@ -48,35 +50,35 @@ pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl --output-pa
 
 ## Nix development (preferred)
 
-Use the flake for a reproducible toolchain, pre-commit hooks, and the `searchbench-*` helper commands (defined under `nix/tools/`, no ad hoc `scripts/` for project automation).
+Use the flake for a reproducible toolchain, pre-commit hooks, and `searchbench-*` helpers (defined under `nix/tools/`, no ad hoc `scripts/` for project automation).
+
+**`nix develop`** installs Git hooks from git-hooks.nix. The generated `.pre-commit-config.yaml` is gitignored.
+
+| Stage | What runs |
+| --- | --- |
+| **`git commit` (pre-commit)** | Fast repo-local checks: formatting (Go/Nix/shell), hygiene, **golangci-lint** (includes **staticcheck** via `.golangci.yml`), **govet**, architecture + prompt contract tests, Pkl/templ generated-file checks, **Repomix** snapshot (`repomix-output.xml` regenerated and staged) |
+| **`git push` (pre-push)** | **`go test ./...`**, root **e2e**, **searchbench-check-generated**, **go mod tidy** check, **standalone staticcheck** (`searchbench-staticcheck`), **standalone golangci-lint**, **`nix flake check`** |
+
+Hook staging avoids duplicate **staticcheck** on the same stage: pre-commit uses **golangci-lint** with `staticcheck` enabled in `.golangci.yml`. Pre-push runs **explicit** `searchbench-staticcheck` and `searchbench-golangci` as a fuller proof pass. Manual `nix develop -c searchbench-staticcheck` / `searchbench-golangci` are for reproducing hook failures only — not a separate “daily routine” tier.
 
 | Command | Purpose |
 | --- | --- |
 | `nix develop` | Dev shell: Go, Pkl, golangci-lint, hooks, `searchbench-*` tools |
-| `nix develop -c pre-commit run --all-files` | Full hook run: Go linters, `go test` hooks, Repomix in the dev hook set, etc. |
-| `nix flake check` | Sandboxed, non-mutating checks (no network) — Nix/shell/formatting; not full Go analysis |
-| `nix develop -c searchbench-update-repomix` | Regenerate `repomix-output.xml` and `git add` it |
+| `nix develop -c pre-commit run --all-files` | Full dev hook run (same family as `git commit`) |
+| `nix flake check` | Sandboxed, **non-mutating** checks — formatting / Nix / shell / lightweight gates; **no** full Go module graph over the network in the default sandbox |
+| `nix develop -c searchbench-update-repomix` | Regenerate `repomix-output.xml` and `git add` it (normally the pre-commit Repomix hook handles this) |
 
-The file `.pre-commit-config.yaml` is generated when you enter `nix develop` and is gitignored.
+**Repomix:** This repository intentionally commits `repomix-output.xml` so the current tree can be shared quickly with AI assistants for architectural review.
 
-**Repomix:** This repository intentionally commits `repomix-output.xml` so the current tree can be shared quickly with AI assistants for architectural review. That is intentional workflow hygiene for this project, not a general recommendation for every repo.
+**Go dependencies:** There is no checked-in `vendor/` tree. Hooks that load the full module graph run in `nix develop` and on **pre-commit** / **pre-push**, not inside the default **`nix flake check`** sandbox (no network there).
 
-**Go dependencies:** There is no checked-in `vendor/` tree. The module cache is populated from the network (or your local cache) when you build and test. **Hooks that load the full module graph** (`govet`, `staticcheck`, `golangci-lint`, `searchbench-architecture`, `searchbench-prompt-contract`, pre-push Go tests) run in `nix develop` and on pre-push — not inside `nix flake check`, because that runs in a sandbox without internet ([git-hooks.nix](https://github.com/cachix/git-hooks.nix) documents this). You can run `go mod vendor` locally if you want a `./vendor` directory; it is gitignored.
-
-**`staticcheck` binary:** Provided on `PATH` via `nixpkgs` `go-tools` (same family as the git-hooks `staticcheck` integration). Run `nix develop -c staticcheck ./...` or `nix develop -c searchbench-staticcheck`.
+**`staticcheck` binary:** On `PATH` via `nixpkgs` `go-tools`. Prefer **`nix develop -c searchbench-staticcheck`** when debugging a staticcheck failure.
 
 **Go / lint policy:** `.golangci.yml` enables high-signal checks (`govet`, `staticcheck`, `ineffassign`, `unused`, `errcheck`, `copyloopvar`, `unconvert`) — not broad style linters.
 
-**Quality gate tiers:**
+**Orchestration outside this repo:** Worktrees, branch lifecycle, task assignment, agent summary packs, and merge orchestration are owned by an **external meta harness**, not by SearchBench-Go. This repository owns **repo-local Git hooks** and **debug-only** `searchbench-*` commands listed below — it does not provide `searchbench-agent-*` tooling, worktree creation, or `AGENT_TASK.md` / `AGENT_REVIEW.md` generation.
 
-| Tier | What runs |
-| --- | --- |
-| `nix flake check` | Sandboxed: `gofmt`, Nix (`nixfmt`, `statix`, …), shell, `searchbench-no-scripts`, vocabulary warning — **no** full Go module graph |
-| `nix develop` + pre-commit | Full dev hook set: Go vet, staticcheck, golangci-lint, architecture + prompt contract tests, generated checks, Repomix refresh, etc. |
-| `git push` (pre-push) | `go test ./...`, root e2e, `searchbench-check-generated`, `searchbench-go-mod-tidy-check`, `searchbench-staticcheck`, `searchbench-golangci` |
-| `nix develop -c searchbench-agent-merge-check` | Strictest local gate: pre-commit, `go test`, `go test -race`, staticcheck, golangci-lint, e2e, `nix flake check`, generated checks, go mod tidy check, Repomix refresh, `git diff --check` |
-
-**Handy commands:**
+**Debugging commands** (use only when a hook failed and you need the same check ad hoc):
 
 | Command | Purpose |
 | --- | --- |
@@ -85,5 +87,11 @@ The file `.pre-commit-config.yaml` is generated when you enter `nix develop` and
 | `nix develop -c searchbench-go-mod-tidy-check` | Fail if `go mod tidy` would change `go.mod` / `go.sum` |
 | `nix develop -c searchbench-prompt-contract-check` | Tests for `.templ` XML prompt contracts |
 | `nix develop -c searchbench-refresh-pkl-example-fixtures` | Regenerate optimize-IC fixtures from the local round (long-running) |
-| `nix develop -c searchbench-openai-netwatch` | Optional HTTPS connection diagnostics helper (migrated from legacy `scripts/`) |
 | `nix develop -c searchbench-go-build-root` | `go build -o searchbench ./cmd/searchbench` |
+| `nix develop -c searchbench-architecture-check` | Import-boundary tests (`go test` under `internal/architecture`) |
+| `nix develop -c searchbench-check-generated` | Pkl + templ + combined generated outputs |
+| `nix develop -c searchbench-check-pkl-generated` | Pkl bindings vs schema |
+| `nix develop -c searchbench-check-templ-generated` | Templ-generated prompts |
+| `nix develop -c searchbench-e2e` | Root package integration tests |
+| `nix develop -c searchbench-go-test-all` | `go test ./...` |
+| `nix develop -c searchbench-nix-flake-check` | `nix flake check` (same as pre-push sandbox step) |

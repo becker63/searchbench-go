@@ -308,13 +308,14 @@ The point is not just to get code written.
 
 The point is to steadily convert hard-earned project understanding into contracts that agents can execute without owning the architecture.
 
-## Nix rails (worktrees and checks)
+## Nix rails (hooks and debugging)
 
-For day-to-day and parallel agent work, prefer the flake-backed workflow documented in [`AGENTS.md`](../../AGENTS.md).
+For the toolchain and automation, use the flake-backed workflow in [`AGENTS.md`](../../AGENTS.md):
 
-- `nix develop` — installs pre-commit (generated config is gitignored) and exposes commands such as `searchbench-update-repomix`, `searchbench-e2e`, `searchbench-agent-start`, `searchbench-agent-check`, `searchbench-agent-pack`, and `searchbench-agent-merge-check`.
-- `nix develop -c pre-commit run --all-files` — full hook pass including the Repomix snapshot hook in the dev set.
-- `nix flake check` — fast, sandboxed checks without mutating the tree **and without network** (formatting / Nix / shell — not full Go analysis). Full Go hooks run in `nix develop` / pre-push.
-- Intentionally committed `repomix-output.xml` — see [`AGENTS.md`](../../AGENTS.md) for why this file is not ignored.
+- **`nix develop`** installs Git hooks; routine validation is **`git commit`** and **`git push`**, not a mental checklist of `searchbench-*` commands.
+- **`nix develop -c pre-commit run --all-files`** reproduces the pre-commit hook set.
+- **`nix flake check`** is a fast, sandboxed, **non-mutating** gate (no network) — not a substitute for the full dev-shell hooks.
+- **Repomix** (`repomix-output.xml`) — see [`AGENTS.md`](../../AGENTS.md).
+- **Worktrees, task routing, and merge orchestration** for coding agents live in the **external meta harness**, not in this repository.
 
 Project automation lives in `nix/tools/` (wired from `flake.nix`); do not add a loose `scripts/` directory for SearchBench tooling.

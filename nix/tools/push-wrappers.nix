@@ -7,6 +7,7 @@
   searchbench-go-mod-tidy-check,
   searchbench-staticcheck,
   searchbench-golangci,
+  searchbench-nix-flake-check,
 }:
 {
   searchbench-go-test-all-push = pkgs.writeShellApplication {
@@ -61,5 +62,14 @@
       exec ${searchbench-golangci}/bin/searchbench-golangci
     '';
     runtimeInputs = [ searchbench-golangci ];
+  };
+
+  searchbench-nix-flake-check-push = pkgs.writeShellApplication {
+    name = "searchbench-nix-flake-check-push";
+    text = ''
+      set -euo pipefail
+      exec ${searchbench-nix-flake-check}/bin/searchbench-nix-flake-check
+    '';
+    runtimeInputs = [ searchbench-nix-flake-check ];
   };
 }

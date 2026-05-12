@@ -45,7 +45,7 @@ nix run .#e2e             # root package integration tests
 nix run .#update-repomix  # refresh committed repomix-output.xml
 ```
 
-See [`AGENTS.md`](AGENTS.md) for Repomix rationale, hook tiers (flake vs pre-commit vs pre-push vs agent merge-check), and command reference.
+See [`AGENTS.md`](AGENTS.md) for the Git hook lifecycle (pre-commit vs pre-push), Repomix, and `searchbench-*` debug commands.
 
 ---
 
@@ -111,7 +111,7 @@ Full documentation hub: **[`docs/README.md`](docs/README.md)**.
 
 Suggested reading order for humans or coding agents:
 
-1. **[`AGENTS.md`](AGENTS.md)** — project rules, vocabulary, and validation commands at the repo root
+1. **[`AGENTS.md`](AGENTS.md)** — project rules, vocabulary, and **Git hook lifecycle** (`nix develop`, `git commit`, `git push`)
 2. **[`docs/architecture/architecture.md`](docs/architecture/architecture.md)** — architecture spine and product vocabulary
 3. **[`docs/architecture/package-boundaries.md`](docs/architecture/package-boundaries.md)** — dependency rules mirrored in tests
 
@@ -121,7 +121,7 @@ Additional topics: visualization plan, roadmap, onboarding ([`docs/guides/replit
 
 ## Development
 
-Run the entire test suite (including CLI and architecture import checks):
+With **`nix develop`**, **`git commit`** and **`git push`** run the routine checks (see **`AGENTS.md`**). To run the full suite directly:
 
 ```bash
 go test ./...

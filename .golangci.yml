@@ -1,4 +1,9 @@
 # High-signal Go checks; avoid style-only linters (see project docs).
+#
+# `staticcheck` is enabled here so pre-commit golangci-lint covers it without also
+# running the git-hooks standalone staticcheck hook (see AGENTS.md). Full-module
+# standalone `searchbench-staticcheck` still runs on pre-push and is available for
+# reproducing failures manually.
 version: "2"
 
 run:
