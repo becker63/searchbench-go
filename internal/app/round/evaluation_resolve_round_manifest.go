@@ -235,6 +235,8 @@ func resolveRoundMatches(
 	parent *pureround.Continuation,
 ) (domain.NonEmpty[domain.MatchSpec], DatasetConfig, error) {
 	if round != nil && round.Matches != nil {
+		// Materialize matches via dataset.MatchSource (JetBrains LCA JSONL under
+		// the manifest directory, or the local fake for other selections).
 		matches, err := defaultMatchSource.Matches(ctx, dataset.Request{
 			ManifestDir: manifestDir,
 			Kind:        round.Matches.Kind,
