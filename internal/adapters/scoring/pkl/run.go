@@ -66,10 +66,34 @@ func Evaluate(ctx context.Context, request Request) (score.ObjectiveResult, erro
 	if err := evaluator.EvaluateModule(ctx, pkl.TextSource(wrapperModuleSource(normalized, currentEvidencePath, parentEvidencePath)), &result); err != nil {
 		return score.ObjectiveResult{}, fmt.Errorf("%w: %w", ErrEvaluate, err)
 	}
+	fillObjectiveValueKinds(&result)
 	if err := result.Validate(); err != nil {
 		return score.ObjectiveResult{}, fmt.Errorf("%w: %w", ErrValidate, err)
 	}
 	return result, nil
+}
+
+// fillObjectiveValueKinds sets ObjectiveValueKind when Pkl decoding leaves it empty
+// (some evaluator paths omit the kind field in JSON even when Pkl populated it).
+func fillObjectiveValueKinds(r *score.ObjectiveResult) {
+	if r == nil {
+		return
+	}
+	finalName := strings.TrimSpace(r.Final)
+	for i := range r.Values {
+		if r.Values[i].Kind != "" {
+			continue
+		}
+		name := strings.TrimSpace(r.Values[i].Name)
+		switch {
+		case finalName != "" && name == finalName:
+			r.Values[i].Kind = score.ObjectiveValueFinal
+		case strings.HasSuffix(name, "Penalty"):
+			r.Values[i].Kind = score.ObjectiveValuePenalty
+		default:
+			r.Values[i].Kind = score.ObjectiveValueIntermediate
+		}
+	}
 }
 
 func normalizeRequest(request Request) (Request, error) {

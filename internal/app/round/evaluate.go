@@ -1,10 +1,10 @@
 package round
 
 import (
-        "context"
-        "errors"
-        "os"
-        "time"
+	"context"
+	"errors"
+	"os"
+	"time"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
@@ -19,23 +19,23 @@ import (
 // the production round flow runs the same helpers individually through the
 // named phase functions in run.go.
 func runEvaluation(ctx context.Context, request evaluationRequest) (Result, error) {
-        plan, err := resolveEvaluation(ctx, request.Resolve)
-        if err != nil {
-                phase := PhaseResolvePlanFailed
-                if errors.Is(err, ErrUnsupportedMode) {
-                        phase = PhaseUnsupportedMode
-                } else if errors.Is(err, config.ErrValidationFailed) {
-                        phase = PhaseValidateManifestFailed
-                } else if errors.Is(err, os.ErrNotExist) {
-                        phase = PhaseResolvePlanFailed
-                } else if request.Resolve.ManifestPath != "" {
-                        if absErr := normalizeManifestPathError(request.Resolve.ManifestPath, err); absErr != nil {
-                                return Result{}, &Error{Phase: PhaseLoadManifestFailed, Err: absErr}
-                        }
-                }
-                return Result{}, &Error{Phase: phase, Err: err}
-        }
-        return runEvaluationResolved(ctx, plan, request)
+	plan, err := resolveEvaluation(ctx, request.Resolve)
+	if err != nil {
+		phase := PhaseResolvePlanFailed
+		if errors.Is(err, ErrUnsupportedMode) {
+			phase = PhaseUnsupportedMode
+		} else if errors.Is(err, config.ErrValidationFailed) {
+			phase = PhaseValidateManifestFailed
+		} else if errors.Is(err, os.ErrNotExist) {
+			phase = PhaseResolvePlanFailed
+		} else if request.Resolve.ManifestPath != "" {
+			if absErr := normalizeManifestPathError(request.Resolve.ManifestPath, err); absErr != nil {
+				return Result{}, &Error{Phase: PhaseLoadManifestFailed, Err: absErr}
+			}
+		}
+		return Result{}, &Error{Phase: phase, Err: err}
+	}
+	return runEvaluationResolved(ctx, plan, request)
 }
 
 // runEvaluationResolved orchestrates the full evaluation pipeline once the
@@ -162,18 +162,18 @@ func renderReport(plan Plan, request evaluationRequest, roundReport report.Round
 }
 
 func normalizeManifestPathError(manifestPath string, err error) error {
-        if manifestPath == "" {
-                return nil
-        }
-        if _, statErr := os.Stat(manifestPath); statErr != nil {
-                return statErr
-        }
-        return nil
+	if manifestPath == "" {
+		return nil
+	}
+	if _, statErr := os.Stat(manifestPath); statErr != nil {
+		return statErr
+	}
+	return nil
 }
 
 func timeoutFromSeconds(seconds int) time.Duration {
-        if seconds <= 0 {
-                return 0
-        }
-        return time.Duration(seconds) * time.Second
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
 }

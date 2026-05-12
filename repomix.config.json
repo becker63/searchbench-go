@@ -1,0 +1,27 @@
+{
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "compress": true,
+    "includeDiffs": true,
+    "includeLogs": true,
+    "includeLogsCount": 10
+  },
+  "ignore": {
+    "customPatterns": [
+      ".git/**",
+      "result/**",
+      "result-*/**",
+      ".direnv/**",
+      ".pre-commit-config.yaml",
+      "repomix-output.*",
+      "node_modules/**",
+      "searchbench",
+      "coverage.out",
+      "*.test",
+      "configs/rounds/*/artifacts/**",
+      "attached_assets/**",
+      "internal/adapters/config/pkl/generated/**"
+    ]
+  }
+}

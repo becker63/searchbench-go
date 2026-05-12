@@ -2,3 +2,12 @@ iterative-context
 .codex
 .tmp/
 #repomix-output.xml
+
+# Nix & local tooling (issue #36)
+/.pre-commit-config.yaml
+/result
+/result-*
+/.direnv
+/searchbench
+/coverage.out
+/*.test

@@ -55,6 +55,11 @@ func TestEvaluateLocalObjectiveWithParent(t *testing.T) {
 	if !hasValue(result.Values, "final") {
 		t.Fatalf("values = %#v, want final", result.Values)
 	}
+	for _, v := range result.Values {
+		if v.Kind == "" {
+			t.Fatalf("objective value %q has empty kind", v.Name)
+		}
+	}
 }
 
 func TestEvaluateLocalObjectiveWithoutParent(t *testing.T) {

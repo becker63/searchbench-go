@@ -14,8 +14,8 @@ cp "$local_dir/scoring/localization-objective.pkl" "$optimize_dir/scoring/locali
 rm -rf "$local_dir/artifacts/games/code-localization/rounds/example-round-001"
 
 GOCACHE="$root/.tmp/go-cache" go run ./cmd/searchbench run \
-  --manifest "$local_dir/round.pkl" \
-  --bundle-root "$local_dir/artifacts/games/code-localization/rounds" \
-  --bundle-id example-round-001
+	--manifest "$local_dir/round.pkl" \
+	--bundle-root "$local_dir/artifacts/games/code-localization/rounds" \
+	--bundle-id example-round-001
 
 touch "$optimize_dir/artifacts/games/code-localization/rounds/.gitkeep"

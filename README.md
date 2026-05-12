@@ -94,9 +94,9 @@ Full documentation hub: **[`docs/README.md`](docs/README.md)**.
 
 Suggested reading order for humans or coding agents:
 
-1. **[`AGENTS.md`](AGENTS.md)** — project rules, vocabulary, and validation commands at the repo root  
-2. **[`docs/architecture/architecture.md`](docs/architecture/architecture.md)** — architecture spine and product vocabulary  
-3. **[`docs/architecture/package-boundaries.md`](docs/architecture/package-boundaries.md)** — dependency rules mirrored in tests  
+1. **[`AGENTS.md`](AGENTS.md)** — project rules, vocabulary, and validation commands at the repo root
+2. **[`docs/architecture/architecture.md`](docs/architecture/architecture.md)** — architecture spine and product vocabulary
+3. **[`docs/architecture/package-boundaries.md`](docs/architecture/package-boundaries.md)** — dependency rules mirrored in tests
 
 Additional topics: visualization plan, roadmap, onboarding ([`docs/guides/replit.md`](docs/guides/replit.md)), LangSmith positioning, engineering workflow, Pkl seams.
 

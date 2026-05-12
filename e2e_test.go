@@ -58,6 +58,11 @@ func TestSearchBenchRoundRunCLIE2E(t *testing.T) {
 	if objective.Final == "" {
 		t.Fatalf("objective.final is empty")
 	}
+	for _, v := range objective.Values {
+		if strings.TrimSpace(string(v.Kind)) == "" {
+			t.Fatalf("objective value %q has empty kind", v.Name)
+		}
+	}
 
 	var resolvedCli round.Plan
 	decodeJSON(t, filepath.Join(bundlePrefix, "resolved-round.json"), &resolvedCli)
@@ -112,12 +117,17 @@ func TestSearchBenchRoundRunEngineE2E(t *testing.T) {
 	if rec.RoundResult.ObjectiveResult == nil || rec.RoundResult.ObjectiveResult.Final == "" {
 		t.Fatalf("objective result missing final: %#v", rec.RoundResult.ObjectiveResult)
 	}
+	for _, v := range rec.RoundResult.ObjectiveResult.Values {
+		if strings.TrimSpace(string(v.Kind)) == "" {
+			t.Fatalf("objective value %q has empty kind", v.Name)
+		}
+	}
 }
 
 func assertBundleArtifacts(tb testing.TB, bundleDir string) {
 	tb.Helper()
 	for _, name := range []string{
-		"resolved-round.json", "round-report.json", "evidence.pkl",
+		"resolved-round.json", "round-report.json", "round-report.txt", "evidence.pkl",
 		"objective.json", "decision.json", "metadata.json", "COMPLETE",
 	} {
 		path := filepath.Join(bundleDir, name)
