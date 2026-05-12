@@ -8,6 +8,7 @@ require (
 	github.com/apple/pkl-go v0.13.2
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cloudwego/eino v0.8.11
+	github.com/cloudwego/eino-ext/callbacks/langsmith v0.0.0-20260509111509-dbda66119839
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
 	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/hmdsefi/gograph v0.7.0
