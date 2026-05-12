@@ -5,17 +5,12 @@ import (
 	"context"
 
 	"github.com/apple/pkl-go/pkl"
-	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/runmode"
 )
 
-// Root schema for a SearchBench **round** manifest.
+// Root schema for a SearchBench round manifest.
 //
-// A round binds a dataset slice, incumbent/challenger policy systems, optional artifacts,
-// and agent configurations. The Go runtime loads this file to resolve bundle paths, evaluation
-// plans, and (when configured) optimization / next-challenger flows.
-//
-// Validation and projection to execution types are implemented in `internal/adapters/config/pkl`
-// and `internal/app/round`. The `go.pkl` import attaches `pkl-go` struct tags for generated Go bindings.
+// The only author-facing entry point is `round`, which either defines a round
+// from scratch or continues from an explicit completed bundle path.
 type SearchBenchRound struct {
 	// Stable game identity for this round (used in bundle layout and reporting).
 	Game Game `pkl:"game"`
@@ -23,29 +18,11 @@ type SearchBenchRound struct {
 	// Human-readable round name; may influence default bundle IDs and reports.
 	Name string `pkl:"name"`
 
-	// Which top-level workflow this manifest participates in (evaluation-only vs optimization).
-	Mode runmode.RunMode `pkl:"mode"`
-
-	// Dataset selection: upstream benchmark id, language/config, and split.
-	Dataset Dataset `pkl:"dataset"`
-
-	// Declares interface contracts (e.g. iterative context selection policy) referenced by artifacts and policy bindings.
+	// Declares interface contracts referenced by policy artifacts.
 	Interfaces Interfaces `pkl:"interfaces"`
 
-	// Incumbent and challenger policy **systems** for the comparative run (ids, backends, prompt bundles, runtime caps).
-	Policies Policies `pkl:"policies"`
-
-	// Optional artifact references (policy file on disk, next-challenger output, parent bundle, etc.).
-	Artifacts Artifacts `pkl:"artifacts"`
-
-	// Agents used when resolving rounds: evaluator (always required for `evaluation` mode) and optimizer (required for `optimization` mode).
-	Agents Agents `pkl:"agents"`
-
-	// Evaluation-mode wiring: must mirror `agents.evaluator`, bind systems to artifacts, and point at the scoring objective file.
-	Evaluation *Evaluation `pkl:"evaluation"`
-
-	// Optimization-mode wiring: must mirror `agents.optimizer`, parent bundle, target artifacts, and evidence policy for next-challenger proposal.
-	Optimization *Optimization `pkl:"optimization"`
+	// Continuation-backed round surface used by concise game-level manifests.
+	Round *RoundManifest `pkl:"round"`
 }
 
 // LoadFromPath loads the pkl module at the given path and evaluates it into a SearchBenchRound

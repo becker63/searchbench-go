@@ -6,14 +6,14 @@ import (
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/optimizerdeniedevidencekind"
 )
 
-// Evidence inclusion and denial rules for optimizer prompts.
-type NextChallengerEvidence struct {
-	// Parent bundle artifact that evidence is loaded from; must match optimization parent wiring (validated in Go).
-	From CompletedRoundBundleArtifact `pkl:"from"`
+// Request to materialize the challenger through the optimizer seam before the
+// round is evaluated.
+type GeneratedChallenger struct {
+	Optimizer Optimizer `pkl:"optimizer"`
 
-	// Evidence kinds pulled into the prompt when present in the parent bundle.
+	ArtifactName string `pkl:"artifactName"`
+
 	Include []nextchallengerevidencekind.NextChallengerEvidenceKind `pkl:"include"`
 
-	// Evidence channels that must never be inlined into the optimizer prompt.
 	Deny []optimizerdeniedevidencekind.OptimizerDeniedEvidenceKind `pkl:"deny"`
 }

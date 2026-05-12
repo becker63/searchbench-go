@@ -51,15 +51,17 @@ func newWriter() writer {
 
 func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (RoundBundleRef, error) {
 	const (
-		phaseValidate  = "validate_bundle_request"
-		phasePrepare   = "prepare_bundle_directory"
-		phaseResolved  = "serialize_resolved_round"
-		phaseReport    = "serialize_report"
-		phaseEvidence  = "serialize_round_evidence"
-		phaseObjective = "serialize_objective_result"
-		phaseDecision  = "serialize_decision"
-		phaseMetadata  = "serialize_metadata"
-		phaseFinalize  = "finalize_bundle"
+		phaseValidate     = "validate_bundle_request"
+		phasePrepare      = "prepare_bundle_directory"
+		phaseResolved     = "serialize_resolved_round"
+		phaseReport       = "serialize_report"
+		phaseEvidence     = "serialize_round_evidence"
+		phaseObjective    = "serialize_objective_result"
+		phaseDecision     = "serialize_decision"
+		phaseArtifacts    = "serialize_bundle_artifacts"
+		phaseContinuation = "serialize_continuation"
+		phaseMetadata     = "serialize_metadata"
+		phaseFinalize     = "finalize_bundle"
 	)
 
 	if err := ctx.Err(); err != nil {
@@ -106,7 +108,7 @@ func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (Roun
 		_ = w.removeAll(stageDir)
 	}()
 
-	files := make([]BundleFile, 0, 7)
+	files := make([]BundleFile, 0, 10+len(request.AdditionalFiles))
 
 	resolvedBytes, err := w.marshalJSON(request.ResolvedInput)
 	if err != nil {
@@ -164,6 +166,24 @@ func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (Roun
 		files = append(files, fileRecord("objective", "objective.json", "application/json", sha256Bytes(objectiveBytes)))
 	}
 
+	for _, artifact := range request.AdditionalFiles {
+		if err := w.writeArtifact(stageDir, artifact.Path, artifact.Content); err != nil {
+			return RoundBundleRef{}, &Error{Phase: phaseArtifacts, Kind: FailureKindFilesystemFailed, Path: stageDir, Err: err}
+		}
+		files = append(files, fileRecord(artifact.Kind, artifact.Path, normalizedArtifactMediaType(artifact.MediaType), sha256Bytes(artifact.Content)))
+	}
+
+	if request.Continuation != nil {
+		continuationBytes, err := w.marshalJSON(*request.Continuation)
+		if err != nil {
+			return RoundBundleRef{}, &Error{Phase: phaseContinuation, Kind: FailureKindSerializationFailed, Path: stageDir, Err: err}
+		}
+		if err := w.writeArtifact(stageDir, "continuation.json", continuationBytes); err != nil {
+			return RoundBundleRef{}, &Error{Phase: phaseContinuation, Kind: FailureKindFilesystemFailed, Path: stageDir, Err: err}
+		}
+		files = append(files, fileRecord("continuation", "continuation.json", "application/json", sha256Bytes(continuationBytes)))
+	}
+
 	completeBytes := []byte(completeMarkerContent)
 	metadataFiles := append([]BundleFile(nil), files...)
 	metadataFiles = append(metadataFiles,
@@ -203,6 +223,9 @@ func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (Roun
 
 func (w writer) writeArtifact(dir string, name string, data []byte) error {
 	path := filepath.Join(dir, name)
+	if err := w.mkdirAll(filepath.Dir(path)); err != nil {
+		return err
+	}
 	if err := w.writeFile(path, data); err != nil {
 		return err
 	}
@@ -277,6 +300,19 @@ func validateRequest(request RoundBundleInput) error {
 			return fmt.Errorf("rendered report file name %q is unsupported", rendered.FileName)
 		}
 	}
+	if request.Continuation != nil {
+		if err := request.Continuation.Validate(); err != nil {
+			return fmt.Errorf("continuation: %w", err)
+		}
+	}
+	for _, artifact := range request.AdditionalFiles {
+		if strings.TrimSpace(artifact.Kind) == "" {
+			return errors.New("bundle artifact kind is required")
+		}
+		if err := validateBundleArtifact(artifact); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -293,6 +329,31 @@ func normalizedRenderedReport(rendered RenderedReport) RenderedReport {
 		}
 	}
 	return rendered
+}
+
+func normalizedArtifactMediaType(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "application/octet-stream"
+	}
+	return value
+}
+
+func validateBundleArtifact(artifact BundleArtifact) error {
+	path := filepath.ToSlash(filepath.Clean(strings.TrimSpace(artifact.Path)))
+	if path == "" || path == "." || path == ".." {
+		return fmt.Errorf("bundle artifact path %q is invalid", artifact.Path)
+	}
+	if strings.HasPrefix(path, "../") || strings.Contains(path, "/../") {
+		return fmt.Errorf("bundle artifact path %q is invalid", artifact.Path)
+	}
+	if filepath.IsAbs(artifact.Path) {
+		return fmt.Errorf("bundle artifact path %q is invalid", artifact.Path)
+	}
+	if len(artifact.Content) == 0 {
+		return fmt.Errorf("bundle artifact %q content is required", artifact.Path)
+	}
+	return nil
 }
 
 func safeBundleName(name string) bool {

@@ -1,4 +1,4 @@
-// Package optimizer is the vertical slice for the Optimizer / NextChallenger agent:
-// prompt types, Eino-backed execution, bundle persistence, and Python policy
-// validation. internal/app/round/internal/optimizer orchestrates this behavior.
+// Package optimizer is the vertical slice for the Optimizer / NextChallenger
+// agent: prompt types, Eino-backed execution, and Python policy validation.
+// Round orchestration lives in internal/app/round.
 package optimizer

@@ -1,0 +1,11 @@
+amends "../SearchBenchRound.pkl"
+
+local function defineFromScratch(roundId: String): RoundManifest =
+  new RoundManifest {
+    id = roundId
+  }
+
+local function continueFrom(bundlePath: String): RoundManifest =
+  new RoundManifest {
+    continues = bundlePath
+  }

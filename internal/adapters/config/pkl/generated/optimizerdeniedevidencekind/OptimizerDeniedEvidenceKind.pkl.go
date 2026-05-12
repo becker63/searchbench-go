@@ -6,10 +6,7 @@ import (
 	"fmt"
 )
 
-// Labels for evidence the optimizer prompt must never include (leakage / safety).
-// `gold_labels` — canonical answers or gold labels from the dataset.
-// `oracle_files` — file lists or paths from oracle-only fields.
-// `raw_dataset_answers` — raw supervision fields from dataset rows.
+// Labels for evidence the optimizer prompt must never include.
 type OptimizerDeniedEvidenceKind string
 
 const (

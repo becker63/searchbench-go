@@ -5,6 +5,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -30,6 +31,8 @@ type RoundBundleInput struct {
 	RoundEvidence   score.RoundEvidenceDocument
 	ObjectiveResult *score.ObjectiveResult
 	RenderedReport  *RenderedReport
+	Continuation    *pureround.Continuation
+	AdditionalFiles []BundleArtifact
 	CreatedAt       time.Time
 }
 
@@ -57,6 +60,15 @@ type BundleFile struct {
 	Path      string `json:"path"`
 	MediaType string `json:"media_type"`
 	SHA256    string `json:"sha256,omitempty"`
+}
+
+// BundleArtifact is an extra caller-supplied artifact that should be persisted
+// inside the completed round bundle alongside the canonical SearchBench files.
+type BundleArtifact struct {
+	Kind      string
+	Path      string
+	MediaType string
+	Content   []byte
 }
 
 // BundleMetadata is the deterministic inventory written into metadata.json.

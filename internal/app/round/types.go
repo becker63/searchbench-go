@@ -1,12 +1,10 @@
 package round
 
 import (
-	"path/filepath"
 	"time"
 
 	"github.com/cloudwego/eino/components/model"
 
-	appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
 	"github.com/becker63/searchbench-go/internal/pure/game"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	pureround "github.com/becker63/searchbench-go/internal/pure/round"
@@ -17,17 +15,13 @@ type OptimizerModelFactory func() (model.ToolCallingChatModel, error)
 
 // Input configures one round workflow.
 //
-// EvaluationManifestPath is the only required field. When
-// OptimizationManifestPath and OptimizerModelFactory are both omitted the
-// round skips the optimizer and produces an evaluation-only bundle.
+// EvaluationManifestPath is the only required field.
 type Input struct {
-	EvaluationManifestPath   string
-	OptimizationManifestPath string
-	BundleRootOverride       string
-	RoundID                  string
-	OptimizerBundleID        string
-	DisableRenderReport      bool
-	Now                      func() time.Time
+	EvaluationManifestPath string
+	BundleRootOverride     string
+	RoundID                string
+	DisableRenderReport    bool
+	Now                    func() time.Time
 
 	EvaluatorModelFactory EvaluatorModelFactory
 	EvaluatorToolFactory  EvaluatorToolFactory
@@ -55,11 +49,9 @@ type Record struct {
 	Game  game.Contract
 	Round pureround.Record
 
-	RoundBundle     string
-	OptimizerBundle string
+	RoundBundle string
 
-	RoundResult          *Result
-	NextChallengerResult *appOptimizer.Record
+	RoundResult *Result
 }
 
 func normalizeInput(input Input) Input {
@@ -74,11 +66,4 @@ func roundBundleRoot(base string) string {
 		return ""
 	}
 	return base
-}
-
-func optimizerBundleRoot(base string) string {
-	if base == "" {
-		return ""
-	}
-	return filepath.Join(base, "optimizer")
 }

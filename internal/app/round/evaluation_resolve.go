@@ -11,8 +11,6 @@ import (
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
-	evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
-	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/score"
@@ -24,12 +22,9 @@ import (
 // resolveEvaluation.
 var defaultMatchSource dataset.MatchSource = evaluatorfake.NewMatchSource()
 
-// selectionPolicyV1DefaultSymbol is the runtime callable used when adapting
-// the manifest-level iterative_context.selection_policy.v1 interface into the
-// existing domain.Policy shape. It is not the SearchBench objective score.
+// selectionPolicyV1DefaultSymbol is the runtime callable used for policy
+// artifacts that implement iterative_context.selection_policy.v1.
 const selectionPolicyV1DefaultSymbol = "score"
-
-var ErrUnsupportedMode = errors.New("evaluation: only evaluation mode is supported")
 
 // resolveEvaluation loads one Pkl manifest through the config adapter and
 // projects it into the canonical resolved round plan.
@@ -48,165 +43,10 @@ func resolveEvaluation(ctx context.Context, request evaluationResolveRequest) (P
 	if err := config.Validate(cfg); err != nil {
 		return Plan{}, err
 	}
-	if cfg.Mode != config.ModeEvaluation {
-		return Plan{}, fmt.Errorf("%w: %s", ErrUnsupportedMode, cfg.Mode)
+	if cfg.Round == nil {
+		return Plan{}, fmt.Errorf("resolve round surface: round block is required")
 	}
-	if cfg.Evaluation == nil || cfg.Agents.Evaluator == nil {
-		return Plan{}, fmt.Errorf("%w: incomplete evaluation manifest", ErrUnsupportedMode)
-	}
-
-	manifestDir := filepath.Dir(manifestPath)
-	evaluation := cfg.Evaluation
-	evaluator := cfg.Agents.Evaluator
-
-	objectivePath, err := resolveExistingManifestPath(manifestDir, evaluation.Scoring.Objective)
-	if err != nil {
-		return Plan{}, fmt.Errorf("resolve objective path: %w", err)
-	}
-	_, bundleWriterRoot, err := resolveBundlePaths(manifestDir, request.BundleRootOverride)
-	if err != nil {
-		return Plan{}, fmt.Errorf("resolve bundle root: %w", err)
-	}
-
-	incumbent, err := resolveSystem(manifestDir, *evaluator, evaluation.Incumbent.System, nil)
-	if err != nil {
-		return Plan{}, fmt.Errorf("resolve incumbent policy: %w", err)
-	}
-	challenger, err := resolveSystem(
-		manifestDir,
-		*evaluator,
-		evaluation.Challenger.System,
-		&evaluation.Challenger.Uses.SelectionPolicy,
-	)
-	if err != nil {
-		return Plan{}, fmt.Errorf("resolve challenger policy: %w", err)
-	}
-
-	tasks, err := defaultMatchSource.Matches(ctx, dataset.Request{
-		ManifestDir: manifestDir,
-		Kind:        cfg.Dataset.Kind,
-		Name:        cfg.Dataset.Name,
-		Config:      cfg.Dataset.Config,
-		Split:       cfg.Dataset.Split,
-		MaxItems:    cfg.Dataset.MaxItems,
-	})
-	if err != nil {
-		return Plan{}, fmt.Errorf("resolve matches: %w", err)
-	}
-	systems := domain.NewPair(incumbent.spec, challenger.spec)
-	comparePlan := compare.NewPlan(systems, tasks)
-	if err := comparePlan.Validate(); err != nil {
-		return Plan{}, fmt.Errorf("validate compare plan: %w", err)
-	}
-
-	now := request.Now().UTC()
-	bundleID := request.BundleID
-	if bundleID == "" {
-		bundleID = defaultBundleID(cfg.Name, now)
-	}
-	reportID := request.ReportID
-	if reportID.Empty() {
-		reportID = defaultReportID(bundleID)
-	}
-
-	gameID := cfg.Game.Id
-	if strings.TrimSpace(gameID) == "" {
-		gameID = "code-localization"
-	}
-	bundleCollection := domain.HostPath(filepath.Join(string(bundleWriterRoot), "games", gameID, "rounds"))
-	expectedBundlePath := domain.HostPath(filepath.Join(string(bundleCollection), bundleID))
-	reportFormats := stringifyReportFormats(evaluation.Report.Formats)
-	renderHumanReport := containsReportFormat(reportFormats, config.ReportFormatText.String())
-
-	effectiveTools, deniedTools, systemPrompt, policyHash, err := evaluatorpolicy.ResolveEvaluatorRunPolicy(
-		evaluator.Tools,
-		evaluator.SystemPrompt,
-		evaluatorpolicy.EvaluatorToolRegistry{
-			Available:      evaluatorfake.LocalEvaluatorToolNames(),
-			DefaultAllowed: evaluatorfake.LocalEvaluatorDefaultAllowedToolNames(),
-		},
-	)
-	if err != nil {
-		return Plan{}, fmt.Errorf("evaluator tool policy: %w", err)
-	}
-
-	return Plan{
-		ManifestPath: manifestPath,
-		RoundName:    cfg.Name,
-		Mode:         cfg.Mode.String(),
-		Game: GameConfig{
-			ID:   cfg.Game.Id,
-			Kind: cfg.Game.Kind,
-		},
-		Round: RoundConfig{
-			ID: bundleID,
-		},
-		Dataset: DatasetConfig{
-			Kind:     cfg.Dataset.Kind,
-			Name:     cfg.Dataset.Name,
-			Config:   cfg.Dataset.Config,
-			Split:    cfg.Dataset.Split,
-			MaxItems: cfg.Dataset.MaxItems,
-		},
-		Policies:    systems,
-		Matches:     tasks,
-		Parallelism: compare.DefaultParallelism(),
-		Evaluator: EvaluatorConfig{
-			Model: EvaluatorModelConfig{
-				Provider:        evaluator.Model.Provider.String(),
-				Name:            evaluator.Model.Name,
-				MaxOutputTokens: derefInt(evaluator.Model.MaxOutputTokens),
-			},
-			Bounds: EvaluatorBoundsConfig{
-				MaxModelTurns:  evaluator.Bounds.MaxModelTurns,
-				MaxToolCalls:   evaluator.Bounds.MaxToolCalls,
-				TimeoutSeconds: evaluator.Bounds.TimeoutSeconds,
-			},
-			Retry: RetryPolicyConfig{
-				MaxAttempts:                evaluator.Retry.MaxAttempts,
-				RetryOnModelError:          evaluator.Retry.RetryOnModelError,
-				RetryOnToolFailure:         evaluator.Retry.RetryOnToolFailure,
-				RetryOnFinalizationFailure: evaluator.Retry.RetryOnFinalizationFailure,
-				RetryOnInvalidPrediction:   evaluator.Retry.RetryOnInvalidPrediction,
-			},
-			ToolPolicy: EvaluatorToolPolicyView{
-				EffectiveAllowed: effectiveTools,
-				Denied:           deniedTools,
-				SystemPrompt:     systemPrompt,
-				PolicySHA256:     policyHash,
-			},
-		},
-		Scoring: ScoringConfig{
-			ObjectivePath: objectivePath,
-			CurrentEvidence: score.ObjectiveEvidenceRef{
-				Name:         "current",
-				BundlePath:   string(expectedBundlePath),
-				EvidencePath: filepath.Join(string(expectedBundlePath), "evidence.pkl"),
-				ReportPath:   filepath.Join(string(expectedBundlePath), "round-report.json"),
-			},
-			ParentEvidence:     cloneEvidenceRef(request.ParentRef),
-			ParentEvidencePath: request.ParentEvidencePath,
-		},
-		Output: OutputConfig{
-			BundleCollectionPath: bundleCollection,
-			BundleWriterRoot:     bundleWriterRoot,
-			ExpectedBundlePath:   expectedBundlePath,
-			ReportFormats:        reportFormats,
-			RenderHumanReport:    renderHumanReport,
-			ResolvedPolicyPaths: ResolvedPolicyPaths{
-				Incumbent:  filepath.ToSlash(incumbent.policyPath),
-				Challenger: filepath.ToSlash(challenger.policyPath),
-			},
-		},
-		Report: ReportConfig{
-			Formats: reportFormats,
-		},
-		Bundle: BundleConfig{
-			ID: bundleID,
-		},
-		ReportID:  reportID,
-		CreatedAt: now,
-	}, nil
+	return resolveRoundManifest(ctx, cfg, manifestPath, request)
 }
 
 type resolvedSystem struct {
@@ -219,55 +59,6 @@ func normalizeEvaluationRequest(request evaluationResolveRequest) evaluationReso
 		request.Now = func() time.Time { return time.Now().UTC() }
 	}
 	return request
-}
-
-func resolveSystem(
-	manifestDir string,
-	evaluator config.Evaluator,
-	system config.System,
-	policyArtifact *config.PolicyArtifact,
-) (resolvedSystem, error) {
-	backendKind, err := mapBackend(system.Backend)
-	if err != nil {
-		return resolvedSystem{}, err
-	}
-
-	out := resolvedSystem{
-		spec: domain.SystemSpec{
-			ID:      domain.SystemID(system.Id),
-			Name:    system.Name,
-			Backend: backendKind,
-			Model: domain.ModelSpec{
-				Provider: evaluator.Model.Provider.String(),
-				Name:     evaluator.Model.Name,
-			},
-			PromptBundle: domain.PromptBundleRef{
-				Name:    system.PromptBundle.Name,
-				Version: derefString(system.PromptBundle.Version),
-			},
-			Runtime: domain.RuntimeConfig{
-				MaxSteps:        resolvedMaxSteps(evaluator.Bounds.MaxModelTurns, system.Runtime.MaxSteps),
-				MaxToolCalls:    evaluator.Bounds.MaxToolCalls,
-				MaxOutputTokens: derefInt(evaluator.Model.MaxOutputTokens),
-			},
-		},
-	}
-	if policyArtifact == nil {
-		return out, nil
-	}
-
-	policyPath, err := resolveExistingManifestPath(manifestDir, policyArtifact.Path)
-	if err != nil {
-		return resolvedSystem{}, fmt.Errorf("resolve policy path: %w", err)
-	}
-	data, err := os.ReadFile(policyPath)
-	if err != nil {
-		return resolvedSystem{}, fmt.Errorf("read policy source: %w", err)
-	}
-	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), selectionPolicyV1DefaultSymbol)
-	out.spec.Policy = &policy
-	out.policyPath = policyPath
-	return out, nil
 }
 
 func resolveBundlePaths(manifestDir string, override string) (domain.HostPath, domain.HostPath, error) {

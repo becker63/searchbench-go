@@ -6,11 +6,7 @@ import (
 	"fmt"
 )
 
-// Evidence kinds the optimizer may pull from the parent bundle when `include` lists them.
-// - `report_summary` — high-level report JSON / summary text.
-// - `round_evidence` — structured round evidence document.
-// - `objective_result` — prior objective scoring payload.
-// - `challenger_policy` — the challenger policy source under evaluation.
+// Evidence kinds the optimizer may pull from the parent bundle.
 type NextChallengerEvidenceKind string
 
 const (

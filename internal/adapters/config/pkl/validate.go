@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"strings"
 )
 
@@ -13,6 +12,15 @@ const maxSystemPromptBytes = 8 * 1024
 var (
 	ErrValidationFailed                           = errors.New("config: validation failed")
 	ErrUnsupportedMode                            = errors.New("config: unsupported mode")
+	ErrMissingRoundManifest                       = errors.New("config: round block is required")
+	ErrMissingRoundID                             = errors.New("config: round.id is required")
+	ErrMissingRoundIncumbent                      = errors.New("config: round.incumbent is required for from-scratch rounds")
+	ErrMissingRoundMatches                        = errors.New("config: round.matches is required for from-scratch rounds")
+	ErrMissingRoundEvaluator                      = errors.New("config: round.evaluator is required for from-scratch rounds")
+	ErrMissingRoundScoring                        = errors.New("config: round.scoring is required for from-scratch rounds")
+	ErrMissingRoundChallenger                     = errors.New("config: round.challenger must define selectionPolicy or generate")
+	ErrRoundChallengerConflict                    = errors.New("config: round.challenger must not define both selectionPolicy and generate")
+	ErrRoundGenerateArtifactNameInvalid           = errors.New("config: round.challenger.generate.artifactName must be relative and must not contain '..'")
 	ErrMissingEvaluation                          = errors.New("config: evaluation config is required")
 	ErrMissingOptimization                        = errors.New("config: optimization config is required")
 	ErrMissingEvaluator                           = errors.New("config: agents.evaluator is required")
@@ -52,51 +60,111 @@ var (
 // Validate applies SearchBench-specific config checks after Pkl has resolved
 // defaults and basic type constraints.
 func Validate(spec RoundSpec) error {
-	if err := validateMode(spec); err != nil {
-		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
-	}
-	if err := validateDataset(spec.Dataset); err != nil {
-		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
+	if spec.Round == nil {
+		return fmt.Errorf("%w: %w", ErrValidationFailed, ErrMissingRoundManifest)
 	}
 	if err := validateInterfaces(spec.Interfaces); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
-	if err := validatePolicies(spec.Policies); err != nil {
-		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
-	}
-	if err := validateArtifacts(spec.Artifacts); err != nil {
-		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
-	}
-	if err := validateAgents(spec.Agents); err != nil {
-		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
-	}
-	if err := validateEvaluation(spec); err != nil {
-		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
-	}
-	if err := validateOptimization(spec); err != nil {
+	if err := validateRoundManifest(spec); err != nil {
 		return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 	}
 	return nil
 }
 
-func validateMode(spec RoundSpec) error {
-	switch spec.Mode {
-	case ModeEvaluation:
-		if spec.Evaluation == nil {
-			return ErrMissingEvaluation
+func validateRoundManifest(spec RoundSpec) error {
+	round := spec.Round
+	if round == nil {
+		return nil
+	}
+	if strings.TrimSpace(round.Id) == "" {
+		return ErrMissingRoundID
+	}
+	if round.Continues == nil {
+		if round.Incumbent == nil {
+			return ErrMissingRoundIncumbent
 		}
-		if spec.Agents.Evaluator == nil {
-			return ErrMissingEvaluator
+		if round.Matches == nil {
+			return ErrMissingRoundMatches
 		}
-	case ModeOptimization:
-		if spec.Optimization == nil {
-			return ErrMissingOptimization
+		if round.Evaluator == nil {
+			return ErrMissingRoundEvaluator
 		}
-		if spec.Agents.Optimizer == nil {
-			return ErrMissingOptimizer
+		if round.Scoring == nil {
+			return ErrMissingRoundScoring
 		}
-	default:
-		return fmt.Errorf("%w: %q", ErrUnsupportedMode, spec.Mode)
+	}
+	if round.Incumbent != nil {
+		if err := validateRoundPolicy("round.incumbent", *round.Incumbent); err != nil {
+			return err
+		}
+	}
+	if err := validateRoundChallenger(round.Challenger); err != nil {
+		return err
+	}
+	if round.Matches != nil {
+		if err := validateDataset(*round.Matches); err != nil {
+			return err
+		}
+	}
+	if round.Evaluator != nil {
+		if err := validateAgentModel(round.Evaluator.Model); err != nil {
+			return err
+		}
+		if err := validateToolPolicy("round.evaluator.tools", round.Evaluator.Tools); err != nil {
+			return err
+		}
+		if err := validateSystemPrompt("round.evaluator.systemPrompt", round.Evaluator.SystemPrompt); err != nil {
+			return err
+		}
+	}
+	if round.Scoring != nil && strings.TrimSpace(round.Scoring.Objective) == "" {
+		return ErrMissingScoringObjectivePath
+	}
+	return nil
+}
+
+func validateRoundPolicy(fieldPath string, policy RoundPolicy) error {
+	if strings.TrimSpace(policy.System.Id) == "" {
+		return fmt.Errorf("%s.system.id: %w", fieldPath, ErrMissingIncumbentPolicyID)
+	}
+	if policy.SelectionPolicy != nil {
+		if err := validatePolicyArtifact(*policy.SelectionPolicy); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateRoundChallenger(challenger RoundChallenger) error {
+	if challenger.SelectionPolicy != nil && challenger.Generate != nil {
+		return ErrRoundChallengerConflict
+	}
+	if challenger.SelectionPolicy == nil && challenger.Generate == nil {
+		return ErrMissingRoundChallenger
+	}
+	if challenger.System != nil && strings.TrimSpace(challenger.System.Id) == "" {
+		return ErrMissingChallengerPolicyID
+	}
+	if challenger.SelectionPolicy != nil {
+		if err := validatePolicyArtifact(*challenger.SelectionPolicy); err != nil {
+			return err
+		}
+	}
+	if challenger.Generate != nil {
+		if err := validateAgentModel(challenger.Generate.Optimizer.Model); err != nil {
+			return err
+		}
+		if err := validateToolPolicy("round.challenger.generate.optimizer.tools", challenger.Generate.Optimizer.Tools); err != nil {
+			return err
+		}
+		if err := validateSystemPrompt("round.challenger.generate.optimizer.systemPrompt", challenger.Generate.Optimizer.SystemPrompt); err != nil {
+			return err
+		}
+		name := strings.TrimSpace(challenger.Generate.ArtifactName)
+		if filepath.IsAbs(name) || containsParentPath(name) || name == "" {
+			return ErrRoundGenerateArtifactNameInvalid
+		}
 	}
 	return nil
 }
@@ -118,35 +186,6 @@ func validateInterfaces(interfaces Interfaces) error {
 	return nil
 }
 
-func validatePolicies(policies Policies) error {
-	if strings.TrimSpace(policies.Incumbent.Id) == "" {
-		return ErrMissingIncumbentPolicyID
-	}
-	if strings.TrimSpace(policies.Challenger.Id) == "" {
-		return ErrMissingChallengerPolicyID
-	}
-	return nil
-}
-
-func validateArtifacts(artifacts Artifacts) error {
-	if artifacts.ChallengerPolicy != nil {
-		if err := validatePolicyArtifact(*artifacts.ChallengerPolicy); err != nil {
-			return err
-		}
-	}
-	if artifacts.NextChallenger != nil {
-		if err := validateNextChallengerArtifact(*artifacts.NextChallenger); err != nil {
-			return err
-		}
-	}
-	if artifacts.ParentRoundBundle != nil {
-		if err := validateCompletedBundleArtifact(*artifacts.ParentRoundBundle); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func validatePolicyArtifact(artifact PolicyArtifact) error {
 	path := strings.TrimSpace(artifact.Path)
 	if path == "" {
@@ -154,51 +193,6 @@ func validatePolicyArtifact(artifact PolicyArtifact) error {
 	}
 	if filepath.IsAbs(path) {
 		return ErrPolicyArtifactPathMustBeRelative
-	}
-	return nil
-}
-
-func validateNextChallengerArtifact(artifact NextChallengerArtifact) error {
-	name := strings.TrimSpace(artifact.ArtifactName)
-	if name == "" {
-		return ErrNextChallengerArtifactNameRequired
-	}
-	if filepath.IsAbs(name) || containsParentPath(name) {
-		return ErrNextChallengerArtifactNameInvalid
-	}
-	return nil
-}
-
-func validateCompletedBundleArtifact(artifact CompletedRoundBundleArtifact) error {
-	if strings.TrimSpace(artifact.Path) == "" {
-		return ErrCompletedBundleArtifactPathRequired
-	}
-	return nil
-}
-
-func validateAgents(agents Agents) error {
-	if agents.Evaluator != nil {
-		if err := validateAgentModel(agents.Evaluator.Model); err != nil {
-			return err
-		}
-		if err := validateToolPolicy("agents.evaluator.tools", agents.Evaluator.Tools); err != nil {
-			return err
-		}
-		if err := validateSystemPrompt("agents.evaluator.systemPrompt", agents.Evaluator.SystemPrompt); err != nil {
-			return err
-		}
-	}
-	if agents.Optimizer != nil {
-		if err := validateAgentModel(agents.Optimizer.Model); err != nil {
-			return err
-		}
-		// Structural shape only: the optimizer agent has no tool registry enforcement yet.
-		if err := validateToolPolicy("agents.optimizer.tools", agents.Optimizer.Tools); err != nil {
-			return err
-		}
-		if err := validateSystemPrompt("agents.optimizer.systemPrompt", agents.Optimizer.SystemPrompt); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -250,66 +244,6 @@ func validateSystemPrompt(fieldPath string, prompt *string) error {
 	}
 	if len(*prompt) > maxSystemPromptBytes {
 		return fmt.Errorf("%s exceeds max length %d bytes: %w", fieldPath, maxSystemPromptBytes, ErrSystemPromptTooLarge)
-	}
-	return nil
-}
-
-func validateEvaluation(spec RoundSpec) error {
-	if spec.Evaluation == nil {
-		return nil
-	}
-	evaluation := *spec.Evaluation
-
-	if spec.Agents.Evaluator == nil {
-		return ErrMissingEvaluator
-	}
-	if !reflect.DeepEqual(*spec.Agents.Evaluator, evaluation.Agent) {
-		return ErrEvaluationAgentMismatch
-	}
-	if !reflect.DeepEqual(spec.Policies.Incumbent, evaluation.Incumbent.System) {
-		return ErrEvaluationIncumbentPolicyMismatch
-	}
-	if !reflect.DeepEqual(spec.Policies.Challenger, evaluation.Challenger.System) {
-		return ErrEvaluationChallengerPolicyMismatch
-	}
-	if spec.Artifacts.ChallengerPolicy == nil {
-		return ErrMissingChallengerSelectionPolicyArtifact
-	}
-	if !reflect.DeepEqual(*spec.Artifacts.ChallengerPolicy, evaluation.Challenger.Uses.SelectionPolicy) {
-		return ErrChallengerSelectionPolicyArtifactMismatch
-	}
-	if evaluation.Challenger.Uses.SelectionPolicy.Implements.Id != spec.Interfaces.IterativeContextSelectionPolicyV1.Id {
-		return ErrChallengerSelectionPolicyInterfaceMismatch
-	}
-	if strings.TrimSpace(evaluation.Scoring.Objective) == "" {
-		return ErrMissingScoringObjectivePath
-	}
-	return nil
-}
-
-func validateOptimization(spec RoundSpec) error {
-	if spec.Optimization == nil {
-		return nil
-	}
-	optimization := *spec.Optimization
-
-	if spec.Agents.Optimizer == nil {
-		return ErrMissingOptimizer
-	}
-	if !reflect.DeepEqual(*spec.Agents.Optimizer, optimization.Agent) {
-		return ErrOptimizerAgentMismatch
-	}
-	if spec.Artifacts.ParentRoundBundle == nil || !reflect.DeepEqual(*spec.Artifacts.ParentRoundBundle, optimization.ParentRound.Bundle) {
-		return ErrOptimizationParentRoundBundleMismatch
-	}
-	if spec.Artifacts.ChallengerPolicy == nil || !reflect.DeepEqual(*spec.Artifacts.ChallengerPolicy, optimization.Target.Input) {
-		return ErrOptimizationChallengerPolicyInputMismatch
-	}
-	if spec.Artifacts.NextChallenger == nil || !reflect.DeepEqual(*spec.Artifacts.NextChallenger, optimization.Target.Output) {
-		return ErrOptimizationNextChallengerOutputMismatch
-	}
-	if !reflect.DeepEqual(optimization.ParentRound.Bundle, optimization.Evidence.From) {
-		return ErrNextChallengerEvidenceSourceMismatch
 	}
 	return nil
 }

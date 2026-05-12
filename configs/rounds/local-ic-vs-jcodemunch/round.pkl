@@ -1,98 +1,16 @@
-amends "../../schema/SearchBenchRound.pkl"
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
 
 name = "local-ic-vs-jcodemunch-round-001"
-mode = "evaluation"
 
-interfaces {
-  iterativeContextSelectionPolicyV1 {
-    id = "iterative_context.selection_policy.v1"
-  }
-}
-
-dataset {
-  kind = "lca"
-  name = "JetBrains-Research/lca-bug-localization"
-  config = "py"
-  split = "dev"
-  maxItems = 5
-}
-
-policies {
-  incumbent {
-    id = "jcodemunch"
-    name = "jCodeMunch"
-    backend = "jcodemunch"
-  }
-
-  challenger {
-    id = "iterative-context"
-    name = "Iterative Context"
-    backend = "iterative_context"
-  }
-}
-
-artifacts {
-  challengerPolicy {
-    id = "challenger-policy-round-001"
-    kind = "policy"
-    path = "policies/challenger_policy.py"
-    implements = interfaces.iterativeContextSelectionPolicyV1
-  }
-}
-
-agents {
-  evaluator {
-    model {
-      provider = "fake"
-      name = "fake-evaluator"
-      maxOutputTokens = 2000
-    }
-
-    bounds {
-      maxModelTurns = 8
-      maxToolCalls = 24
-      timeoutSeconds = 300
-    }
-
-    tools {
-      allow {
-        "resolve"
-        "expand"
-        "resolve_and_expand"
-      }
-
-      deny {
-        "shell"
-        "go_test"
-        "write_file"
-        "network"
-      }
-    }
-
-    systemPrompt = """
-    Use structural code evidence before guessing.
-    Prefer the smallest plausible file set.
-    Do not invent files that were not returned by tools.
-    """
-  }
-}
-
-evaluation {
-  agent = agents.evaluator
-
-  incumbent {
-    system = policies.incumbent
-  }
-
-  challenger {
-    system = policies.challenger
-
-    uses {
-      selectionPolicy = artifacts.challengerPolicy
+round = (game.defineFromScratch("round-001")) {
+  incumbent = game.jcodemunch()
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-001"
     }
   }
-
-  scoring {
-    objective = "scoring/localization-objective.pkl"
-  }
+  matches = game.lca("py", "dev", 5)
+  evaluator = game.fakeEvaluator()
+  scoring = game.objective("scoring/localization-objective.pkl")
 }

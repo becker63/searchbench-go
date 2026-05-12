@@ -6,6 +6,6 @@
 // executor packages remain authoritative for execution semantics.
 //
 // One manifest resolves to one Go config struct. After that resolution, Go
-// validation enforces SearchBench-specific rules such as evaluator/writer
-// separation and mode-specific requirements.
+// validation enforces SearchBench-specific rules for the continuation-backed
+// `round` surface.
 package config

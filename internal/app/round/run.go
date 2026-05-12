@@ -2,10 +2,8 @@ package round
 
 import (
 	"context"
-	"errors"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-	appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
 	"github.com/becker63/searchbench-go/internal/games/codelocalization"
 	"github.com/becker63/searchbench-go/internal/pure/game"
 	"github.com/becker63/searchbench-go/internal/pure/report"
@@ -16,8 +14,8 @@ import (
 // Run completes one round and, when configured, proposes a next challenger.
 //
 // The flow is the named pipeline: ResolveGame -> ResolveRound ->
-// EvaluateMatches -> BuildEvidence -> EvaluateObjective -> Decide ->
-// WriteBundle -> ProposeNextChallenger. Each step delegates to the
+// MaterializeChallenger -> EvaluateMatches -> BuildEvidence ->
+// EvaluateObjective -> Decide -> WriteBundle. Each step delegates to the
 // corresponding phase function, and only WriteBundle is allowed to write the
 // COMPLETE marker for the round bundle.
 func Run(ctx context.Context, input Input) (Record, error) {
@@ -31,6 +29,10 @@ func Run(ctx context.Context, input Input) (Record, error) {
 	record.Game = resolvedGame
 
 	resolved, err := ResolveRound(ctx, resolvedGame, input)
+	if err != nil {
+		return record, err
+	}
+	resolved, err = MaterializeChallenger(ctx, resolved, input)
 	if err != nil {
 		return record, err
 	}
@@ -68,16 +70,6 @@ func Run(ctx context.Context, input Input) (Record, error) {
 	}
 	record.RoundBundle = string(bundleRef.Path)
 	record.RoundResult = &roundResult
-
-	next, err := ProposeNextChallenger(ctx, resolved, evidence, objective, decision, bundleRef, input)
-	if err != nil {
-		return record, err
-	}
-	if next != nil {
-		record.NextChallengerResult = next
-		record.OptimizerBundle = next.BundlePath
-		record.Round.NextChallenger = next.Optimizer.Proposal != nil
-	}
 	return record, nil
 }
 
@@ -98,6 +90,17 @@ func ResolveRound(ctx context.Context, resolvedGame game.Contract, input Input) 
 		return Resolved{}, err
 	}
 	return Resolved{Game: resolvedGame, Round: roundPlan}, nil
+}
+
+// MaterializeChallenger resolves any optimizer-backed challenger generation
+// before evaluation begins. Checked-in challengers leave the resolved plan
+// unchanged.
+func MaterializeChallenger(ctx context.Context, resolved Resolved, input Input) (Resolved, error) {
+	updated, err := materializeChallenger(ctx, resolved, input)
+	if err != nil {
+		return Resolved{}, &Error{Phase: PhaseMaterializeChallengerFailed, Err: err}
+	}
+	return updated, nil
 }
 
 // EvaluateMatches runs incumbent and challenger executions for the round
@@ -164,58 +167,6 @@ func WriteBundle(
 		evidence,
 		objective,
 	)
-}
-
-// ProposeNextChallenger asks the optimizer for a possible future challenger.
-//
-// When neither an OptimizerModelFactory nor an OptimizationManifestPath is
-// configured, the round skips the optimizer cleanly and returns nil without
-// error.
-func ProposeNextChallenger(
-	ctx context.Context,
-	_ Resolved,
-	_ score.RoundEvidenceDocument,
-	_ *score.ObjectiveResult,
-	_ report.Decision,
-	bundleRef bundlefs.BundleRef,
-	input Input,
-) (*appOptimizer.Record, error) {
-	if input.OptimizationManifestPath == "" {
-		return nil, nil
-	}
-	if input.OptimizerModelFactory == nil {
-		return nil, errors.New("round: OptimizerModelFactory is required when OptimizationManifestPath is set")
-	}
-	optimizerModel, err := input.OptimizerModelFactory()
-	if err != nil {
-		return nil, err
-	}
-
-	optimizerPlan, err := appOptimizer.Resolve(ctx, appOptimizer.ResolveRequest{
-		ManifestPath:             input.OptimizationManifestPath,
-		BundleRootOverride:       optimizerBundleRoot(input.BundleRootOverride),
-		ParentBundlePathOverride: string(bundleRef.Path),
-		BundleID:                 input.OptimizerBundleID,
-		Now:                      input.Now,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	nextChallengerRecord, err := appOptimizer.RunResolved(ctx, optimizerPlan, appOptimizer.Request{
-		Resolve: appOptimizer.ResolveRequest{
-			ManifestPath:             input.OptimizationManifestPath,
-			BundleRootOverride:       optimizerBundleRoot(input.BundleRootOverride),
-			ParentBundlePathOverride: string(bundleRef.Path),
-			BundleID:                 input.OptimizerBundleID,
-			Now:                      input.Now,
-		},
-		Model: optimizerModel,
-	})
-	if err != nil {
-		return &nextChallengerRecord, err
-	}
-	return &nextChallengerRecord, nil
 }
 
 func buildResult(

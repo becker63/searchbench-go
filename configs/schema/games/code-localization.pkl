@@ -1,0 +1,122 @@
+amends "../core/SearchBenchRoundCore.pkl"
+
+local function lca(datasetConfig: String, datasetSplit: String, datasetMaxItems: Int): Dataset =
+  new Dataset {
+    kind = "lca"
+    name = "JetBrains-Research/lca-bug-localization"
+    config = datasetConfig
+    split = datasetSplit
+    maxItems = datasetMaxItems
+  }
+
+local function objective(objectivePath: String): Scoring =
+  new Scoring {
+    objective = objectivePath
+  }
+
+local function fakeEvaluator(): Evaluator =
+  new Evaluator {
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+      maxOutputTokens = 2000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 24
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "resolve"
+        "expand"
+        "resolve_and_expand"
+      }
+
+      deny {
+        "shell"
+        "go_test"
+        "write_file"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Use structural code evidence before guessing.
+    Prefer the smallest plausible file set.
+    Do not invent files that were not returned by tools.
+    """
+  }
+
+local function fakeOptimizer(): Optimizer =
+  new Optimizer {
+    model {
+      provider = "fake"
+      name = "fake-optimizer"
+      maxOutputTokens = 4000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 16
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "read_parent_bundle"
+        "read_score_evidence"
+        "read_objective_result"
+        "read_report_summary"
+        "read_artifact"
+        "write_artifact_proposal"
+      }
+
+      deny {
+        "run_evaluator"
+        "shell"
+        "go_test"
+        "write_manifest"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Improve the Iterative Context selection policy using only the provided parent-run evidence.
+
+    Prefer small, inspectable changes.
+    Preserve the declared policy interface.
+    Do not overfit to hidden labels or oracle files.
+    Emit exactly one replacement policy proposal.
+    """
+  }
+
+local function jcodemunch(): RoundPolicy =
+  new RoundPolicy {
+    system {
+      id = "jcodemunch"
+      name = "jCodeMunch"
+      backend = "jcodemunch"
+    }
+  }
+
+local function iterativeContext(policyPath: String): RoundChallenger =
+  new RoundChallenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy"
+      kind = "policy"
+      path = policyPath
+      implements = interfaces.iterativeContextSelectionPolicyV1
+    }
+  }
+
+local function generate(): GeneratedChallenger =
+  new GeneratedChallenger {}

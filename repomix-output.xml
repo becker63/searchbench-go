@@ -47,6 +47,12 @@ cmd/
     main.go
 configs/
   rounds/
+    continue-ic-from-local/
+      policies/
+        challenger_policy.py
+      round.pkl
+    generate-ic-from-local/
+      round.pkl
     local-ic-vs-jcodemunch/
       policies/
         challenger_policy.py
@@ -60,6 +66,11 @@ configs/
         localization-objective.pkl
       round.pkl
   schema/
+    core/
+      SearchBenchRoundCore.pkl
+    games/
+      code-localization-helpers.pkl
+      code-localization.pkl
     SearchBenchObjective.pkl
     SearchBenchObjectiveHelpers.pkl
     SearchBenchRound.pkl
@@ -88,6 +99,7 @@ internal/
     bundle/
       fs/
         bundle.go
+        continuation.go
         errors.go
         evidence_pkl.go
         metadata.go
@@ -185,27 +197,20 @@ internal/
           runner_example_test.go
           runner_test.go
           runner.go
-        optimizer/
-          bundle.go
-          doc.go
-          evidence.go
-          plan.go
-          resolve.go
-          run_test.go
-          run.go
+      bundle_continuation.go
+      challenger_materialize.go
       doc.go
       evaluate.go
       evaluation_errors.go
       evaluation_evidence.go
       evaluation_marshal.go
       evaluation_plan.go
+      evaluation_resolve_round_manifest.go
       evaluation_resolve_test.go
       evaluation_resolve.go
       evaluation_test.go
       evaluation_types.go
-      evaluator_parity_test.go
       evaluator.go
-      phases_test.go
       run_test.go
       run.go
       types.go
@@ -272,6 +277,7 @@ internal/
       report.go
       spec.go
     round/
+      continuation.go
       round.go
     score/
       comparison_test.go
@@ -371,6 +377,46 @@ import (
 func main()
 </file>
 
+<file path="configs/rounds/continue-ic-from-local/policies/challenger_policy.py">
+def score(task)
+⋮----
+files = task.get("candidate_files", [])
+</file>
+
+<file path="configs/rounds/continue-ic-from-local/round.pkl">
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "continue-ic-from-local-round-002"
+
+round = (game.continueFrom("../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001")) {
+  id = "round-002"
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-002"
+    }
+  }
+}
+</file>
+
+<file path="configs/rounds/generate-ic-from-local/round.pkl">
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "generate-ic-from-local-round-002"
+
+round = (game.continueFrom("../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001")) {
+  id = "round-002"
+
+  challenger {
+    generate {
+      optimizer = game.fakeOptimizer()
+      artifactName = "next_challenger_policy.round-002.py"
+    }
+  }
+}
+</file>
+
 <file path="configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py">
 def score(match)
 </file>
@@ -428,103 +474,21 @@ bounds = new ObjectiveBounds {
 </file>
 
 <file path="configs/rounds/local-ic-vs-jcodemunch/round.pkl">
-amends "../../schema/SearchBenchRound.pkl"
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
 
 name = "local-ic-vs-jcodemunch-round-001"
-mode = "evaluation"
 
-interfaces {
-  iterativeContextSelectionPolicyV1 {
-    id = "iterative_context.selection_policy.v1"
-  }
-}
-
-dataset {
-  kind = "lca"
-  name = "JetBrains-Research/lca-bug-localization"
-  config = "py"
-  split = "dev"
-  maxItems = 5
-}
-
-policies {
-  incumbent {
-    id = "jcodemunch"
-    name = "jCodeMunch"
-    backend = "jcodemunch"
-  }
-
-  challenger {
-    id = "iterative-context"
-    name = "Iterative Context"
-    backend = "iterative_context"
-  }
-}
-
-artifacts {
-  challengerPolicy {
-    id = "challenger-policy-round-001"
-    kind = "policy"
-    path = "policies/challenger_policy.py"
-    implements = interfaces.iterativeContextSelectionPolicyV1
-  }
-}
-
-agents {
-  evaluator {
-    model {
-      provider = "fake"
-      name = "fake-evaluator"
-      maxOutputTokens = 2000
-    }
-
-    bounds {
-      maxModelTurns = 8
-      maxToolCalls = 24
-      timeoutSeconds = 300
-    }
-
-    tools {
-      allow {
-        "resolve"
-        "expand"
-        "resolve_and_expand"
-      }
-
-      deny {
-        "shell"
-        "go_test"
-        "write_file"
-        "network"
-      }
-    }
-
-    systemPrompt = """
-    Use structural code evidence before guessing.
-    Prefer the smallest plausible file set.
-    Do not invent files that were not returned by tools.
-    """
-  }
-}
-
-evaluation {
-  agent = agents.evaluator
-
-  incumbent {
-    system = policies.incumbent
-  }
-
-  challenger {
-    system = policies.challenger
-
-    uses {
-      selectionPolicy = artifacts.challengerPolicy
+round = (game.defineFromScratch("round-001")) {
+  incumbent = game.jcodemunch()
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-001"
     }
   }
-
-  scoring {
-    objective = "scoring/localization-objective.pkl"
-  }
+  matches = game.lca("py", "dev", 5)
+  evaluator = game.fakeEvaluator()
+  scoring = game.objective("scoring/localization-objective.pkl")
 }
 </file>
 
@@ -695,6 +659,279 @@ optimization {
 }
 </file>
 
+<file path="configs/schema/core/SearchBenchRoundCore.pkl">
+amends "../SearchBenchRound.pkl"
+
+local function defineFromScratch(roundId: String): RoundManifest =
+  new RoundManifest {
+    id = roundId
+  }
+
+local function continueFrom(bundlePath: String): RoundManifest =
+  new RoundManifest {
+    continues = bundlePath
+  }
+</file>
+
+<file path="configs/schema/games/code-localization-helpers.pkl">
+import "./code-localization.pkl" as schema
+
+function defineFromScratch(roundId: String): schema.RoundManifest =
+  new schema.RoundManifest {
+    id = roundId
+  }
+
+function continueFrom(bundlePath: String): schema.RoundManifest =
+  new schema.RoundManifest {
+    continues = bundlePath
+  }
+
+function jcodemunch(): schema.RoundPolicy =
+  new schema.RoundPolicy {
+    system {
+      id = "jcodemunch"
+      name = "jCodeMunch"
+      backend = "jcodemunch"
+    }
+  }
+
+function iterativeContext(policyPath: String): schema.RoundChallenger =
+  new schema.RoundChallenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy"
+      kind = "policy"
+      path = policyPath
+      implements = new schema.Interface {
+        id = "iterative_context.selection_policy.v1"
+      }
+    }
+  }
+
+function lca(datasetConfig: String, datasetSplit: String, datasetMaxItems: Int): schema.Dataset =
+  new schema.Dataset {
+    kind = "lca"
+    name = "JetBrains-Research/lca-bug-localization"
+    config = datasetConfig
+    split = datasetSplit
+    maxItems = datasetMaxItems
+  }
+
+function objective(objectivePath: String): schema.Scoring =
+  new schema.Scoring {
+    objective = objectivePath
+  }
+
+function fakeEvaluator(): schema.Evaluator =
+  new schema.Evaluator {
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+      maxOutputTokens = 2000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 24
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "resolve"
+        "expand"
+        "resolve_and_expand"
+      }
+
+      deny {
+        "shell"
+        "go_test"
+        "write_file"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Use structural code evidence before guessing.
+    Prefer the smallest plausible file set.
+    Do not invent files that were not returned by tools.
+    """
+  }
+
+function fakeOptimizer(): schema.Optimizer =
+  new schema.Optimizer {
+    model {
+      provider = "fake"
+      name = "fake-optimizer"
+      maxOutputTokens = 4000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 16
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "read_parent_bundle"
+        "read_score_evidence"
+        "read_objective_result"
+        "read_report_summary"
+        "read_artifact"
+        "write_artifact_proposal"
+      }
+
+      deny {
+        "run_evaluator"
+        "shell"
+        "go_test"
+        "write_manifest"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Improve the Iterative Context selection policy using only the provided parent-run evidence.
+
+    Prefer small, inspectable changes.
+    Preserve the declared policy interface.
+    Do not overfit to hidden labels or oracle files.
+    Emit exactly one replacement policy proposal.
+    """
+  }
+</file>
+
+<file path="configs/schema/games/code-localization.pkl">
+amends "../core/SearchBenchRoundCore.pkl"
+
+local function lca(datasetConfig: String, datasetSplit: String, datasetMaxItems: Int): Dataset =
+  new Dataset {
+    kind = "lca"
+    name = "JetBrains-Research/lca-bug-localization"
+    config = datasetConfig
+    split = datasetSplit
+    maxItems = datasetMaxItems
+  }
+
+local function objective(objectivePath: String): Scoring =
+  new Scoring {
+    objective = objectivePath
+  }
+
+local function fakeEvaluator(): Evaluator =
+  new Evaluator {
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+      maxOutputTokens = 2000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 24
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "resolve"
+        "expand"
+        "resolve_and_expand"
+      }
+
+      deny {
+        "shell"
+        "go_test"
+        "write_file"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Use structural code evidence before guessing.
+    Prefer the smallest plausible file set.
+    Do not invent files that were not returned by tools.
+    """
+  }
+
+local function fakeOptimizer(): Optimizer =
+  new Optimizer {
+    model {
+      provider = "fake"
+      name = "fake-optimizer"
+      maxOutputTokens = 4000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 16
+      timeoutSeconds = 300
+    }
+
+    tools {
+      allow {
+        "read_parent_bundle"
+        "read_score_evidence"
+        "read_objective_result"
+        "read_report_summary"
+        "read_artifact"
+        "write_artifact_proposal"
+      }
+
+      deny {
+        "run_evaluator"
+        "shell"
+        "go_test"
+        "write_manifest"
+        "network"
+      }
+    }
+
+    systemPrompt = """
+    Improve the Iterative Context selection policy using only the provided parent-run evidence.
+
+    Prefer small, inspectable changes.
+    Preserve the declared policy interface.
+    Do not overfit to hidden labels or oracle files.
+    Emit exactly one replacement policy proposal.
+    """
+  }
+
+local function jcodemunch(): RoundPolicy =
+  new RoundPolicy {
+    system {
+      id = "jcodemunch"
+      name = "jCodeMunch"
+      backend = "jcodemunch"
+    }
+  }
+
+local function iterativeContext(policyPath: String): RoundChallenger =
+  new RoundChallenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy"
+      kind = "policy"
+      path = policyPath
+      implements = interfaces.iterativeContextSelectionPolicyV1
+    }
+  }
+
+local function generate(): GeneratedChallenger =
+  new GeneratedChallenger {}
+</file>
+
 <file path="configs/schema/SearchBenchObjective.pkl">
 /// Schema for the **objective result** document emitted when a scoring Pkl module is evaluated
 /// against one or more on-disk evidence bundles (current round, optional parent round).
@@ -824,14 +1061,10 @@ function finalValue(valueName: String, amount: Number) = new objective.Objective
 </file>
 
 <file path="configs/schema/SearchBenchRound.pkl">
-/// Root schema for a SearchBench **round** manifest.
+/// Root schema for a SearchBench round manifest.
 ///
-/// A round binds a dataset slice, incumbent/challenger policy systems, optional artifacts,
-/// and agent configurations. The Go runtime loads this file to resolve bundle paths, evaluation
-/// plans, and (when configured) optimization / next-challenger flows.
-///
-/// Validation and projection to execution types are implemented in `internal/adapters/config/pkl`
-/// and `internal/app/round`. The `go.pkl` import attaches `pkl-go` struct tags for generated Go bindings.
+/// The only author-facing entry point is `round`, which either defines a round
+/// from scratch or continues from an explicit completed bundle path.
 @go.Package { name = "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated" }
 module searchbench.config.SearchBenchRound
 
@@ -841,429 +1074,190 @@ import "package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/go.pkl"
 game: Game = new {}
 
 /// Human-readable round name; may influence default bundle IDs and reports.
-name: String
+name: String = ""
 
-/// Which top-level workflow this manifest participates in (evaluation-only vs optimization).
-mode: RunMode = "evaluation"
-
-/// Dataset selection: upstream benchmark id, language/config, and split.
-dataset: Dataset
-
-/// Declares interface contracts (e.g. iterative context selection policy) referenced by artifacts and policy bindings.
+/// Declares interface contracts referenced by policy artifacts.
 interfaces: Interfaces = new {}
 
-/// Incumbent and challenger policy **systems** for the comparative run (ids, backends, prompt bundles, runtime caps).
-policies: Policies
-
-/// Optional artifact references (policy file on disk, next-challenger output, parent bundle, etc.).
-artifacts: Artifacts = new {}
-
-/// Agents used when resolving rounds: evaluator (always required for `evaluation` mode) and optimizer (required for `optimization` mode).
-agents: Agents = new {}
-
-/// Evaluation-mode wiring: must mirror `agents.evaluator`, bind systems to artifacts, and point at the scoring objective file.
-evaluation: Evaluation?
-
-/// Optimization-mode wiring: must mirror `agents.optimizer`, parent bundle, target artifacts, and evidence policy for next-challenger proposal.
-optimization: Optimization?
-
-/// Top-level workflow discriminator for this manifest:
-/// - `evaluation` — compare incumbent vs challenger on the dataset slice and produce evidence/decision.
-/// - `optimization` — propose a next challenger policy using parent round evidence (requires optimizer agent and optimization block).
-typealias RunMode = "evaluation" | "optimization"
+/// Continuation-backed round surface used by concise game-level manifests.
+round: RoundManifest?
 
 /// Upstream dataset family; currently only LCA-style bug localization is supported.
 typealias DatasetKind = "lca"
 
-/// Execution backend for a policy system. `iterative_context` is the iterative context challenger stack;
-/// `jcodemunch` is the legacy path; `fake` is a deterministic local stub for tests and offline runs.
+/// Execution backend for a policy system.
 typealias Backend = "iterative_context" | "jcodemunch" | "fake"
 
-/// LLM provider id for agent models (`openai`, `openrouter`, `cerebras`, or `fake` for scripted/stub runs).
+/// LLM provider id for agent models.
 typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
 
-/// Formats written for the round report (machine-readable JSON, human text, or both).
+/// Formats written for the round report.
 typealias ReportFormat = "json" | "text"
 
-/// Optional tracer integration (reserved).
-typealias TracingProvider = "langsmith"
-
-/// Semantic kinds for durable artifacts: `policy` (checked-in policy file), `next_challenger` (optimizer output slot),
-/// `completed_round_bundle` (pointer to a finished round bundle directory).
-typealias ArtifactKind = "policy" | "next_challenger" | "completed_round_bundle"
-
-/// Evidence kinds the optimizer may pull from the parent bundle when `include` lists them.
-/// - `report_summary` — high-level report JSON / summary text.
-/// - `round_evidence` — structured round evidence document.
-/// - `objective_result` — prior objective scoring payload.
-/// - `challenger_policy` — the challenger policy source under evaluation.
+/// Evidence kinds the optimizer may pull from the parent bundle.
 typealias NextChallengerEvidenceKind =
   "report_summary" | "round_evidence" | "objective_result" | "challenger_policy"
 
-/// Labels for evidence the optimizer prompt must never include (leakage / safety).
-/// `gold_labels` — canonical answers or gold labels from the dataset.
-/// `oracle_files` — file lists or paths from oracle-only fields.
-/// `raw_dataset_answers` — raw supervision fields from dataset rows.
+/// Labels for evidence the optimizer prompt must never include.
 typealias OptimizerDeniedEvidenceKind = "gold_labels" | "oracle_files" | "raw_dataset_answers"
 
-/// Logical game this round belongs to (drives artifact roots under the game id).
+/// Logical game this round belongs to.
 class Game {
-  /// Stable game id (e.g. product bundle namespace).
   id: String = "code-localization"
-
-  /// Free-form game kind string for downstream classification.
   kind: String = "code_localization"
 }
 
 /// Selects a dataset slice from an upstream bug-localization benchmark.
 class Dataset {
-  /// Dataset family; constrains how the harness loads instances.
   kind: DatasetKind = "lca"
-
-  /// Upstream dataset repository or product identifier.
   name: String = "JetBrains-Research/lca-bug-localization"
-
-  /// Profile/config key interpreted by the dataset adapter (e.g. language stack).
   config: String
-
-  /// Split name within the dataset (e.g. train/dev).
   split: String
-
-  /// Optional cap on the number of matches to draw; omit for the adapter default.
   maxItems: Int(this > 0)?
 }
 
 /// Declares interface identifiers that policies and artifacts must satisfy.
 class Interfaces {
-  /// Binding for `iterative_context.selection_policy.v1` (challenger selection policy contract).
   iterativeContextSelectionPolicyV1: Interface = new {
     id = "iterative_context.selection_policy.v1"
   }
 }
 
-/// Named capability contract (id is the stable string compared across manifest, artifacts, and code).
+/// Named capability contract.
 class Interface {
-  /// Opaque interface id string (e.g. `iterative_context.selection_policy.v1`).
   id: String
 }
 
-/// Pair of executable policy systems compared in this round.
-class Policies {
-  /// Baseline system (incumbent policy role).
-  incumbent: System
-
-  /// Candidate system (challenger policy role).
-  challenger: System
-}
-
-/// One executable policy: identity, engine backend, prompts, and runtime limits.
+/// One executable policy system.
 class System {
-  /// Stable slug for this system in runs and reports.
   id: String
-
-  /// Display name; defaults to `id` when omitted in instances (see default below).
   name: String = id
-
-  /// Which runtime backend executes this system’s policy implementation.
   backend: Backend
-
-  /// Prompt bundle reference (name + optional version) resolved by the harness.
   promptBundle: PromptBundle = new {}
-
-  /// Per-run execution bounds (steps, wall clock).
   runtime: Runtime = new {}
 }
 
-/// Locates the prompt bundle material for a system (version pins reproducibility).
+/// Locates the prompt bundle material for a system.
 class PromptBundle {
-  /// Bundle name known to the product (e.g. `default`).
   name: String = "default"
-
-  /// Optional version or channel label for the bundle.
   version: String? = "dev"
 }
 
 /// Hard limits while executing one system on one match.
 class Runtime {
-  /// Maximum LLM/agent steps for this system (must be positive).
   maxSteps: Int(this > 0) = 16
-
-  /// Wall-clock timeout in seconds for system execution on one match attempt.
   timeoutSeconds: Int(this > 0) = 300
-}
-
-/// Durable artifact pointers used when binding evaluation and optimization targets.
-class Artifacts {
-  /// Challenger policy file on disk (relative to manifest dir unless otherwise specified by harness).
-  challengerPolicy: PolicyArtifact?
-
-  /// Declares the artifact record for the next-challenger proposal output.
-  nextChallenger: NextChallengerArtifact?
-
-  /// Completed parent round bundle (for evidence loading in optimization or scored comparisons with a parent).
-  parentRoundBundle: CompletedRoundBundleArtifact?
 }
 
 /// A versioned policy artifact implementing a declared interface.
 class PolicyArtifact {
-  /// Stable artifact id for cross-manifest references.
   id: String
-
-  /// Fixed kind tag for routing and validation.
   kind: "policy" = "policy"
-
-  /// Repo-relative path to policy source checked in next to the manifest tree.
   path: String
-
-  /// Interface contract this policy must implement.
   implements: Interface
 }
 
-/// Describes the next challenger artifact slot produced by optimization.
-class NextChallengerArtifact {
-  /// Stable artifact id.
+/// Author-facing round surface: either define a round from scratch or continue
+/// from an explicit completed bundle path.
+class RoundManifest {
   id: String
-
-  /// Fixed kind tag.
-  kind: "next_challenger" = "next_challenger"
-
-  /// File name (relative path) for the emitted next challenger policy artifact.
-  artifactName: String
-
-  /// Interface the emitted artifact must satisfy.
-  implements: Interface
-}
-
-/// Pointer to an on-disk completed round bundle directory (evidence, reports, metadata).
-class CompletedRoundBundleArtifact {
-  /// Stable id referencing this completed bundle in other blocks.
-  id: String
-
-  /// Fixed kind tag.
-  kind: "completed_round_bundle" = "completed_round_bundle"
-
-  /// Relative path from the manifest to the bundle root (normalized by the harness).
-  path: String
-}
-
-/// Agent definitions for roles that participate in round resolution.
-class Agents {
-  /// Evaluator agent configuration (required when `mode` is `evaluation` and for `evaluation.*` blocks).
+  continues: String?
+  incumbent: RoundPolicy?
+  challenger: RoundChallenger
+  matches: Dataset?
   evaluator: Evaluator?
-
-  /// Optimizer agent configuration (required when `mode` is `optimization` and for `optimization.*` blocks).
-  optimizer: Optimizer?
-}
-
-/// Allow/deny tool policy for an agent manifest surface.
-///
-/// Structural validation is done in config load; **evaluator** tool names are also checked at round resolution
-/// against the runtime tool registry (`Available` vs explicit allow vs defaults).
-class AgentToolPolicy {
-  /// Explicit allow list; when empty, the runtime uses **default allowed** tools minus **deny** (see round resolution docs).
-  allow: Listing<String> = new {}
-
-  /// Names subtracted from the active candidate set (must not overlap explicit allow entries; validated in Go).
-  deny: Listing<String> = new {}
-}
-
-/// LLM call routing for an agent’s chat/completion model.
-class Model {
-  /// Provider key consumed by the harness / adapter.
-  provider: Provider
-
-  /// Model name within the provider.
-  name: String
-
-  /// Optional provider-specific routing hint (e.g. deployment id).
-  routing: String?
-
-  /// Optional max output tokens for the model call (positive when set).
-  maxOutputTokens: Int(this > 0)? = 2000
-}
-
-/// Shared safety bounds for agent loops (evaluator, optimizer).
-class AgentBounds {
-  /// Maximum model turns per attempt in the agent harness.
-  maxModelTurns: Int(this > 0) = 8
-
-  /// Maximum tool invocations per attempt (non-negative; `0` may disable tools depending on runtime).
-  maxToolCalls: Int(this >= 0) = 24
-
-  /// Wall-clock ceiling in seconds for a single agent attempt sequence.
-  timeoutSeconds: Int(this > 0) = 300
-}
-
-/// Configuration for the SearchBench **evaluator** agent (compares predictions on matches).
-class Evaluator {
-  /// Primary chat model used by the evaluator runtime.
-  model: Model
-
-  /// Loop and wall-clock bounds for evaluator attempts.
-  bounds: AgentBounds = new {}
-
-  /// Tool allow/deny policy surfaced from the manifest; intersected with the evaluator runtime registry in Go.
-  tools: AgentToolPolicy = new {}
-
-  /// Optional extra system-facing instructions appended to the stable evaluator prompt XML (trimmed; size-capped in Go).
-  systemPrompt: String?
-
-  /// Retry behavior across evaluator attempts (distinct from model “turns” inside one attempt).
-  retry: RetryPolicy = new {}
-
-  /// Optional telemetry hooks (reserved / product-specific).
-  tracing: Tracing?
-}
-
-/// Configuration for the **optimizer** agent (next challenger proposal). Tool allow/deny is validated for shape only until an optimizer tool runtime exists.
-class Optimizer {
-  /// Chat model used for optimization / proposal generation.
-  model: Model
-
-  /// Agent attempt bounds for the optimizer loop.
-  bounds: AgentBounds = new {}
-
-  /// Structural tool allow/deny (not enforced against a registry in the current harness).
-  tools: AgentToolPolicy = new {}
-
-  /// Optional extra instructions for the optimizer prompt appendix (size-capped in Go when validated).
-  systemPrompt: String?
-}
-
-/// How the harness retries failed evaluator attempts before surfacing a run failure.
-class RetryPolicy {
-  /// Upper bound on distinct evaluator attempts including retries (must be positive).
-  maxAttempts: Int(this > 0) = 2
-
-  /// Whether to retry after provider/model transport style errors.
-  retryOnModelError: Boolean = true
-
-  /// Whether to retry after tool execution failures inside the evaluator agent loop.
-  retryOnToolFailure: Boolean = false
-
-  /// Whether to retry when JSON prediction finalization fails.
-  retryOnFinalizationFailure: Boolean = true
-
-  /// Whether to retry when the model returns a prediction that fails schema validation.
-  retryOnInvalidPrediction: Boolean = true
-}
-
-/// Optional tracing configuration (feature-flag style).
-class Tracing {
-  /// Master switch for emission of traces.
-  enabled: Boolean = false
-
-  /// Tracing backend identifier when enabled.
-  provider: TracingProvider?
-
-  /// Optional project or workspace key for the tracer.
-  project: String?
-}
-
-/// Evaluation-mode root block: wires agent, policy bindings, scoring objective path, and report outputs.
-///
-/// Must stay consistent with `agents.evaluator` and `policies` (validated in Go).
-class Evaluation {
-  /// Snapshot that must equal `agents.evaluator` (same model, bounds, tools, prompts).
-  agent: Evaluator
-
-  /// Which manifest `policies.incumbent` entry this evaluation uses for the incumbent role.
-  incumbent: EvaluationSystemBinding
-
-  /// Which manifest `policies.challenger` entry this evaluation uses, plus required selection policy artifact binding.
-  challenger: ChallengerEvaluationBinding
-
-  /// Path to the Pkl **objective** module that defines scoring over evidence.
-  scoring: Scoring
-
-  /// Report output formats for this round run.
+  scoring: Scoring?
   report: Report = new {}
 }
 
-/// Indirection so evaluation can reference a member of `policies` by value identity checks in Go.
-class EvaluationSystemBinding {
-  /// System block from `policies` for this role (incumbent).
+/// One executable round-side policy declaration.
+class RoundPolicy {
   system: System
+  selectionPolicy: PolicyArtifact?
 }
 
-/// Challenger side binding plus artifact reference for the implemented selection policy.
-class ChallengerEvaluationBinding {
-  /// System block from `policies` for the challenger role.
-  system: System
-
-  /// Artifact pointers required for challenger execution.
-  uses: ChallengerUses = new {}
+/// Challenger patch for the concise round surface.
+class RoundChallenger {
+  system: System?
+  selectionPolicy: PolicyArtifact?
+  generate: GeneratedChallenger?
 }
 
-/// Artifact wiring for a challenger evaluation run.
-class ChallengerUses {
-  /// Selection policy file (`PolicyArtifact`) the challenger must load for this round.
-  selectionPolicy: PolicyArtifact
-}
-
-/// Locates the scoring objective module relative to the manifest.
-class Scoring {
-  /// Path to the SearchBench objective .pkl (e.g. under `scoring/` next to the round).
-  objective: String
-}
-
-/// Human- and machine-readable report outputs for the round bundle.
-class Report {
-  /// Which report artifacts to materialize (JSON and/or text summaries).
-  formats: Listing<ReportFormat> = new {
-    "json"
-    "text"
-  }
-}
-
-/// Optimization-mode root block: proposes a next challenger policy using evidence from a completed parent round.
-class Optimization {
-  /// Must mirror `agents.optimizer` (same model, bounds, tools, prompts).
-  agent: Optimizer
-
-  /// Which completed bundle supplies parent-round context.
-  parentRound: ParentRound
-
-  /// Input policy artifact and output next-challenger artifact slots for the proposal.
-  target: NextChallengerTarget
-
-  /// Which evidence streams to include / forbid when prompting the optimizer.
-  evidence: NextChallengerEvidence = new {}
-}
-
-/// Parent round locator inside the optimization graph.
-class ParentRound {
-  /// Completed round bundle artifact; must align with `artifacts.parentRoundBundle` (validated in Go).
-  bundle: CompletedRoundBundleArtifact
-}
-
-/// Declares input policy to improve and the next challenger output artifact record.
-class NextChallengerTarget {
-  /// Current challenger policy artifact that optimization reads as input.
-  input: PolicyArtifact
-
-  /// Artifact record describing the file name and interface for the proposed next policy.
-  output: NextChallengerArtifact
-}
-
-/// Evidence inclusion and denial rules for optimizer prompts.
-class NextChallengerEvidence {
-  /// Parent bundle artifact that evidence is loaded from; must match optimization parent wiring (validated in Go).
-  from: CompletedRoundBundleArtifact
-
-  /// Evidence kinds pulled into the prompt when present in the parent bundle.
+/// Request to materialize the challenger through the optimizer seam before the
+/// round is evaluated.
+class GeneratedChallenger {
+  optimizer: Optimizer
+  artifactName: String = "generated_challenger_policy.py"
   include: Listing<NextChallengerEvidenceKind> = new {
     "report_summary"
     "round_evidence"
     "objective_result"
     "challenger_policy"
   }
-
-  /// Evidence channels that must never be inlined into the optimizer prompt.
   deny: Listing<OptimizerDeniedEvidenceKind> = new {
     "gold_labels"
     "oracle_files"
     "raw_dataset_answers"
+  }
+}
+
+/// Allow/deny tool policy for an agent manifest surface.
+class AgentToolPolicy {
+  allow: Listing<String> = new {}
+  deny: Listing<String> = new {}
+}
+
+/// LLM call routing for an agent model.
+class Model {
+  provider: Provider
+  name: String
+  routing: String?
+  maxOutputTokens: Int(this > 0)? = 2000
+}
+
+/// Shared safety bounds for agent loops.
+class AgentBounds {
+  maxModelTurns: Int(this > 0) = 8
+  maxToolCalls: Int(this >= 0) = 24
+  timeoutSeconds: Int(this > 0) = 300
+}
+
+/// Configuration for the SearchBench evaluator agent.
+class Evaluator {
+  model: Model
+  bounds: AgentBounds = new {}
+  tools: AgentToolPolicy = new {}
+  systemPrompt: String?
+  retry: RetryPolicy = new {}
+}
+
+/// Configuration for the optimizer agent used to materialize a challenger.
+class Optimizer {
+  model: Model
+  bounds: AgentBounds = new {}
+  tools: AgentToolPolicy = new {}
+  systemPrompt: String?
+}
+
+/// How the harness retries failed evaluator attempts.
+class RetryPolicy {
+  maxAttempts: Int(this > 0) = 2
+  retryOnModelError: Boolean = true
+  retryOnToolFailure: Boolean = false
+  retryOnFinalizationFailure: Boolean = true
+  retryOnInvalidPrediction: Boolean = true
+}
+
+/// Locates the scoring objective module relative to the manifest.
+class Scoring {
+  objective: String
+}
+
+/// Human- and machine-readable report outputs for the round bundle.
+class Report {
+  formats: Listing<ReportFormat> = new {
+    "json"
+    "text"
   }
 }
 </file>
@@ -7033,6 +7027,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/report"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 ⋮----
@@ -7040,6 +7035,7 @@ import (
 ⋮----
 "github.com/becker63/searchbench-go/internal/pure/domain"
 "github.com/becker63/searchbench-go/internal/pure/report"
+pureround "github.com/becker63/searchbench-go/internal/pure/round"
 "github.com/becker63/searchbench-go/internal/pure/score"
 ⋮----
 const (
@@ -7064,6 +7060,8 @@ type RoundBundleInput struct {
 	RoundEvidence   score.RoundEvidenceDocument
 	ObjectiveResult *score.ObjectiveResult
 	RenderedReport  *RenderedReport
+	Continuation    *pureround.Continuation
+	AdditionalFiles []BundleArtifact
 	CreatedAt       time.Time
 }
 ⋮----
@@ -7091,6 +7089,15 @@ type BundleFile struct {
 	SHA256    string `json:"sha256,omitempty"`
 }
 ⋮----
+// BundleArtifact is an extra caller-supplied artifact that should be persisted
+// inside the completed round bundle alongside the canonical SearchBench files.
+type BundleArtifact struct {
+	Kind      string
+	Path      string
+	MediaType string
+	Content   []byte
+}
+⋮----
 // BundleMetadata is the deterministic inventory written into metadata.json.
 type BundleMetadata struct {
 	SchemaVersion string       `json:"schema_version"`
@@ -7098,6 +7105,39 @@ type BundleMetadata struct {
 	CreatedAt     time.Time    `json:"created_at"`
 	Files         []BundleFile `json:"files"`
 }
+</file>
+
+<file path="internal/adapters/bundle/fs/continuation.go">
+package bundlefs
+⋮----
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
+)
+⋮----
+"encoding/json"
+"errors"
+"fmt"
+"os"
+"path/filepath"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+pureround "github.com/becker63/searchbench-go/internal/pure/round"
+⋮----
+var (
+	ErrIncompleteBundle      = errors.New("bundle: completed marker is missing")
+⋮----
+// LoadContinuation requires an explicit completed round bundle path and reads
+// the continuation metadata that later manifests continue from.
+func LoadContinuation(bundlePath domain.HostPath) (pureround.Continuation, error)
+⋮----
+var continuation pureround.Continuation
 </file>
 
 <file path="internal/adapters/bundle/fs/errors.go">
@@ -7403,15 +7443,17 @@ func newWriter() writer
 func (w writer) WriteBundle(ctx context.Context, request RoundBundleInput) (RoundBundleRef, error)
 ⋮----
 const (
-		phaseValidate  = "validate_bundle_request"
-		phasePrepare   = "prepare_bundle_directory"
-		phaseResolved  = "serialize_resolved_round"
-		phaseReport    = "serialize_report"
-		phaseEvidence  = "serialize_round_evidence"
-		phaseObjective = "serialize_objective_result"
-		phaseDecision  = "serialize_decision"
-		phaseMetadata  = "serialize_metadata"
-		phaseFinalize  = "finalize_bundle"
+		phaseValidate     = "validate_bundle_request"
+		phasePrepare      = "prepare_bundle_directory"
+		phaseResolved     = "serialize_resolved_round"
+		phaseReport       = "serialize_report"
+		phaseEvidence     = "serialize_round_evidence"
+		phaseObjective    = "serialize_objective_result"
+		phaseDecision     = "serialize_decision"
+		phaseArtifacts    = "serialize_bundle_artifacts"
+		phaseContinuation = "serialize_continuation"
+		phaseMetadata     = "serialize_metadata"
+		phaseFinalize     = "finalize_bundle"
 	)
 ⋮----
 func (w writer) writeArtifact(dir string, name string, data []byte) error
@@ -7425,6 +7467,10 @@ func normalizeRequest(w writer, request RoundBundleInput) RoundBundleInput
 func validateRequest(request RoundBundleInput) error
 ⋮----
 func normalizedRenderedReport(rendered RenderedReport) RenderedReport
+⋮----
+func normalizedArtifactMediaType(value string) string
+⋮----
+func validateBundleArtifact(artifact BundleArtifact) error
 ⋮----
 func safeBundleName(name string) bool
 ⋮----
@@ -7440,8 +7486,8 @@ func hasCompleteMarker(dir string) bool
 // executor packages remain authoritative for execution semantics.
 ⋮----
 // One manifest resolves to one Go config struct. After that resolution, Go
-// validation enforces SearchBench-specific rules such as evaluator/writer
-// separation and mode-specific requirements.
+// validation enforces SearchBench-specific rules for the continuation-backed
+// `round` surface.
 package config
 </file>
 
@@ -7449,26 +7495,22 @@ package config
 package config
 ⋮----
 import (
-	"bytes"
 	"context"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 )
 ⋮----
-"bytes"
 "context"
-"os"
 "os/exec"
 "path/filepath"
 "testing"
 ⋮----
-func TestLoadLocalICVsJCodeMunchManifest(t *testing.T)
+func TestLoadLocalManifest(t *testing.T)
 ⋮----
-func TestLoadOptimizeICManifest(t *testing.T)
+func TestLoadContinuationManifest(t *testing.T)
 ⋮----
-func TestOptimizeICExampleSupportFilesMatchEvaluationExample(t *testing.T)
+func TestLoadGeneratedContinuationManifest(t *testing.T)
 ⋮----
 func requirePkl(t *testing.T)
 </file>
@@ -7502,30 +7544,23 @@ package config
 ⋮----
 import (
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated"
-	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/artifactkind"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/backend"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/nextchallengerevidencekind"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/optimizerdeniedevidencekind"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/provider"
 	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/reportformat"
-	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/runmode"
 )
 ⋮----
 "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated"
-"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/artifactkind"
 "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/backend"
 "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/nextchallengerevidencekind"
 "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/optimizerdeniedevidencekind"
 "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/provider"
 "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/reportformat"
-"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/runmode"
 ⋮----
 // RoundSpec is the typed root manifest resolved from SearchBenchRound.pkl.
 ⋮----
 const (
-	ModeEvaluation   = runmode.Evaluation
-	ModeOptimization = runmode.Optimization
-
 	BackendIterativeContext = backend.IterativeContext
 	BackendJCodeMunch       = backend.Jcodemunch
 	BackendFake             = backend.Fake
@@ -7537,10 +7572,6 @@ const (
 
 	ReportFormatJSON = reportformat.Json
 	ReportFormatText = reportformat.Text
-
-	ArtifactKindPolicy               = artifactkind.Policy
-	ArtifactKindNextChallenger       = artifactkind.NextChallenger
-	ArtifactKindCompletedRoundBundle = artifactkind.CompletedRoundBundle
 
 	NextChallengerEvidenceReportSummary    = nextchallengerevidencekind.ReportSummary
 	NextChallengerEvidenceRoundEvidence    = nextchallengerevidencekind.RoundEvidence
@@ -7559,7 +7590,6 @@ package config
 import (
 	"go/token"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -7569,72 +7599,41 @@ import (
 ⋮----
 "go/token"
 "path/filepath"
-"reflect"
 "runtime"
 "strings"
 "testing"
 ⋮----
 "github.com/becker63/searchbench-go/internal/testing/importcheck"
 ⋮----
-func TestValidEvaluationConfigValidates(t *testing.T)
+func TestValidFromScratchRoundValidates(t *testing.T)
 ⋮----
-func TestValidOptimizationConfigValidates(t *testing.T)
+func TestValidContinuationRoundValidates(t *testing.T)
 ⋮----
-func TestOptimizationModeDoesNotRequireEvaluationOrScoring(t *testing.T)
+func TestMissingRoundBlockFails(t *testing.T)
 ⋮----
-func TestEvaluationModeRequiresEvaluation(t *testing.T)
+func TestFromScratchRequiresIncumbent(t *testing.T)
 ⋮----
-func TestEvaluationModeRequiresEvaluator(t *testing.T)
+func TestFromScratchRequiresMatches(t *testing.T)
 ⋮----
-func TestOptimizationModeRequiresOptimization(t *testing.T)
+func TestFromScratchRequiresEvaluator(t *testing.T)
 ⋮----
-func TestOptimizationModeRequiresOptimizer(t *testing.T)
+func TestFromScratchRequiresScoring(t *testing.T)
 ⋮----
-func TestRoundConfigNoLongerHasWriterOrOutputConfig(t *testing.T)
+func TestContinuationRejectsMissingChallengerPatch(t *testing.T)
 ⋮----
-func TestRejectsMissingDatasetConfig(t *testing.T)
+func TestContinuationRejectsConflictingChallengerPatch(t *testing.T)
 ⋮----
-func TestRejectsMissingDatasetSplit(t *testing.T)
-⋮----
-func TestRejectsMissingIncumbentPolicyID(t *testing.T)
-⋮----
-func TestRejectsMissingIterativeContextSystemID(t *testing.T)
-⋮----
-func TestRejectsMissingAgentModelProvider(t *testing.T)
-⋮----
-func TestRejectsMissingAgentModelName(t *testing.T)
-⋮----
-func TestRejectsMissingScoringObjectivePath(t *testing.T)
-⋮----
-func TestRejectsEvaluationAgentMismatch(t *testing.T)
-⋮----
-func TestRejectsEvaluationChallengerPolicyMismatch(t *testing.T)
-⋮----
-func TestRejectsSelectionPolicyArtifactMismatch(t *testing.T)
-⋮----
-func TestRejectsSelectionPolicyInterfaceMismatch(t *testing.T)
-⋮----
-func TestRejectsAbsolutePolicyArtifactPath(t *testing.T)
-⋮----
-func TestRejectsProposalArtifactNameWithParentTraversal(t *testing.T)
-⋮----
-func TestRejectsNextChallengerTargetOutputMismatch(t *testing.T)
-⋮----
-func TestRejectsEmptyToolAllowEntry(t *testing.T)
-⋮----
-func TestRejectsDuplicateToolAllowEntry(t *testing.T)
-⋮----
-func TestRejectsToolAllowDenyOverlap(t *testing.T)
-⋮----
-func TestRejectsOversizedSystemPrompt(t *testing.T)
-⋮----
-func TestRejectsUnsupportedMode(t *testing.T)
+func TestGeneratedArtifactNameMustBeRelative(t *testing.T)
 ⋮----
 func TestPurePackagesDoNotImportPkl(t *testing.T)
 ⋮----
-func sampleEvaluationRound() RoundSpec
+func sampleFromScratchRound() RoundSpec
 ⋮----
-func sampleOptimizationRound() RoundSpec
+func sampleContinuationRound() RoundSpec
+⋮----
+func sampleGeneratedContinuationRound() RoundSpec
+⋮----
+func sampleOptimizer() Optimizer
 ⋮----
 func sampleModel(name string) Model
 ⋮----
@@ -7650,14 +7649,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"strings"
 )
 ⋮----
 "errors"
 "fmt"
 "path/filepath"
-"reflect"
 "strings"
 ⋮----
 const maxSystemPromptBytes = 8 * 1024
@@ -7669,35 +7666,23 @@ var (
 // defaults and basic type constraints.
 func Validate(spec RoundSpec) error
 ⋮----
-func validateMode(spec RoundSpec) error
+func validateRoundManifest(spec RoundSpec) error
+⋮----
+func validateRoundPolicy(fieldPath string, policy RoundPolicy) error
+⋮----
+func validateRoundChallenger(challenger RoundChallenger) error
 ⋮----
 func validateDataset(dataset Dataset) error
 ⋮----
 func validateInterfaces(interfaces Interfaces) error
 ⋮----
-func validatePolicies(policies Policies) error
-⋮----
-func validateArtifacts(artifacts Artifacts) error
-⋮----
 func validatePolicyArtifact(artifact PolicyArtifact) error
-⋮----
-func validateNextChallengerArtifact(artifact NextChallengerArtifact) error
-⋮----
-func validateCompletedBundleArtifact(artifact CompletedRoundBundleArtifact) error
-⋮----
-func validateAgents(agents Agents) error
-⋮----
-// Structural shape only: the optimizer agent has no tool registry enforcement yet.
 ⋮----
 func validateAgentModel(model Model) error
 ⋮----
 func validateToolPolicy(prefix string, policy AgentToolPolicy) error
 ⋮----
 func validateSystemPrompt(fieldPath string, prompt *string) error
-⋮----
-func validateEvaluation(spec RoundSpec) error
-⋮----
-func validateOptimization(spec RoundSpec) error
 ⋮----
 func containsParentPath(path string) bool
 </file>
@@ -10000,9 +9985,9 @@ var buf bytes.Buffer
 </file>
 
 <file path="internal/agents/optimizer/doc.go">
-// Package optimizer is the vertical slice for the Optimizer / NextChallenger agent:
-// prompt types, Eino-backed execution, bundle persistence, and Python policy
-// validation. internal/app/round/internal/optimizer orchestrates this behavior.
+// Package optimizer is the vertical slice for the Optimizer / NextChallenger
+// agent: prompt types, Eino-backed execution, and Python policy validation.
+// Round orchestration lives in internal/app/round.
 package optimizer
 </file>
 
@@ -10581,279 +10566,95 @@ func (r Runner) ExecuteAndScore(
 ) (*score.ScoredRun, *run.RunFailure)
 </file>
 
-<file path="internal/app/round/internal/optimizer/bundle.go">
-package optimizer
+<file path="internal/app/round/bundle_continuation.go">
+package round
+⋮----
+import (
+	"path/filepath"
+	"strings"
+
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/pure/report"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"path/filepath"
+"strings"
+⋮----
+bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+"github.com/becker63/searchbench-go/internal/pure/report"
+pureround "github.com/becker63/searchbench-go/internal/pure/round"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+func roundBundleArtifacts(plan Plan) ([]bundlefs.BundleArtifact, map[domain.Role]string)
+⋮----
+func buildContinuation(
+	plan Plan,
+	roundReport report.RoundReport,
+	objective *score.ObjectiveResult,
+	policyPaths map[domain.Role]string,
+) *pureround.Continuation
+⋮----
+func continuationSurvivorRole(plan Plan) domain.Role
+</file>
+
+<file path="internal/app/round/challenger_materialize.go">
+package round
 ⋮----
 import (
 	"context"
-	"path/filepath"
-
-	optimizebundle "github.com/becker63/searchbench-go/internal/agents/optimizer/bundle"
-	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
-	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-)
-⋮----
-"context"
-"path/filepath"
-⋮----
-optimizebundle "github.com/becker63/searchbench-go/internal/agents/optimizer/bundle"
-optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
-pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-⋮----
-// defaultValidateProposal delegates to the Python-policy validator bundled with the optimizer agent.
-var defaultValidateProposal = optimizepolicy.Validate
-⋮----
-// writeBundle delegates to optimizer-owned bundle persistence, projecting the in-memory
-// Plan into manifest-derived ResolvedDocument metadata.
-func writeBundle(ctx context.Context, plan Plan, result pureoptimizer.NextChallengerRecord) (string, error)
-</file>
-
-<file path="internal/app/round/internal/optimizer/doc.go">
-// Package optimizer resolves and runs manifest-driven optimization plans.
-package optimizer
-</file>
-
-<file path="internal/app/round/internal/optimizer/evidence.go">
-package optimizer
-⋮----
-import (
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 	purereport "github.com/becker63/searchbench-go/internal/pure/report"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 ⋮----
+"context"
 "encoding/json"
 "fmt"
 "os"
 "path/filepath"
 "slices"
 ⋮----
+bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
+optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 "github.com/becker63/searchbench-go/internal/pure/domain"
 pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 purereport "github.com/becker63/searchbench-go/internal/pure/report"
+pureround "github.com/becker63/searchbench-go/internal/pure/round"
 "github.com/becker63/searchbench-go/internal/pure/score"
 ⋮----
-func loadEvidence(plan Plan) (pureoptimizer.NextChallengerEvidence, error)
+func materializeChallenger(ctx context.Context, resolved Resolved, input Input) (Resolved, error)
+⋮----
+func buildGeneratedChallengerEvidence(
+	parentBundle domain.HostPath,
+	continuation pureround.Continuation,
+	plan Plan,
+) (pureoptimizer.NextChallengerEvidence, error)
 ⋮----
 var roundReport purereport.RoundReport
 ⋮----
 var objectiveResult score.ObjectiveResult
 ⋮----
-func decodeJSONFile(path string, out any) error
+func includesGeneratedEvidence(plan Plan, kind string) bool
 ⋮----
-func summarizeReport(roundReport purereport.RoundReport) pureoptimizer.ReportSummary
+func summarizeGeneratedReport(roundReport purereport.RoundReport) pureoptimizer.ReportSummary
 ⋮----
-func includesEvidence(plan Plan, kind string) bool
-</file>
-
-<file path="internal/app/round/internal/optimizer/plan.go">
-package optimizer
-⋮----
-import (
-	"time"
-
-	"github.com/cloudwego/eino/components/model"
-
-	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
-	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-)
-⋮----
-"time"
-⋮----
-"github.com/cloudwego/eino/components/model"
-⋮----
-optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
-pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-⋮----
-// ResolveRequest configures one optimizer plan resolution.
-type ResolveRequest struct {
-	ManifestPath             string
-	BundleRootOverride       string
-	ParentBundlePathOverride string
-	BundleID                 string
-	Now                      func() time.Time
-}
-⋮----
-// Request configures one next-challenger run.
-type Request struct {
-	Resolve ResolveRequest
-
-	Model            model.ToolCallingChatModel
-	ValidateProposal optimizereino.ValidateProposalFunc
-	RenderPrompt     optimizereino.RenderOptimizerPromptFunc
-	RetryPolicy      *pureoptimizer.RetryPolicy
-}
-⋮----
-// Record is the app-level next-challenger run outcome.
-type Record struct {
-	ManifestPath string
-	BundlePath   string
-	Optimizer    pureoptimizer.NextChallengerRecord
-}
-⋮----
-// Plan is the resolved optimization plan before evidence loading.
-type Plan struct {
-	ManifestPath       string
-	RoundName          string
-	CreatedAt          time.Time
-	BundleID           string
-	BundleCollection   string
-	BundleWriterRoot   string
-	ExpectedBundlePath string
-	Agent              pureoptimizer.AgentConfig
-	Target             pureoptimizer.NextChallengerTarget
-	ParentBundle       pureoptimizer.ParentRoundRef
-	InputPolicy        InputPolicyPlan
-	IncludedEvidence   []string
-	DeniedEvidence     []string
-}
-⋮----
-// InputPolicyPlan is the unresolved input policy artifact reference.
-type InputPolicyPlan struct {
-	ArtifactID  string
-	Path        string
-	InterfaceID string
-}
-</file>
-
-<file path="internal/app/round/internal/optimizer/resolve.go">
-package optimizer
-⋮----
-import (
-	"context"
-	"errors"
-	"fmt"
-	"path/filepath"
-	"strings"
-	"time"
-
-	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	"github.com/becker63/searchbench-go/internal/pure/domain"
-	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-)
-⋮----
-"context"
-"errors"
-"fmt"
-"path/filepath"
-"strings"
-"time"
-⋮----
-config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-"github.com/becker63/searchbench-go/internal/pure/domain"
-pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-⋮----
-var ErrUnsupportedMode = errors.New("optimizer: only optimization mode is supported")
-⋮----
-// Resolve loads one Pkl optimization manifest into the canonical optimizer plan.
-func Resolve(ctx context.Context, request ResolveRequest) (Plan, error)
-⋮----
-func normalizeRequest(request ResolveRequest) ResolveRequest
-⋮----
-func resolveExistingManifestPath(manifestDir string, relPath string) (string, error)
-⋮----
-func resolveBundlePaths(manifestDir string, override string) (string, string, error)
-⋮----
-func defaultBundleID(name string, now time.Time) string
-⋮----
-func stringifyTools(values []string) []string
-⋮----
-func stringifyEvidenceKinds(values []config.NextChallengerEvidenceKind) []string
-⋮----
-func stringifyDeniedEvidenceKinds(values []config.OptimizerDeniedEvidenceKind) []string
-⋮----
-func derefInt(value *int) int
-⋮----
-func artifactID(value string) domain.ArtifactID
-⋮----
-func hostPath(value string) domain.HostPath
-</file>
-
-<file path="internal/app/round/internal/optimizer/run_test.go">
-package optimizer
-⋮----
-import (
-	"context"
-	"errors"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"testing"
-	"time"
-
-	"github.com/cloudwego/eino/schema"
-
-	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-	"github.com/becker63/searchbench-go/internal/testing/modeltest"
-)
-⋮----
-"context"
-"errors"
-"os"
-"os/exec"
-"path/filepath"
-"runtime"
-"strings"
-"testing"
-"time"
-⋮----
-"github.com/cloudwego/eino/schema"
-⋮----
-pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-"github.com/becker63/searchbench-go/internal/testing/modeltest"
-⋮----
-func TestResolveOptimizationManifest(t *testing.T)
-⋮----
-func TestResolveOptimizationManifestAllowsParentBundleOverride(t *testing.T)
-⋮----
-func TestRunRejectsEvaluationManifest(t *testing.T)
-⋮----
-func TestLoadEvidenceRespectsIncludedKinds(t *testing.T)
-⋮----
-func TestRunMissingParentBundleFailsTyped(t *testing.T)
-⋮----
-func TestRunSuccessfulOptimizerWritesBundle(t *testing.T)
-⋮----
-func TestRunFailureDoesNotWriteComplete(t *testing.T)
-⋮----
-var failure *pureoptimizer.Failure
-⋮----
-func requirePkl(t *testing.T)
-⋮----
-func repoRoot(t *testing.T) string
-⋮----
-func mustReadFile(t *testing.T, path string) []byte
-</file>
-
-<file path="internal/app/round/internal/optimizer/run.go">
-package optimizer
-⋮----
-import (
-	"context"
-
-	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
-	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-)
-⋮----
-"context"
-⋮----
-optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
-pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
-⋮----
-// Run executes one optimization manifest through the first optimizer loop.
-func Run(ctx context.Context, request Request) (Record, error)
-⋮----
-// RunResolved executes one already-resolved optimization plan.
-func RunResolved(ctx context.Context, plan Plan, request Request) (Record, error)
+func decodeJSONArtifact(path string, target any) error
 </file>
 
 <file path="internal/app/round/doc.go">
@@ -10944,16 +10745,17 @@ import "fmt"
 type Phase string
 ⋮----
 const (
-	PhaseLoadManifestFailed     Phase = "load_manifest_failed"
-	PhaseValidateManifestFailed Phase = "validate_manifest_failed"
-	PhaseUnsupportedMode        Phase = "unsupported_mode"
-	PhaseResolvePlanFailed      Phase = "resolve_plan_failed"
-	PhaseComparisonFailed       Phase = "comparison_failed"
-	PhaseRoundEvidenceFailed    Phase = "round_evidence_failed"
-	PhaseEvidencePKLFailed      Phase = "evidence_pkl_failed"
-	PhaseObjectiveFailed        Phase = "objective_failed"
-	PhaseRenderReportFailed     Phase = "render_report_failed"
-	PhaseBundleWriteFailed      Phase = "bundle_write_failed"
+	PhaseLoadManifestFailed          Phase = "load_manifest_failed"
+	PhaseValidateManifestFailed      Phase = "validate_manifest_failed"
+	PhaseUnsupportedMode             Phase = "unsupported_mode"
+	PhaseResolvePlanFailed           Phase = "resolve_plan_failed"
+	PhaseMaterializeChallengerFailed Phase = "materialize_challenger_failed"
+	PhaseComparisonFailed            Phase = "comparison_failed"
+	PhaseRoundEvidenceFailed         Phase = "round_evidence_failed"
+	PhaseEvidencePKLFailed           Phase = "evidence_pkl_failed"
+	PhaseObjectiveFailed             Phase = "objective_failed"
+	PhaseRenderReportFailed          Phase = "render_report_failed"
+	PhaseBundleWriteFailed           Phase = "bundle_write_failed"
 )
 ⋮----
 // Error is the phase-tagged local manifest-run failure.
@@ -11013,22 +10815,26 @@ import "encoding/json"
 func (p Plan) MarshalJSON() ([]byte, error)
 ⋮----
 type bundleView struct {
-		ManifestPath string          `json:"manifest_path,omitempty"`
-		RoundName    string          `json:"round_name,omitempty"`
-		Mode         string          `json:"mode,omitempty"`
-		Game         GameConfig      `json:"game,omitempty"`
-		Round        RoundConfig     `json:"round,omitempty"`
-		Dataset      DatasetConfig   `json:"dataset,omitempty"`
-		Policies     any             `json:"policies"`
-		Matches      any             `json:"matches"`
-		Parallelism  any             `json:"parallelism,omitempty"`
-		Evaluator    EvaluatorConfig `json:"evaluator,omitempty"`
-		Scoring      ScoringConfig   `json:"scoring,omitempty"`
-		Output       OutputConfig    `json:"output,omitempty"`
-		Report       ReportConfig    `json:"report_options,omitempty"`
-		Bundle       BundleConfig    `json:"bundle,omitempty"`
-		ReportID     string          `json:"report_id,omitempty"`
-		CreatedAt    string          `json:"created_at,omitempty"`
+		ManifestPath              string                          `json:"manifest_path,omitempty"`
+		RoundName                 string                          `json:"round_name,omitempty"`
+		Mode                      string                          `json:"mode,omitempty"`
+		Game                      GameConfig                      `json:"game,omitempty"`
+		Round                     RoundConfig                     `json:"round,omitempty"`
+		Dataset                   DatasetConfig                   `json:"dataset,omitempty"`
+		Policies                  any                             `json:"policies"`
+		Matches                   any                             `json:"matches"`
+		Parallelism               any                             `json:"parallelism,omitempty"`
+		CandidateInterfaceID      string                          `json:"candidate_interface_id,omitempty"`
+		Evaluator                 EvaluatorConfig                 `json:"evaluator,omitempty"`
+		Optimizer                 *OptimizerConfig                `json:"optimizer,omitempty"`
+		Scoring                   ScoringConfig                   `json:"scoring,omitempty"`
+		Output                    OutputConfig                    `json:"output,omitempty"`
+		Report                    ReportConfig                    `json:"report_options,omitempty"`
+		Bundle                    BundleConfig                    `json:"bundle,omitempty"`
+		Lineage                   LineageConfig                   `json:"lineage,omitempty"`
+		ChallengerMaterialization ChallengerMaterializationConfig `json:"challenger_materialization,omitempty"`
+		ReportID                  string                          `json:"report_id,omitempty"`
+		CreatedAt                 string                          `json:"created_at,omitempty"`
 	}
 </file>
 
@@ -11040,6 +10846,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 ⋮----
@@ -11047,6 +10854,7 @@ import (
 ⋮----
 "github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 "github.com/becker63/searchbench-go/internal/pure/domain"
+pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 "github.com/becker63/searchbench-go/internal/pure/score"
 ⋮----
 // evaluationResolveRequest configures one manifest-driven evaluation plan resolution.
@@ -11062,22 +10870,26 @@ type evaluationResolveRequest struct {
 ⋮----
 // Plan is the canonical app-layer evaluation projection used by execution.
 type Plan struct {
-	ManifestPath string                            `json:"manifest_path,omitempty"`
-	RoundName    string                            `json:"round_name,omitempty"`
-	Mode         string                            `json:"mode,omitempty"`
-	Game         GameConfig                        `json:"game,omitempty"`
-	Round        RoundConfig                       `json:"round,omitempty"`
-	Dataset      DatasetConfig                     `json:"dataset,omitempty"`
-	Policies     domain.Pair[domain.SystemSpec]    `json:"-"`
-	Matches      domain.NonEmpty[domain.MatchSpec] `json:"matches"`
-	Parallelism  compare.Parallelism               `json:"-"`
-	Evaluator    EvaluatorConfig                   `json:"evaluator,omitempty"`
-	Scoring      ScoringConfig                     `json:"scoring,omitempty"`
-	Output       OutputConfig                      `json:"output,omitempty"`
-	Report       ReportConfig                      `json:"report_options,omitempty"`
-	Bundle       BundleConfig                      `json:"bundle,omitempty"`
-	ReportID     domain.ReportID                   `json:"report_id,omitempty"`
-	CreatedAt    time.Time                         `json:"created_at"`
+	ManifestPath              string                            `json:"manifest_path,omitempty"`
+	RoundName                 string                            `json:"round_name,omitempty"`
+	Mode                      string                            `json:"mode,omitempty"`
+	Game                      GameConfig                        `json:"game,omitempty"`
+	Round                     RoundConfig                       `json:"round,omitempty"`
+	Dataset                   DatasetConfig                     `json:"dataset,omitempty"`
+	Policies                  domain.Pair[domain.SystemSpec]    `json:"-"`
+	Matches                   domain.NonEmpty[domain.MatchSpec] `json:"matches"`
+	Parallelism               compare.Parallelism               `json:"-"`
+	CandidateInterfaceID      string                            `json:"candidate_interface_id,omitempty"`
+	Evaluator                 EvaluatorConfig                   `json:"evaluator,omitempty"`
+	Optimizer                 *OptimizerConfig                  `json:"optimizer,omitempty"`
+	Scoring                   ScoringConfig                     `json:"scoring,omitempty"`
+	Output                    OutputConfig                      `json:"output,omitempty"`
+	Report                    ReportConfig                      `json:"report_options,omitempty"`
+	Bundle                    BundleConfig                      `json:"bundle,omitempty"`
+	Lineage                   LineageConfig                     `json:"lineage,omitempty"`
+	ChallengerMaterialization ChallengerMaterializationConfig   `json:"challenger_materialization,omitempty"`
+	ReportID                  domain.ReportID                   `json:"report_id,omitempty"`
+	CreatedAt                 time.Time                         `json:"created_at"`
 }
 ⋮----
 // GameConfig records the resolved game contract identity from the manifest.
@@ -11147,6 +10959,10 @@ type RetryPolicyConfig struct {
 	RetryOnInvalidPrediction   bool `json:"retry_on_invalid_prediction,omitempty"`
 }
 ⋮----
+type OptimizerConfig struct {
+	Agent pureoptimizer.AgentConfig `json:"agent"`
+}
+⋮----
 // ScoringConfig records the resolved scoring objective and evidence refs.
 type ScoringConfig struct {
 	ObjectivePath      string                      `json:"objective_path,omitempty"`
@@ -11180,6 +10996,125 @@ type ReportConfig struct {
 type BundleConfig struct {
 	ID string `json:"id,omitempty"`
 }
+⋮----
+type LineageConfig struct {
+	Continues string `json:"continues,omitempty"`
+}
+⋮----
+type ChallengerMaterializationConfig struct {
+	Mode             string   `json:"mode,omitempty"`
+	ArtifactName     string   `json:"artifact_name,omitempty"`
+	IncludedEvidence []string `json:"included_evidence,omitempty"`
+	DeniedEvidence   []string `json:"denied_evidence,omitempty"`
+}
+</file>
+
+<file path="internal/app/round/evaluation_resolve_round_manifest.go">
+package round
+⋮----
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
+	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+	"github.com/becker63/searchbench-go/internal/ports/dataset"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+	pureround "github.com/becker63/searchbench-go/internal/pure/round"
+	"github.com/becker63/searchbench-go/internal/pure/score"
+)
+⋮----
+"context"
+"fmt"
+"os"
+"path/filepath"
+"strings"
+⋮----
+bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
+config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
+"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
+"github.com/becker63/searchbench-go/internal/ports/dataset"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+pureround "github.com/becker63/searchbench-go/internal/pure/round"
+"github.com/becker63/searchbench-go/internal/pure/score"
+⋮----
+func resolveRoundManifest(ctx context.Context, cfg config.RoundSpec, manifestPath string, request evaluationResolveRequest) (Plan, error)
+⋮----
+var (
+		parentContinuation *pureround.Continuation
+		parentBundlePath   string
+		parentEvidenceRef  *score.ObjectiveEvidenceRef
+		parentEvidencePath string
+	)
+⋮----
+func resolveRoundMatches(
+	ctx context.Context,
+	manifestDir string,
+	cfg config.RoundSpec,
+	round *config.RoundManifest,
+	parent *pureround.Continuation,
+) (domain.NonEmpty[domain.MatchSpec], DatasetConfig, error)
+⋮----
+func resolveRoundEvaluator(round *config.RoundManifest, parent *pureround.Continuation) (EvaluatorConfig, domain.ModelSpec, EvaluatorBoundsConfig, int, error)
+⋮----
+func resolveRoundScoring(
+	manifestDir string,
+	round *config.RoundManifest,
+	parent *pureround.Continuation,
+	expectedBundlePath domain.HostPath,
+	parentEvidenceRef *score.ObjectiveEvidenceRef,
+	parentEvidencePath string,
+) (ScoringConfig, error)
+⋮----
+func resolveRoundIncumbent(
+	manifestDir string,
+	round *config.RoundManifest,
+	parent *pureround.Continuation,
+	parentBundlePath string,
+	model domain.ModelSpec,
+	bounds EvaluatorBoundsConfig,
+	modelMaxOutputTokens int,
+) (domain.SystemSpec, string, error)
+⋮----
+func resolveRoundChallenger(
+	manifestDir string,
+	round *config.RoundManifest,
+	parent *pureround.Continuation,
+	parentBundlePath string,
+	model domain.ModelSpec,
+	bounds EvaluatorBoundsConfig,
+	modelMaxOutputTokens int,
+) (domain.SystemSpec, string, ChallengerMaterializationConfig, *OptimizerConfig, string, error)
+⋮----
+var baseSystem domain.SystemSpec
+var basePolicyPath string
+⋮----
+func resolveRoundSystem(
+	manifestDir string,
+	system config.System,
+	policyArtifact *config.PolicyArtifact,
+	model domain.ModelSpec,
+	bounds EvaluatorBoundsConfig,
+	modelMaxOutputTokens int,
+) (resolvedSystem, error)
+⋮----
+func roundStringPtr(value string) *string
+⋮----
+func stringifyTools(values []string) []string
+⋮----
+func stringifyEvidenceKinds(values []config.NextChallengerEvidenceKind) []string
+⋮----
+func stringifyDeniedEvidenceKinds(values []config.OptimizerDeniedEvidenceKind) []string
 </file>
 
 <file path="internal/app/round/evaluation_resolve_test.go">
@@ -11187,8 +11122,8 @@ package round
 ⋮----
 import (
 	"context"
-	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -11196,13 +11131,11 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/score"
-	"github.com/becker63/searchbench-go/internal/testing/importcheck"
 )
 ⋮----
 "context"
-"go/token"
 "os"
+"os/exec"
 "path/filepath"
 "runtime"
 "strings"
@@ -11210,18 +11143,20 @@ import (
 "time"
 ⋮----
 "github.com/becker63/searchbench-go/internal/pure/domain"
-"github.com/becker63/searchbench-go/internal/pure/score"
-"github.com/becker63/searchbench-go/internal/testing/importcheck"
 ⋮----
-func TestResolveExampleManifest(t *testing.T)
+func TestResolveFromScratchManifest(t *testing.T)
 ⋮----
-func TestResolveOptimizeICManifestRejectsUnsupportedMode(t *testing.T)
+func TestResolveContinuationManifestInheritsParentContext(t *testing.T)
 ⋮----
-func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T)
+func TestResolveContinuationRejectsMissingCompleteMarker(t *testing.T)
 ⋮----
-func TestRoundPackageDoesNotImportGeneratedBindings(t *testing.T)
+func requirePkl(t *testing.T)
 ⋮----
-func reflectStringsEqual(got, want []string) bool
+func repoRoot(t *testing.T) string
+⋮----
+func stringsContains(value string, needle string) bool
+⋮----
+func domainSystemID(value string) domain.SystemID
 </file>
 
 <file path="internal/app/round/evaluation_resolve.go">
@@ -11238,8 +11173,6 @@ import (
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
-	evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
-	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/score"
@@ -11255,8 +11188,6 @@ import (
 ⋮----
 config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
-evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
-"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 "github.com/becker63/searchbench-go/internal/ports/dataset"
 "github.com/becker63/searchbench-go/internal/pure/domain"
 "github.com/becker63/searchbench-go/internal/pure/score"
@@ -11267,12 +11198,9 @@ evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/po
 // resolveEvaluation.
 var defaultMatchSource dataset.MatchSource = evaluatorfake.NewMatchSource()
 ⋮----
-// selectionPolicyV1DefaultSymbol is the runtime callable used when adapting
-// the manifest-level iterative_context.selection_policy.v1 interface into the
-// existing domain.Policy shape. It is not the SearchBench objective score.
+// selectionPolicyV1DefaultSymbol is the runtime callable used for policy
+// artifacts that implement iterative_context.selection_policy.v1.
 const selectionPolicyV1DefaultSymbol = "score"
-⋮----
-var ErrUnsupportedMode = errors.New("evaluation: only evaluation mode is supported")
 ⋮----
 // resolveEvaluation loads one Pkl manifest through the config adapter and
 // projects it into the canonical resolved round plan.
@@ -11284,13 +11212,6 @@ type resolvedSystem struct {
 }
 ⋮----
 func normalizeEvaluationRequest(request evaluationResolveRequest) evaluationResolveRequest
-⋮----
-func resolveSystem(
-	manifestDir string,
-	evaluator config.Evaluator,
-	system config.System,
-	policyArtifact *config.PolicyArtifact,
-) (resolvedSystem, error)
 ⋮----
 func resolveBundlePaths(manifestDir string, override string) (domain.HostPath, domain.HostPath, error)
 ⋮----
@@ -11328,73 +11249,23 @@ package round
 ⋮----
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-	pkl "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/report"
-	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 ⋮----
 "context"
-"errors"
 "os"
 "path/filepath"
-"slices"
-"strings"
 "testing"
 "time"
 ⋮----
 bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-pkl "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-"github.com/becker63/searchbench-go/internal/pure/domain"
-"github.com/becker63/searchbench-go/internal/pure/report"
-"github.com/becker63/searchbench-go/internal/pure/score"
 ⋮----
-func TestLocalManifestCanBeLoadedAndValidated(t *testing.T)
-⋮----
-func TestRunRejectsUnsupportedMode(t *testing.T)
-⋮----
-func TestRoundComparesIncumbentAndChallenger(t *testing.T)
-⋮----
-func TestRoundEvidenceUsesMatchExecutions(t *testing.T)
-⋮----
-func TestRoundWritesDurableBundle(t *testing.T)
-⋮----
-var metadata bundlefs.BundleMetadata
-⋮----
-var resolved Plan
-⋮----
-func TestMaterializeRoundEvidenceCreatesCurrentTempModule(t *testing.T)
-⋮----
-func TestMaterializeRoundEvidenceAcceptsExplicitParent(t *testing.T)
-⋮----
-func TestRunWithParentEvidenceThreadsObjectiveRefs(t *testing.T)
-⋮----
-func TestRunObjectiveFailurePreventsCompletedBundle(t *testing.T)
-⋮----
-func TestRunMissingObjectiveFailsBeforeFinalization(t *testing.T)
-⋮----
-func TestRunMissingParentScoreFailsCleanly(t *testing.T)
-⋮----
-func sampleEvaluationRequest(tempDir string) evaluationRequest
-⋮----
-func createRoundFixture(t *testing.T, objectiveMutation string) string
-⋮----
-func assertFileExists(t *testing.T, path string)
-⋮----
-func metadataHasPath(metadata bundlefs.BundleMetadata, path string) bool
-⋮----
-func sampleRoundEvidence(t *testing.T, reportID domain.ReportID) score.RoundEvidenceDocument
-⋮----
-func writeScoreModuleForTest(t *testing.T, root string, name string, evidence score.RoundEvidenceDocument) string
+func TestRunFromScratchWritesContinuationBundle(t *testing.T)
 </file>
 
 <file path="internal/app/round/evaluation_types.go">
@@ -11460,46 +11331,6 @@ type Result struct {
 }
 </file>
 
-<file path="internal/app/round/evaluator_parity_test.go">
-package round
-⋮----
-import (
-	"context"
-	"os/exec"
-	"slices"
-	"strings"
-	"testing"
-
-	"github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
-	"github.com/becker63/searchbench-go/internal/agents/evaluator/prompt"
-	"github.com/becker63/searchbench-go/internal/pure/domain"
-	run "github.com/becker63/searchbench-go/internal/pure/execution"
-)
-⋮----
-"context"
-"os/exec"
-"slices"
-"strings"
-"testing"
-⋮----
-"github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
-"github.com/becker63/searchbench-go/internal/agents/evaluator/prompt"
-"github.com/becker63/searchbench-go/internal/pure/domain"
-run "github.com/becker63/searchbench-go/internal/pure/execution"
-⋮----
-func TestFilterToolsByAllowSetExcludesDeniedNames(t *testing.T)
-⋮----
-func TestFilterToolNamesMatchEffectiveAllowed(t *testing.T)
-⋮----
-var got []string
-⋮----
-func TestRenderedPromptListsOnlyEffectiveTools(t *testing.T)
-⋮----
-func TestResolvedRoundIncludesEvaluatorToolPolicyFields(t *testing.T)
-⋮----
-func sampleSpec() run.Spec
-</file>
-
 <file path="internal/app/round/evaluator.go">
 package round
 ⋮----
@@ -11559,113 +11390,38 @@ func filterToolsByAllowSet(ctx context.Context, tools []tool.BaseTool, allow map
 var out []tool.BaseTool
 </file>
 
-<file path="internal/app/round/phases_test.go">
-package round
-⋮----
-import (
-	"context"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"testing"
-)
-⋮----
-"context"
-"os"
-"os/exec"
-"path/filepath"
-"testing"
-⋮----
-// TestEvaluateMatchesDoesNotWriteCompleteMarker confirms EvaluateMatches stays
-// effect-free with respect to the round bundle. The COMPLETE marker is the
-// canonical "round bundle is durable" signal; it must only appear after
-// WriteBundle runs.
-func TestEvaluateMatchesDoesNotWriteCompleteMarker(t *testing.T)
-⋮----
-// TestBuildEvidenceDoesNotWriteCompleteMarker confirms BuildEvidence is a pure
-// projection over MatchRecords and produces no bundle artifacts.
-func TestBuildEvidenceDoesNotWriteCompleteMarker(t *testing.T)
-⋮----
-// TestEvaluateObjectiveDoesNotWriteCompleteMarker confirms EvaluateObjective
-// runs the scoring graph without persisting any bundle artifact.
-func TestEvaluateObjectiveDoesNotWriteCompleteMarker(t *testing.T)
-⋮----
-// TestWriteBundleWritesCompleteMarker confirms WriteBundle is the only phase
-// that writes the COMPLETE marker for the round bundle.
-func TestWriteBundleWritesCompleteMarker(t *testing.T)
-⋮----
-// newTestRound resolves a round plan from the canonical Round001 manifest in
-// a fresh temp bundle root. It returns the Resolved record and the override
-// bundle root for assertions.
-func newTestRound(t *testing.T) (Resolved, string)
-⋮----
-func assertNoCompleteMarker(t *testing.T, bundleRoot string)
-⋮----
-var found []string
-</file>
-
 <file path="internal/app/round/run_test.go">
 package round
 ⋮----
 import (
 	"context"
-	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
-	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/testing/modeltest"
 )
 ⋮----
 "context"
-"encoding/json"
 "os"
-"os/exec"
 "path/filepath"
-"strings"
 "testing"
 "time"
 ⋮----
 "github.com/cloudwego/eino/components/model"
 "github.com/cloudwego/eino/schema"
 ⋮----
-evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 "github.com/becker63/searchbench-go/internal/pure/domain"
-run "github.com/becker63/searchbench-go/internal/pure/execution"
 "github.com/becker63/searchbench-go/internal/testing/modeltest"
 ⋮----
-func TestRoundAdvancesNextChallengerFromEvidence(t *testing.T)
+func TestRunGeneratedContinuationEvaluatesCurrentRound(t *testing.T)
 ⋮----
-var evaluatorModels []*modeltest.ScriptedModel
-⋮----
-var optimizerResolved struct {
-		ParentRound struct {
-			BundlePath string `json:"bundle_path"`
-		} `json:"parent_round"`
-	}
-⋮----
-func TestRoundResolutionFailurePreventsNextChallenger(t *testing.T)
-⋮----
-func TestRoundRequiresOptimizerFactoryWhenOptimizationConfigured(t *testing.T)
-⋮----
-func containsEvaluatorPhase(phases []evaluatoreino.Phase, want evaluatoreino.Phase) bool
-⋮----
-func requirePkl(t *testing.T)
-⋮----
-func repoRoot(t *testing.T) string
-⋮----
-func mustReadFile(t *testing.T, path string) []byte
-⋮----
-func decodeJSONFile(t *testing.T, path string, target any)
+func domainSystemRoleChallenger() domain.Role
 </file>
 
 <file path="internal/app/round/run.go">
@@ -11673,10 +11429,8 @@ package round
 ⋮----
 import (
 	"context"
-	"errors"
 
 	bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-	appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
 	"github.com/becker63/searchbench-go/internal/games/codelocalization"
 	"github.com/becker63/searchbench-go/internal/pure/game"
 	"github.com/becker63/searchbench-go/internal/pure/report"
@@ -11685,10 +11439,8 @@ import (
 )
 ⋮----
 "context"
-"errors"
 ⋮----
 bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
-appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
 "github.com/becker63/searchbench-go/internal/games/codelocalization"
 "github.com/becker63/searchbench-go/internal/pure/game"
 "github.com/becker63/searchbench-go/internal/pure/report"
@@ -11698,8 +11450,8 @@ pureround "github.com/becker63/searchbench-go/internal/pure/round"
 // Run completes one round and, when configured, proposes a next challenger.
 //
 // The flow is the named pipeline: ResolveGame -> ResolveRound ->
-// EvaluateMatches -> BuildEvidence -> EvaluateObjective -> Decide ->
-// WriteBundle -> ProposeNextChallenger. Each step delegates to the
+// MaterializeChallenger -> EvaluateMatches -> BuildEvidence ->
+// EvaluateObjective -> Decide -> WriteBundle. Each step delegates to the
 // corresponding phase function, and only WriteBundle is allowed to write the
 // COMPLETE marker for the round bundle.
 func Run(ctx context.Context, input Input) (Record, error)
@@ -11709,6 +11461,11 @@ func ResolveGame(_ context.Context, _ Input) (game.Contract, error)
 ⋮----
 // ResolveRound loads and normalizes the caller's round manifest.
 func ResolveRound(ctx context.Context, resolvedGame game.Contract, input Input) (Resolved, error)
+⋮----
+// MaterializeChallenger resolves any optimizer-backed challenger generation
+// before evaluation begins. Checked-in challengers leave the resolved plan
+// unchanged.
+func MaterializeChallenger(ctx context.Context, resolved Resolved, input Input) (Resolved, error)
 ⋮----
 // EvaluateMatches runs incumbent and challenger executions for the round
 // matches. It must not write any bundle artifacts; persistence is reserved for
@@ -11743,21 +11500,6 @@ func WriteBundle(
 	input Input,
 ) (bundlefs.BundleRef, error)
 ⋮----
-// ProposeNextChallenger asks the optimizer for a possible future challenger.
-⋮----
-// When neither an OptimizerModelFactory nor an OptimizationManifestPath is
-// configured, the round skips the optimizer cleanly and returns nil without
-// error.
-func ProposeNextChallenger(
-	ctx context.Context,
-	_ Resolved,
-	_ score.RoundEvidenceDocument,
-	_ *score.ObjectiveResult,
-	_ report.Decision,
-	bundleRef bundlefs.BundleRef,
-	input Input,
-) (*appOptimizer.Record, error)
-⋮----
 func buildResult(
 	matches MatchRecords,
 	bundleRef bundlefs.BundleRef,
@@ -11772,23 +11514,19 @@ func evaluationRequestFromInput(input Input) evaluationRequest
 package round
 ⋮----
 import (
-	"path/filepath"
 	"time"
 
 	"github.com/cloudwego/eino/components/model"
 
-	appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
 	"github.com/becker63/searchbench-go/internal/pure/game"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	pureround "github.com/becker63/searchbench-go/internal/pure/round"
 )
 ⋮----
-"path/filepath"
 "time"
 ⋮----
 "github.com/cloudwego/eino/components/model"
 ⋮----
-appOptimizer "github.com/becker63/searchbench-go/internal/app/round/internal/optimizer"
 "github.com/becker63/searchbench-go/internal/pure/game"
 "github.com/becker63/searchbench-go/internal/pure/report"
 pureround "github.com/becker63/searchbench-go/internal/pure/round"
@@ -11798,17 +11536,13 @@ type OptimizerModelFactory func() (model.ToolCallingChatModel, error)
 ⋮----
 // Input configures one round workflow.
 //
-// EvaluationManifestPath is the only required field. When
-// OptimizationManifestPath and OptimizerModelFactory are both omitted the
-// round skips the optimizer and produces an evaluation-only bundle.
+// EvaluationManifestPath is the only required field.
 type Input struct {
-	EvaluationManifestPath   string
-	OptimizationManifestPath string
-	BundleRootOverride       string
-	RoundID                  string
-	OptimizerBundleID        string
-	DisableRenderReport      bool
-	Now                      func() time.Time
+	EvaluationManifestPath string
+	BundleRootOverride     string
+	RoundID                string
+	DisableRenderReport    bool
+	Now                    func() time.Time
 
 	EvaluatorModelFactory EvaluatorModelFactory
 	EvaluatorToolFactory  EvaluatorToolFactory
@@ -11836,18 +11570,14 @@ type Record struct {
 	Game  game.Contract
 	Round pureround.Record
 
-	RoundBundle     string
-	OptimizerBundle string
+	RoundBundle string
 
-	RoundResult          *Result
-	NextChallengerResult *appOptimizer.Record
+	RoundResult *Result
 }
 ⋮----
 func normalizeInput(input Input) Input
 ⋮----
 func roundBundleRoot(base string) string
-⋮----
-func optimizerBundleRoot(base string) string
 </file>
 
 <file path="internal/architecture/imports_test.go">
@@ -13901,6 +13631,122 @@ func NewComparisonSpecFromRefs(
 ⋮----
 // Validate checks that the report boundary is structurally meaningful.
 func (s ComparisonSpec) Validate() error
+</file>
+
+<file path="internal/pure/round/continuation.go">
+package round
+⋮----
+import (
+	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+)
+⋮----
+"errors"
+"fmt"
+"path/filepath"
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+⋮----
+const ContinuationSchemaVersion = "searchbench.continuation.v1"
+⋮----
+var (
+	ErrInvalidContinuation      = errors.New("round: invalid continuation")
+⋮----
+// Continuation is the durable lineage payload written into a completed round
+// bundle. It carries the resolved context required to author the next round
+// without repeating the inner evaluation shape in Pkl.
+type Continuation struct {
+	SchemaVersion       string                            `json:"schema_version"`
+	BundleID            string                            `json:"bundle_id"`
+	Game                ContinuationGame                  `json:"game"`
+	Round               ContinuationRound                 `json:"round"`
+	CandidateInterface  ContinuationInterface             `json:"candidate_interface"`
+	SurvivingCandidate  ContinuationCandidate             `json:"surviving_candidate"`
+	DefaultContinuation ContinuationDefaults              `json:"default_continuation"`
+	Matches             domain.NonEmpty[domain.MatchSpec] `json:"matches"`
+	Evaluator           ContinuationEvaluator             `json:"evaluator"`
+	Scoring             ContinuationScoring               `json:"scoring"`
+	Evidence            ContinuationEvidence              `json:"evidence"`
+}
+⋮----
+type ContinuationGame struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind,omitempty"`
+}
+⋮----
+type ContinuationRound struct {
+	ID string `json:"id"`
+}
+⋮----
+type ContinuationInterface struct {
+	ID string `json:"id"`
+}
+⋮----
+type ContinuationCandidate struct {
+	Role         domain.Role       `json:"role"`
+	System       domain.SystemSpec `json:"system"`
+	ArtifactPath string            `json:"artifact_path"`
+}
+⋮----
+type ContinuationDefaults struct {
+	IncumbentFrom string `json:"incumbent_from"`
+	MatchesFrom   string `json:"matches_from"`
+	ObjectiveFrom string `json:"objective_from"`
+	EvaluatorFrom string `json:"evaluator_from"`
+}
+⋮----
+type ContinuationEvaluator struct {
+	Model        ContinuationModel  `json:"model"`
+	Bounds       ContinuationBounds `json:"bounds"`
+	Retry        ContinuationRetry  `json:"retry"`
+	AllowedTools []string           `json:"allowed_tools,omitempty"`
+	DeniedTools  []string           `json:"denied_tools,omitempty"`
+	SystemPrompt string             `json:"system_prompt,omitempty"`
+	PolicySHA256 string             `json:"policy_sha256,omitempty"`
+}
+⋮----
+type ContinuationModel struct {
+	Provider        string `json:"provider"`
+	Name            string `json:"name"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+}
+⋮----
+type ContinuationBounds struct {
+	MaxModelTurns  int `json:"max_model_turns,omitempty"`
+	MaxToolCalls   int `json:"max_tool_calls,omitempty"`
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+}
+⋮----
+type ContinuationRetry struct {
+	MaxAttempts                int  `json:"max_attempts,omitempty"`
+	RetryOnModelError          bool `json:"retry_on_model_error,omitempty"`
+	RetryOnToolFailure         bool `json:"retry_on_tool_failure,omitempty"`
+	RetryOnFinalizationFailure bool `json:"retry_on_finalization_failure,omitempty"`
+	RetryOnInvalidPrediction   bool `json:"retry_on_invalid_prediction,omitempty"`
+}
+⋮----
+type ContinuationScoring struct {
+	ObjectivePath string   `json:"objective_path"`
+	ReportFormats []string `json:"report_formats,omitempty"`
+}
+⋮----
+type ContinuationEvidence struct {
+	RoundEvidencePath string `json:"round_evidence_path"`
+	ObjectivePath     string `json:"objective_path,omitempty"`
+	ReportPath        string `json:"report_path"`
+	DecisionPath      string `json:"decision_path"`
+}
+⋮----
+func (c Continuation) Validate() error
+⋮----
+// ResolveArtifactPath expands a bundle-relative artifact path against the
+// completed round bundle path.
+func (c Continuation) ResolveArtifactPath(bundlePath domain.HostPath) string
 </file>
 
 <file path="internal/pure/round/round.go">

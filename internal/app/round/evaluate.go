@@ -22,9 +22,7 @@ func runEvaluation(ctx context.Context, request evaluationRequest) (Result, erro
 	plan, err := resolveEvaluation(ctx, request.Resolve)
 	if err != nil {
 		phase := PhaseResolvePlanFailed
-		if errors.Is(err, ErrUnsupportedMode) {
-			phase = PhaseUnsupportedMode
-		} else if errors.Is(err, config.ErrValidationFailed) {
+		if errors.Is(err, config.ErrValidationFailed) {
 			phase = PhaseValidateManifestFailed
 		} else if errors.Is(err, os.ErrNotExist) {
 			phase = PhaseResolvePlanFailed
@@ -43,6 +41,16 @@ func runEvaluation(ctx context.Context, request evaluationRequest) (Result, erro
 // public phase functions call, so this wrapper and the phase functions stay
 // in lockstep.
 func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationRequest) (Result, error) {
+	resolved, err := materializeChallenger(ctx, Resolved{Round: plan}, Input{
+		EvaluatorModelFactory: request.EvaluatorModelFactory,
+		EvaluatorToolFactory:  request.EvaluatorToolFactory,
+		OptimizerModelFactory: nil,
+	})
+	if err != nil {
+		return Result{}, &Error{Phase: PhaseMaterializeChallengerFailed, Err: err}
+	}
+	plan = resolved.Round
+
 	runCtx, cancel := withEvaluatorTimeout(ctx, plan)
 	defer cancel()
 
@@ -131,6 +139,8 @@ func writeRoundBundle(
 	if err != nil {
 		return bundlefs.BundleRef{}, &Error{Phase: PhaseRenderReportFailed, Err: err}
 	}
+	additionalFiles, policyPaths := roundBundleArtifacts(plan)
+	continuation := buildContinuation(plan, roundReport, objective, policyPaths)
 	bundleRef, err := bundlefs.WriteBundle(ctx, bundlefs.RoundBundleInput{
 		RootPath:        plan.Output.BundleWriterRoot,
 		BundleID:        plan.Bundle.ID,
@@ -139,6 +149,8 @@ func writeRoundBundle(
 		RoundEvidence:   evidence,
 		ObjectiveResult: objective,
 		RenderedReport:  rendered,
+		Continuation:    continuation,
+		AdditionalFiles: additionalFiles,
 		CreatedAt:       plan.CreatedAt,
 	})
 	if err != nil {

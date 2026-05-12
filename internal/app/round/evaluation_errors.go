@@ -5,16 +5,17 @@ import "fmt"
 type Phase string
 
 const (
-	PhaseLoadManifestFailed     Phase = "load_manifest_failed"
-	PhaseValidateManifestFailed Phase = "validate_manifest_failed"
-	PhaseUnsupportedMode        Phase = "unsupported_mode"
-	PhaseResolvePlanFailed      Phase = "resolve_plan_failed"
-	PhaseComparisonFailed       Phase = "comparison_failed"
-	PhaseRoundEvidenceFailed    Phase = "round_evidence_failed"
-	PhaseEvidencePKLFailed      Phase = "evidence_pkl_failed"
-	PhaseObjectiveFailed        Phase = "objective_failed"
-	PhaseRenderReportFailed     Phase = "render_report_failed"
-	PhaseBundleWriteFailed      Phase = "bundle_write_failed"
+	PhaseLoadManifestFailed          Phase = "load_manifest_failed"
+	PhaseValidateManifestFailed      Phase = "validate_manifest_failed"
+	PhaseUnsupportedMode             Phase = "unsupported_mode"
+	PhaseResolvePlanFailed           Phase = "resolve_plan_failed"
+	PhaseMaterializeChallengerFailed Phase = "materialize_challenger_failed"
+	PhaseComparisonFailed            Phase = "comparison_failed"
+	PhaseRoundEvidenceFailed         Phase = "round_evidence_failed"
+	PhaseEvidencePKLFailed           Phase = "evidence_pkl_failed"
+	PhaseObjectiveFailed             Phase = "objective_failed"
+	PhaseRenderReportFailed          Phase = "render_report_failed"
+	PhaseBundleWriteFailed           Phase = "bundle_write_failed"
 )
 
 // Error is the phase-tagged local manifest-run failure.

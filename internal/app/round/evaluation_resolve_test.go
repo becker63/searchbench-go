@@ -2,8 +2,8 @@ package round
 
 import (
 	"context"
-	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
-	"github.com/becker63/searchbench-go/internal/pure/score"
-	"github.com/becker63/searchbench-go/internal/testing/importcheck"
 )
 
-func TestResolveExampleManifest(t *testing.T) {
+func TestResolveFromScratchManifest(t *testing.T) {
 	t.Parallel()
 
 	requirePkl(t)
@@ -24,10 +22,9 @@ func TestResolveExampleManifest(t *testing.T) {
 	out, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
 		ManifestPath:       manifestPath,
 		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts"),
-		BundleID:           "round-resolve",
-		ReportID:           domain.ReportID("report-round-resolve"),
+		BundleID:           "round-001",
 		Now: func() time.Time {
-			return time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
+			return time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
 		},
 	})
 	if err != nil {
@@ -37,123 +34,133 @@ func TestResolveExampleManifest(t *testing.T) {
 	if got, want := out.RoundName, "local-ic-vs-jcodemunch-round-001"; got != want {
 		t.Fatalf("RoundName = %q, want %q", got, want)
 	}
-	if got, want := out.Mode, "evaluation"; got != want {
-		t.Fatalf("Mode = %q, want %q", got, want)
+	if got, want := out.CandidateInterfaceID, "iterative_context.selection_policy.v1"; got != want {
+		t.Fatalf("CandidateInterfaceID = %q, want %q", got, want)
 	}
-	if got, want := out.Policies.Incumbent.ID, domain.SystemID("jcodemunch"); got != want {
-		t.Fatalf("Incumbent.ID = %q, want %q", got, want)
-	}
-	if got, want := out.Policies.Challenger.ID, domain.SystemID("iterative-context"); got != want {
-		t.Fatalf("Challenger.ID = %q, want %q", got, want)
-	}
-	if got, want := out.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
-		t.Fatalf("ObjectivePath = %q, want %q", got, want)
+	if out.Lineage.Continues != "" {
+		t.Fatalf("Lineage.Continues = %q, want empty", out.Lineage.Continues)
 	}
 	if got, want := out.Output.ResolvedPolicyPaths.Challenger, filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "policies", "challenger_policy.py")); got != want {
-		t.Fatalf("challenger policy path = %q, want %q", got, want)
-	}
-	if got, want := out.Output.BundleWriterRoot, domain.HostPath(filepath.Join(filepath.Dir(manifestPath), "artifacts")); got == want {
-		t.Fatalf("BundleWriterRoot unexpectedly ignored override")
-	}
-	if got, want := out.Output.ReportFormats, []string{"json", "text"}; !reflectStringsEqual(got, want) {
-		t.Fatalf("ReportFormats = %v, want %v", got, want)
-	}
-	if got, want := out.ReportID, domain.ReportID("report-round-resolve"); got != want {
-		t.Fatalf("ReportID = %q, want %q", got, want)
+		t.Fatalf("Resolved challenger policy path = %q, want %q", got, want)
 	}
 }
 
-func TestResolveOptimizeICManifestRejectsUnsupportedMode(t *testing.T) {
+func TestResolveContinuationManifestInheritsParentContext(t *testing.T) {
 	t.Parallel()
 
 	requirePkl(t)
 
-	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "optimize-ic", "round.pkl")
-	_, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
-		ManifestPath:       manifestPath,
-		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts", "runs"),
-		BundleID:           "optimize-ic-example",
-	})
-	if err == nil || !strings.Contains(err.Error(), ErrUnsupportedMode.Error()) {
-		t.Fatalf("resolveEvaluation() error = %v, want unsupported mode", err)
-	}
-}
-
-func TestResolveManifestRelativePathsAndParentEvidence(t *testing.T) {
-	t.Parallel()
-
-	requirePkl(t)
-
-	parentEvidence := filepath.Join(t.TempDir(), "parent-evidence.pkl")
-	if err := os.WriteFile(parentEvidence, []byte("schemaVersion = \"searchbench.round_evidence.v1\"\nreportId = \"parent\"\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile(parentEvidence) error = %v", err)
-	}
-
+	manifestPath := filepath.Join(repoRoot(t), "configs", "rounds", "continue-ic-from-local", "round.pkl")
 	out, err := resolveEvaluation(context.Background(), evaluationResolveRequest{
-		ManifestPath:       filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "round.pkl"),
-		BundleRootOverride: filepath.Join(t.TempDir(), "bundle-root"),
-		BundleID:           "with-parent",
-		ParentRef: &score.ObjectiveEvidenceRef{
-			Name:         "parent",
-			BundlePath:   "fixtures/parent-run",
-			EvidencePath: "fixtures/parent-run/evidence.pkl",
-			ReportPath:   "fixtures/parent-run/round-report.json",
-		},
-		ParentEvidencePath: parentEvidence,
+		ManifestPath:       manifestPath,
+		BundleRootOverride: filepath.Join(t.TempDir(), "artifacts"),
+		BundleID:           "round-002",
 	})
 	if err != nil {
 		t.Fatalf("resolveEvaluation() error = %v", err)
 	}
 
-	if got, want := out.Output.BundleCollectionPath, domain.HostPath(filepath.Join(string(out.Output.BundleWriterRoot), "games", "code-localization", "rounds")); got != want {
-		t.Fatalf("BundleCollectionPath = %q, want %q", got, want)
-	}
-	if got, want := out.Output.ExpectedBundlePath, domain.HostPath(filepath.Join(string(out.Output.BundleCollectionPath), "with-parent")); got != want {
-		t.Fatalf("ExpectedBundlePath = %q, want %q", got, want)
+	if out.Lineage.Continues == "" {
+		t.Fatal("Lineage.Continues is empty")
 	}
 	if out.Scoring.ParentEvidence == nil {
-		t.Fatal("ParentEvidence is nil")
+		t.Fatal("Scoring.ParentEvidence is nil")
 	}
-	if got, want := out.Scoring.ParentEvidence.EvidencePath, "fixtures/parent-run/evidence.pkl"; got != want {
-		t.Fatalf("ParentEvidence.EvidencePath = %q, want %q", got, want)
+	if out.Policies.Incumbent.Policy == nil {
+		t.Fatal("continued incumbent policy is nil")
 	}
-	if got, want := out.Scoring.ParentEvidencePath, parentEvidence; got != want {
-		t.Fatalf("ParentEvidencePath = %q, want %q", got, want)
+	if out.Policies.Challenger.Policy == nil {
+		t.Fatal("continued challenger policy is nil")
+	}
+	if got, want := out.Policies.Incumbent.Policy.ID, out.Policies.Challenger.Policy.ID; got == want {
+		t.Fatalf("continued incumbent policy ID unexpectedly equals challenger policy ID after challenger patch")
+	}
+	if got, want := out.Policies.Incumbent.ID, domainSystemID("iterative-context"); got != want {
+		t.Fatalf("continued incumbent ID = %q, want %q", got, want)
+	}
+	if got, want := out.Policies.Incumbent.Policy.ID.String(), "challenger-policy-round-001"; got != want {
+		t.Fatalf("continued incumbent policy ID = %q, want %q", got, want)
+	}
+	if got, want := out.Policies.Challenger.Policy.ID.String(), "challenger-policy-round-002"; got != want {
+		t.Fatalf("continued challenger policy ID = %q, want %q", got, want)
 	}
 }
 
-func TestRoundPackageDoesNotImportGeneratedBindings(t *testing.T) {
+func TestResolveContinuationRejectsMissingCompleteMarker(t *testing.T) {
 	t.Parallel()
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
+	requirePkl(t)
+
+	root := t.TempDir()
+	parent := filepath.Join(root, "parent")
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		t.Fatalf("MkdirAll(parent) error = %v", err)
 	}
 
-	dir := filepath.Dir(currentFile)
-	fs := token.NewFileSet()
-	files, err := importcheck.ParseNonTestGoFilesImportsOnly(fs, dir)
-	if err != nil {
-		t.Fatalf("ParseNonTestGoFilesImportsOnly() error = %v", err)
+	manifestPath := filepath.Join(root, "round.pkl")
+	if err := os.WriteFile(manifestPath, []byte(`amends "`+filepath.ToSlash(filepath.Join(repoRoot(t), "configs", "schema", "games", "code-localization.pkl"))+`"
+name = "tmp"
+round {
+  continues = "parent"
+  id = "round-002"
+  challenger {
+    selectionPolicy {
+      id = "challenger-policy-round-002"
+      kind = "policy"
+      path = "policies/challenger_policy.py"
+      implements {
+        id = "iterative_context.selection_policy.v1"
+      }
+    }
+  }
+}
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
 	}
-	for _, file := range files {
-		for _, imp := range file.Imports {
-			path := strings.Trim(imp.Path.Value, `"`)
-			if strings.Contains(path, "/internal/adapters/config/pkl/generated") {
-				t.Fatalf("app/round import %q leaked generated bindings", path)
-			}
-		}
+	policiesDir := filepath.Join(root, "policies")
+	if err := os.MkdirAll(policiesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(policies) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(policiesDir, "challenger_policy.py"), []byte("def score(match):\n    return []\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(policy) error = %v", err)
+	}
+
+	_, err := resolveEvaluation(context.Background(), evaluationResolveRequest{ManifestPath: manifestPath})
+	if err == nil || !stringsContains(err.Error(), "completed marker is missing") {
+		t.Fatalf("resolveEvaluation() error = %v, want missing COMPLETE marker failure", err)
 	}
 }
 
-func reflectStringsEqual(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
+func requirePkl(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("pkl"); err != nil {
+		t.Skip("pkl CLI not available on PATH")
 	}
-	for i := range got {
-		if got[i] != want[i] {
-			return false
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	_, path, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	dir := filepath.Dir(path)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
 		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("go.mod not found from test file location")
+		}
+		dir = parent
 	}
-	return true
+}
+
+func stringsContains(value string, needle string) bool {
+	return strings.Contains(value, needle)
+}
+
+func domainSystemID(value string) domain.SystemID {
+	return domain.SystemID(value)
 }

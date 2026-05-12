@@ -5,6 +5,7 @@ import (
 
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 
@@ -21,22 +22,26 @@ type evaluationResolveRequest struct {
 
 // Plan is the canonical app-layer evaluation projection used by execution.
 type Plan struct {
-	ManifestPath string                            `json:"manifest_path,omitempty"`
-	RoundName    string                            `json:"round_name,omitempty"`
-	Mode         string                            `json:"mode,omitempty"`
-	Game         GameConfig                        `json:"game,omitempty"`
-	Round        RoundConfig                       `json:"round,omitempty"`
-	Dataset      DatasetConfig                     `json:"dataset,omitempty"`
-	Policies     domain.Pair[domain.SystemSpec]    `json:"-"`
-	Matches      domain.NonEmpty[domain.MatchSpec] `json:"matches"`
-	Parallelism  compare.Parallelism               `json:"-"`
-	Evaluator    EvaluatorConfig                   `json:"evaluator,omitempty"`
-	Scoring      ScoringConfig                     `json:"scoring,omitempty"`
-	Output       OutputConfig                      `json:"output,omitempty"`
-	Report       ReportConfig                      `json:"report_options,omitempty"`
-	Bundle       BundleConfig                      `json:"bundle,omitempty"`
-	ReportID     domain.ReportID                   `json:"report_id,omitempty"`
-	CreatedAt    time.Time                         `json:"created_at"`
+	ManifestPath              string                            `json:"manifest_path,omitempty"`
+	RoundName                 string                            `json:"round_name,omitempty"`
+	Mode                      string                            `json:"mode,omitempty"`
+	Game                      GameConfig                        `json:"game,omitempty"`
+	Round                     RoundConfig                       `json:"round,omitempty"`
+	Dataset                   DatasetConfig                     `json:"dataset,omitempty"`
+	Policies                  domain.Pair[domain.SystemSpec]    `json:"-"`
+	Matches                   domain.NonEmpty[domain.MatchSpec] `json:"matches"`
+	Parallelism               compare.Parallelism               `json:"-"`
+	CandidateInterfaceID      string                            `json:"candidate_interface_id,omitempty"`
+	Evaluator                 EvaluatorConfig                   `json:"evaluator,omitempty"`
+	Optimizer                 *OptimizerConfig                  `json:"optimizer,omitempty"`
+	Scoring                   ScoringConfig                     `json:"scoring,omitempty"`
+	Output                    OutputConfig                      `json:"output,omitempty"`
+	Report                    ReportConfig                      `json:"report_options,omitempty"`
+	Bundle                    BundleConfig                      `json:"bundle,omitempty"`
+	Lineage                   LineageConfig                     `json:"lineage,omitempty"`
+	ChallengerMaterialization ChallengerMaterializationConfig   `json:"challenger_materialization,omitempty"`
+	ReportID                  domain.ReportID                   `json:"report_id,omitempty"`
+	CreatedAt                 time.Time                         `json:"created_at"`
 }
 
 // GameConfig records the resolved game contract identity from the manifest.
@@ -110,6 +115,10 @@ type RetryPolicyConfig struct {
 	RetryOnInvalidPrediction   bool `json:"retry_on_invalid_prediction,omitempty"`
 }
 
+type OptimizerConfig struct {
+	Agent pureoptimizer.AgentConfig `json:"agent"`
+}
+
 // ScoringConfig records the resolved scoring objective and evidence refs.
 type ScoringConfig struct {
 	ObjectivePath      string                      `json:"objective_path,omitempty"`
@@ -142,4 +151,15 @@ type ReportConfig struct {
 // BundleConfig records the resolved output bundle target.
 type BundleConfig struct {
 	ID string `json:"id,omitempty"`
+}
+
+type LineageConfig struct {
+	Continues string `json:"continues,omitempty"`
+}
+
+type ChallengerMaterializationConfig struct {
+	Mode             string   `json:"mode,omitempty"`
+	ArtifactName     string   `json:"artifact_name,omitempty"`
+	IncludedEvidence []string `json:"included_evidence,omitempty"`
+	DeniedEvidence   []string `json:"denied_evidence,omitempty"`
 }
