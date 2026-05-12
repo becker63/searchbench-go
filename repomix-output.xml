@@ -16529,7 +16529,6 @@ Short version: use Go + Pkl as in [`README.md`](README.md).
   "output": {
     "filePath": "repomix-output.xml",
     "style": "xml",
-    "compress": true,
     "includeDiffs": false,
     "includeLogs": false,
     "includeLogsCount": 10
