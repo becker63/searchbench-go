@@ -86,6 +86,16 @@ docs/
   README.md
 internal/
   adapters/
+    backend/
+      jcodemunch/
+        doc.go
+        errors.go
+        factory.go
+        jcodemunch_test.go
+        normalize.go
+        runtime.go
+        toolinfo.go
+        uri.go
     bundle/
       fs/
         bundle.go
@@ -6910,6 +6920,301 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
 
 Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/doc.go">
+// Package jcodemunch connects SearchBench evaluator runs to a jCodeMunch MCP server.
+//
+// The adapter owns MCP session lifecycle, repo root registration, MCP tool listing,
+// conversion into Eino tools, and normalization of tool results for the evaluator.
+// Setup failures (connect, list tools during tool construction) are distinct from
+// per-invocation tool failures.
+⋮----
+// Production use starts a subprocess transport via [OpenCommand]. Tests should use
+// [NewRuntime] with an in-memory MCP session from [github.com/modelcontextprotocol/go-sdk/mcp.NewInMemoryTransports].
+package jcodemunch
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/errors.go">
+package jcodemunch
+⋮----
+import (
+	"errors"
+	"fmt"
+)
+⋮----
+"errors"
+"fmt"
+⋮----
+// Kind classifies jCodeMunch adapter failures for errors.Is-style checks.
+type Kind int
+⋮----
+const (
+	// KindSetup covers MCP session setup: connect, initialize, optional repo
+	// indexing hooks, and prefetch steps such as tools/list when building the tool surface.
+	KindSetup Kind = iota
+	// KindToolCall covers MCP tools/call failures and tool results marked as errors.
+	KindToolCall
+)
+⋮----
+// KindSetup covers MCP session setup: connect, initialize, optional repo
+// indexing hooks, and prefetch steps such as tools/list when building the tool surface.
+⋮----
+// KindToolCall covers MCP tools/call failures and tool results marked as errors.
+⋮----
+// Error is a typed adapter failure with an operation label.
+type Error struct {
+	Kind Kind
+	Op   string
+	Err  error
+}
+⋮----
+func (e *Error) Error() string
+⋮----
+// Unwrap implements error unwrapper semantics.
+func (e *Error) Unwrap() error
+⋮----
+// IsSetup reports whether err is (or wraps) a [Error] with [KindSetup].
+func IsSetup(err error) bool
+⋮----
+var je *Error
+⋮----
+// IsToolCall reports whether err is (or wraps) a [Error] with [KindToolCall].
+func IsToolCall(err error) bool
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/factory.go">
+package jcodemunch
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"encoding/json"
+"fmt"
+"strings"
+⋮----
+"github.com/cloudwego/eino/components/tool"
+"github.com/cloudwego/eino/schema"
+⋮----
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+// EvaluatorToolFactory returns an [run]-compatible tool factory backed by MCP tools
+// exposed through rt. Tool metadata is fetched on each factory invocation so policy
+// filtering in the round executor sees the same tool names as the server.
+func EvaluatorToolFactory(rt *Runtime) func(run.Spec) ([]tool.BaseTool, error)
+⋮----
+var out []tool.BaseTool
+⋮----
+type mcpInvokableTool struct {
+	rt   *Runtime
+	name string
+	info *schema.ToolInfo
+}
+⋮----
+func (t mcpInvokableTool) Info(_ context.Context) (*schema.ToolInfo, error)
+⋮----
+func (t mcpInvokableTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error)
+⋮----
+var _ tool.InvokableTool = mcpInvokableTool{}
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/jcodemunch_test.go">
+package jcodemunch_test
+⋮----
+import (
+	"context"
+	"os/exec"
+	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/becker63/searchbench-go/internal/adapters/backend/jcodemunch"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"os/exec"
+"testing"
+"time"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+"github.com/becker63/searchbench-go/internal/adapters/backend/jcodemunch"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+func TestScriptedMCPToolSurface(t *testing.T)
+⋮----
+// Admin-style tool name: still listed by MCP; round executor allow-lists gate exposure for the model.
+⋮----
+func TestCallToolSurfacesMCPResultErrors(t *testing.T)
+⋮----
+func TestOpenCommandFailsSetup(t *testing.T)
+⋮----
+func TestRepoRootRegisteredBeforeConnect(t *testing.T)
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/normalize.go">
+package jcodemunch
+⋮----
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"encoding/json"
+"fmt"
+"strings"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// NormalizeCallToolResult turns an MCP tools/call result into a single JSON string for Eino.
+//
+// When the result is not an MCP error payload but [mcp.CallToolResult.IsError] is set,
+// this returns a [Error] with [KindToolCall].
+func NormalizeCallToolResult(res *mcp.CallToolResult) (string, error)
+⋮----
+// Fall back to serializing raw content blocks for non-text payloads.
+⋮----
+func textFromContent(parts []mcp.Content) string
+⋮----
+var b strings.Builder
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/runtime.go">
+package jcodemunch
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os/exec"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"context"
+"encoding/json"
+"fmt"
+"os/exec"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// Runtime holds a live MCP client session for jCodeMunch-style tool servers.
+type Runtime struct {
+	session *mcp.ClientSession
+}
+⋮----
+// NewRuntime wraps an initialized MCP client session. The caller must have already
+// completed the MCP initialize handshake (for example via [mcp.Client.Connect]).
+func NewRuntime(session *mcp.ClientSession) *Runtime
+⋮----
+// Session returns the underlying MCP session for advanced call sites.
+func (r *Runtime) Session() *mcp.ClientSession
+⋮----
+// Close ends the MCP session.
+func (r *Runtime) Close() error
+⋮----
+// ListTools returns the full paginated tool list advertised by the server.
+func (r *Runtime) ListTools(ctx context.Context) ([]*mcp.Tool, error)
+⋮----
+var (
+		all    []*mcp.Tool
+		cursor string
+	)
+⋮----
+// CallTool invokes MCP tools/call and normalizes the payload for the evaluator tool surface.
+func (r *Runtime) CallTool(ctx context.Context, name string, arguments json.RawMessage) (string, error)
+⋮----
+var args any
+⋮----
+// CommandConfig starts an MCP server subprocess over stdio and completes the MCP handshake.
+type CommandConfig struct {
+	// Command is the MCP server command (stdin/stdout JSON-RPC). Required.
+	Command *exec.Cmd
+	// RepoPath, when non-empty, is registered as an MCP root before connecting.
+	RepoPath string
+	// Client, when non-empty, is used as the MCP client; otherwise a default SearchBench client is created.
+	Client *mcp.Client
+	// Setup is invoked after a successful connect/index window for optional repo indexing tools
+	// or other admin calls. Failures should wrap or return [Error] with [KindSetup] where appropriate.
+	Setup func(ctx context.Context, rt *Runtime) error
+}
+⋮----
+// Command is the MCP server command (stdin/stdout JSON-RPC). Required.
+⋮----
+// RepoPath, when non-empty, is registered as an MCP root before connecting.
+⋮----
+// Client, when non-empty, is used as the MCP client; otherwise a default SearchBench client is created.
+⋮----
+// Setup is invoked after a successful connect/index window for optional repo indexing tools
+// or other admin calls. Failures should wrap or return [Error] with [KindSetup] where appropriate.
+⋮----
+// OpenCommand connects to a jCodeMunch MCP server launched as a subprocess.
+func OpenCommand(ctx context.Context, cfg CommandConfig) (*Runtime, error)
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/toolinfo.go">
+package jcodemunch
+⋮----
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"encoding/json"
+"fmt"
+⋮----
+"github.com/cloudwego/eino/schema"
+"github.com/eino-contrib/jsonschema"
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// ToolInfoFromMCP converts an MCP tool definition into Eino [schema.ToolInfo].
+func ToolInfoFromMCP(t *mcp.Tool) (*schema.ToolInfo, error)
+⋮----
+func paramsFromInputSchema(input any) (*schema.ParamsOneOf, error)
+⋮----
+var js jsonschema.Schema
+⋮----
+// Last resort: accept arbitrary JSON object arguments as a single string field.
+// This keeps marginal servers usable even when their schema is not draft 2020-12 compatible.
+</file>
+
+<file path="internal/adapters/backend/jcodemunch/uri.go">
+package jcodemunch
+⋮----
+import (
+	"fmt"
+	"net/url"
+	"path/filepath"
+	"strings"
+)
+⋮----
+"fmt"
+"net/url"
+"path/filepath"
+"strings"
+⋮----
+// filePathToRootURI turns a local filesystem path into a file-scheme URI suitable
+// for MCP roots (absolute path, forward slashes in the URI path segment).
+func filePathToRootURI(path string) (string, error)
 </file>
 
 <file path="internal/adapters/bundle/fs/bundle.go">
@@ -16675,7 +16980,9 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/cloudwego/eino v0.8.11
 	github.com/cloudwego/eino-ext/components/model/openai v0.1.13
+	github.com/eino-contrib/jsonschema v1.0.3
 	github.com/hmdsefi/gograph v0.7.0
+	github.com/modelcontextprotocol/go-sdk v1.4.1
 	go.uber.org/zap v1.27.1
 )
 
@@ -16693,8 +17000,8 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.17 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/eino-contrib/jsonschema v1.0.3 // indirect
 	github.com/evanphx/json-patch v0.5.2 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -16711,6 +17018,8 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.9 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/segmentio/asm v1.1.3 // indirect
+	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/slongfield/pyfmt v0.0.0-20220222012616-ea85ff4c361f // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
@@ -16719,11 +17028,13 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.11.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1 // indirect
-	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/oauth2 v0.34.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 </file>
