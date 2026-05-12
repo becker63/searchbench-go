@@ -95,6 +95,16 @@ docs/
 internal/
   adapters/
     backend/
+      iterativecontext/
+        doc.go
+        errors.go
+        factory.go
+        iterativecontext_test.go
+        normalize.go
+        runtime.go
+        session.go
+        toolinfo.go
+        uri.go
       jcodemunch/
         doc.go
         errors.go
@@ -6974,6 +6984,374 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
 
 Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/doc.go">
+// Package iterativecontext connects SearchBench evaluator runs to an Iterative Context MCP server.
+//
+// The adapter owns MCP session lifecycle, optional repo root registration, harness-owned
+// score installation ([Runtime.InstallScore], [Runtime.VerifyScore]) before evaluator tools
+// are listed, and MCP tools/call dispatch for evaluator-facing localization tools.
+⋮----
+// Evaluator-visible tool lists intentionally exclude admin/install/verify tools even if the
+// server advertises them in tools/list.
+⋮----
+// Production use starts a subprocess transport via [OpenCommand]. Tests should use [NewRuntime]
+// with an in-memory MCP session from [github.com/modelcontextprotocol/go-sdk/mcp.NewInMemoryTransports].
+package iterativecontext
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/errors.go">
+package iterativecontext
+⋮----
+import (
+	"errors"
+	"fmt"
+)
+⋮----
+"errors"
+"fmt"
+⋮----
+// Kind classifies Iterative Context adapter failures for errors.Is-style checks.
+type Kind int
+⋮----
+const (
+	// KindSession covers MCP transport/session setup before a usable client session exists
+	// (connect, handshake).
+⋮----
+// KindSession covers MCP transport/session setup before a usable client session exists
+// (connect, handshake).
+⋮----
+// KindInstall covers harness score installation via MCP install_score.
+⋮----
+// KindVerify covers harness score verification via MCP verify_score.
+⋮----
+// KindToolSetup covers evaluator tool surface preparation (tools/list and schema mapping).
+⋮----
+// KindToolCall covers evaluator MCP tools/call failures and tool results marked as errors.
+⋮----
+// Error is a typed adapter failure with an operation label.
+type Error struct {
+	Kind Kind
+	Op   string
+	Err  error
+}
+⋮----
+func (e *Error) Error() string
+⋮----
+// Unwrap implements error unwrapper semantics.
+func (e *Error) Unwrap() error
+⋮----
+// IsSession reports whether err is (or wraps) an [Error] with [KindSession].
+func IsSession(err error) bool
+⋮----
+var ie *Error
+⋮----
+// IsInstall reports whether err is (or wraps) an [Error] with [KindInstall].
+func IsInstall(err error) bool
+⋮----
+// IsVerify reports whether err is (or wraps) an [Error] with [KindVerify].
+func IsVerify(err error) bool
+⋮----
+// IsToolSetup reports whether err is (or wraps) an [Error] with [KindToolSetup].
+func IsToolSetup(err error) bool
+⋮----
+// IsToolCall reports whether err is (or wraps) an [Error] with [KindToolCall].
+func IsToolCall(err error) bool
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/factory.go">
+package iterativecontext
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/schema"
+
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"encoding/json"
+"fmt"
+"strings"
+⋮----
+"github.com/cloudwego/eino/components/tool"
+"github.com/cloudwego/eino/schema"
+⋮----
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+// EvaluatorToolFactory returns an [run]-compatible tool factory backed by MCP tools exposed
+// through rt. Only evaluator-safe tools are listed (admin/install/verify tools are omitted).
+func EvaluatorToolFactory(rt *Runtime) func(run.Spec) ([]tool.BaseTool, error)
+⋮----
+var out []tool.BaseTool
+⋮----
+type mcpInvokableTool struct {
+	rt   *Runtime
+	name string
+	info *schema.ToolInfo
+}
+⋮----
+func (t mcpInvokableTool) Info(_ context.Context) (*schema.ToolInfo, error)
+⋮----
+func (t mcpInvokableTool) InvokableRun(ctx context.Context, input string, _ ...tool.Option) (string, error)
+⋮----
+var _ tool.InvokableTool = mcpInvokableTool{}
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/iterativecontext_test.go">
+package iterativecontext_test
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"os/exec"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"encoding/json"
+"os/exec"
+"sync"
+"testing"
+"time"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+"github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+func objectSchema() map[string]any
+⋮----
+func TestEvaluatorToolListHidesAdminTools(t *testing.T)
+⋮----
+func TestPrepareScoreInstallBeforeVerify(t *testing.T)
+⋮----
+var mu sync.Mutex
+⋮----
+var args map[string]any
+⋮----
+func TestInstallScoreSurfacesJSONErrorKind(t *testing.T)
+⋮----
+func TestCallToolEvaluatorSurfacesToolKind(t *testing.T)
+⋮----
+func TestOpenCommandFailsSession(t *testing.T)
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/normalize.go">
+package iterativecontext
+⋮----
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"encoding/json"
+"fmt"
+"strings"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// NormalizeCallToolResult turns an MCP tools/call result into a single JSON string for Eino.
+//
+// When the result is not an MCP error payload but [mcp.CallToolResult.IsError] is set,
+// this returns an [Error] with [KindToolCall].
+func NormalizeCallToolResult(res *mcp.CallToolResult) (string, error)
+⋮----
+func textFromContent(parts []mcp.Content) string
+⋮----
+var b strings.Builder
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/runtime.go">
+package iterativecontext
+⋮----
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"context"
+"encoding/json"
+"errors"
+"fmt"
+"strings"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// Tool names reserved for harness-side score setup; never exposed to the evaluator tool list.
+var excludedEvaluatorToolNames = map[string]struct{}{
+	"install_score": {},
+	"verify_score":  {},
+}
+⋮----
+// ScoreInstallParams selects a policy module on disk and the deterministic identity used by the harness.
+type ScoreInstallParams struct {
+	PolicyPath string
+	PolicyID   string
+	// Symbol names the callable inside the policy module; empty means the server default (score_fn).
+	Symbol string
+}
+⋮----
+// Symbol names the callable inside the policy module; empty means the server default (score_fn).
+⋮----
+// Runtime holds a live MCP client session for Iterative Context tool servers.
+type Runtime struct {
+	session *mcp.ClientSession
+}
+⋮----
+// NewRuntime wraps an initialized MCP client session. The caller must have already
+// completed the MCP initialize handshake (for example via [mcp.Client.Connect]).
+func NewRuntime(session *mcp.ClientSession) *Runtime
+⋮----
+// Session returns the underlying MCP session for advanced call sites.
+func (r *Runtime) Session() *mcp.ClientSession
+⋮----
+// Close ends the MCP session.
+func (r *Runtime) Close() error
+⋮----
+// listMCPTools returns the full paginated tools/list payload from the server.
+func (r *Runtime) listMCPTools(ctx context.Context) ([]*mcp.Tool, error)
+⋮----
+var (
+		all    []*mcp.Tool
+		cursor string
+	)
+⋮----
+// ListEvaluatorTools returns MCP tools intended for the evaluator after stripping harness-admin tools.
+func (r *Runtime) ListEvaluatorTools(ctx context.Context) ([]*mcp.Tool, error)
+⋮----
+var out []*mcp.Tool
+⋮----
+// PrepareScore installs then verifies the active score identity for this MCP session.
+func PrepareScore(ctx context.Context, rt *Runtime, p ScoreInstallParams) error
+⋮----
+// InstallScore invokes MCP install_score for this session.
+func (r *Runtime) InstallScore(ctx context.Context, p ScoreInstallParams) error
+⋮----
+// VerifyScore invokes MCP verify_score for this session.
+func (r *Runtime) VerifyScore(ctx context.Context, policyID string) error
+⋮----
+func (r *Runtime) callAdminTool(ctx context.Context, kind Kind, op, name string, args map[string]any) (string, error)
+⋮----
+var je *Error
+⋮----
+func interpretScoreJSON(kind Kind, op, payloadJSON string) error
+⋮----
+var m map[string]any
+⋮----
+// CallTool invokes MCP tools/call and normalizes the payload for the evaluator tool surface.
+func (r *Runtime) CallTool(ctx context.Context, name string, arguments json.RawMessage) (string, error)
+⋮----
+var args any
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/session.go">
+package iterativecontext
+⋮----
+import (
+	"context"
+	"fmt"
+	"os/exec"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"context"
+"fmt"
+"os/exec"
+⋮----
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// CommandConfig starts an MCP server subprocess over stdio and completes the MCP handshake.
+type CommandConfig struct {
+	// Command is the MCP server command (stdin/stdout JSON-RPC). Required.
+	Command *exec.Cmd
+	// RepoPath, when non-empty, is registered as an MCP root before connecting.
+	RepoPath string
+	// Client, when non-empty, is used as the MCP client; otherwise a default SearchBench client is created.
+	Client *mcp.Client
+	// ScoreInstall, when non-nil, runs [PrepareScore] immediately after a successful connect.
+	ScoreInstall *ScoreInstallParams
+}
+⋮----
+// Command is the MCP server command (stdin/stdout JSON-RPC). Required.
+⋮----
+// RepoPath, when non-empty, is registered as an MCP root before connecting.
+⋮----
+// Client, when non-empty, is used as the MCP client; otherwise a default SearchBench client is created.
+⋮----
+// ScoreInstall, when non-nil, runs [PrepareScore] immediately after a successful connect.
+⋮----
+// OpenCommand connects to an Iterative Context MCP server launched as a subprocess.
+func OpenCommand(ctx context.Context, cfg CommandConfig) (*Runtime, error)
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/toolinfo.go">
+package iterativecontext
+⋮----
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+⋮----
+"encoding/json"
+"fmt"
+⋮----
+"github.com/cloudwego/eino/schema"
+"github.com/eino-contrib/jsonschema"
+"github.com/modelcontextprotocol/go-sdk/mcp"
+⋮----
+// ToolInfoFromMCP converts an MCP tool definition into Eino [schema.ToolInfo].
+func ToolInfoFromMCP(t *mcp.Tool) (*schema.ToolInfo, error)
+⋮----
+func paramsFromInputSchema(input any) (*schema.ParamsOneOf, error)
+⋮----
+var js jsonschema.Schema
+</file>
+
+<file path="internal/adapters/backend/iterativecontext/uri.go">
+package iterativecontext
+⋮----
+import (
+	"fmt"
+	"net/url"
+	"path/filepath"
+	"strings"
+)
+⋮----
+"fmt"
+"net/url"
+"path/filepath"
+"strings"
+⋮----
+// filePathToRootURI turns a local filesystem path into a file-scheme URI suitable
+// for MCP roots (absolute path, forward slashes in the URI path segment).
+func filePathToRootURI(path string) (string, error)
 </file>
 
 <file path="internal/adapters/backend/jcodemunch/doc.go">
