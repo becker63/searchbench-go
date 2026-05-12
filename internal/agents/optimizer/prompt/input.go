@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sort"
 
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -78,6 +79,13 @@ func InputFromSpec(spec pureoptimizer.Spec) (Input, error) {
 			return Input{}, err
 		}
 		input.ObjectiveResultJSON = data
+	}
+
+	if spec.Target.InterfaceID == optimizepolicy.IterativeContextSelectionPolicyInterfaceID {
+		input.Constraints = append(input.Constraints,
+			"Target interface iterative_context.selection_policy.v1 requires exactly one top-level callable "+
+				optimizepolicy.CanonicalICPolicySymbol+"(node, graph, depth) returning float.",
+		)
 	}
 
 	return input, nil

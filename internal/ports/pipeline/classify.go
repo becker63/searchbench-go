@@ -44,8 +44,12 @@ func Classify(results []StepResult) Classification {
 			classification.GenerationFailures = append(classification.GenerationFailures, result)
 		case "gofmt_check":
 			classification.FormatErrors = append(classification.FormatErrors, result)
-		case "python_compile":
+		case "python_compile", "policy_static_precheck", "basedpyright":
 			classification.TypeErrors = append(classification.TypeErrors, result)
+		case "stage_policy", "ic_validate_policy":
+			classification.FormatErrors = append(classification.FormatErrors, result)
+		case "ruff_check":
+			classification.LintErrors = append(classification.LintErrors, result)
 		case "go_vet":
 			if looksLikeTypeError(result) {
 				classification.TypeErrors = append(classification.TypeErrors, result)
@@ -58,6 +62,8 @@ func Classify(results []StepResult) Classification {
 			} else {
 				classification.TestFailures = append(classification.TestFailures, result)
 			}
+		case "pytest":
+			classification.TestFailures = append(classification.TestFailures, result)
 		default:
 			classification.InfrastructureFailures = append(classification.InfrastructureFailures, result)
 		}

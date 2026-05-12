@@ -71,7 +71,7 @@ func TestResolveContinuationManifestInheritsParentContext(t *testing.T) {
 	if err := os.MkdirAll(policiesDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(policies) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(policiesDir, "challenger_policy.py"), []byte("def score(match):\n    return []\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(policiesDir, "challenger_policy.py"), []byte("def score_fn(node, graph, depth):\n    return 0.0\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(policy) error = %v", err)
 	}
 
@@ -164,7 +164,7 @@ round {
 	if err := os.MkdirAll(policiesDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(policies) error = %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(policiesDir, "challenger_policy.py"), []byte("def score(match):\n    return []\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(policiesDir, "challenger_policy.py"), []byte("def score_fn(node, graph, depth):\n    return 0.0\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(policy) error = %v", err)
 	}
 

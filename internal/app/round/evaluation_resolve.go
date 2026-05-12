@@ -19,10 +19,6 @@ import (
 // and falls back to the evaluator fake for non-JetBrains match selections.
 var defaultMatchSource dataset.MatchSource = newDefaultMatchSource()
 
-// selectionPolicyV1DefaultSymbol is the runtime callable used for policy
-// artifacts that implement iterative_context.selection_policy.v1.
-const selectionPolicyV1DefaultSymbol = "score"
-
 // resolveEvaluation loads one Pkl manifest through the config adapter and
 // projects it into the canonical resolved round plan.
 func resolveEvaluation(ctx context.Context, request evaluationResolveRequest) (Plan, error) {

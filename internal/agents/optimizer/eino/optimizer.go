@@ -18,20 +18,11 @@ import (
 // RenderOptimizerPromptFunc renders the optimizer prompt from its typed prompt contract.
 type RenderOptimizerPromptFunc func(ctx context.Context, input optimizerprompt.Input) (string, error)
 
-// ProposalValidationResult is the typed output of staged policy validation.
-type ProposalValidationResult struct {
-	Results        []pipeline.StepResult
-	Classification *pipeline.Classification
-}
-
-// ValidateProposalFunc stages and validates one policy proposal.
-type ValidateProposalFunc func(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (ProposalValidationResult, *pureoptimizer.Failure)
-
 // OptimizerConfig defines the first next-challenger runner dependencies.
 type OptimizerConfig struct {
 	Model            model.ToolCallingChatModel
 	RenderPrompt     RenderOptimizerPromptFunc
-	ValidateProposal ValidateProposalFunc
+	ValidateProposal pureoptimizer.ValidateProposalFunc
 	RetryPolicy      *pureoptimizer.RetryPolicy
 	WorkDir          string
 }
@@ -40,7 +31,7 @@ type OptimizerConfig struct {
 type Optimizer struct {
 	model            model.ToolCallingChatModel
 	renderPrompt     RenderOptimizerPromptFunc
-	validateProposal ValidateProposalFunc
+	validateProposal pureoptimizer.ValidateProposalFunc
 	retryPolicy      pureoptimizer.RetryPolicy
 }
 
@@ -167,8 +158,8 @@ func (o *Optimizer) Run(ctx context.Context, spec pureoptimizer.Spec) pureoptimi
 		recordPhase(pureoptimizer.PhaseWriteNextChallengerStage)
 		recordPhase(pureoptimizer.PhaseRunPolicyPipeline)
 		validation, failure := o.validateProposal(ctx, *proposal)
-		attempt.PipelineResults = validation.stepResults()
-		attempt.PipelineClassification = validation.classification()
+		attempt.PipelineResults = cloneProposalPipelineResults(validation)
+		attempt.PipelineClassification = cloneProposalPipelineClassification(validation)
 		recordPhase(pureoptimizer.PhaseClassifyPipeline)
 		if failure != nil {
 			attempt.Failure = failure
@@ -247,11 +238,11 @@ func contextCancelledFailure(err error, attemptNumber int) *pureoptimizer.Failur
 	}
 }
 
-func (r ProposalValidationResult) stepResults() []pipeline.StepResult {
+func cloneProposalPipelineResults(r pureoptimizer.ProposalValidationResult) []pipeline.StepResult {
 	return append([]pipeline.StepResult(nil), r.Results...)
 }
 
-func (r ProposalValidationResult) classification() *pipeline.Classification {
+func cloneProposalPipelineClassification(r pureoptimizer.ProposalValidationResult) *pipeline.Classification {
 	if r.Classification == nil {
 		return nil
 	}

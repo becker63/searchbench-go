@@ -30,7 +30,8 @@ func TestRenderIncludesExpectedSections(t *testing.T) {
 		"next_challenger_policy.round-002.py",
 		"iterative_context.selection_policy.v1",
 		"Improve policy using only parent evidence.",
-		"def score(task):",
+		"def score_fn(node, graph, depth):",
+		"score_fn(node, graph, depth) returning float",
 		"localization-v1",
 		"PROMOTE",
 	} {
@@ -85,7 +86,7 @@ func sampleOptimizerSpec() pureoptimizer.Spec {
 			InputPolicy: pureoptimizer.PolicySource{
 				ArtifactID:  domain.ArtifactID("challenger-policy-round-001"),
 				InterfaceID: "iterative_context.selection_policy.v1",
-				Source:      "def score(task):\n    return []\n",
+				Source:      "def score_fn(node, graph, depth):\n    return 0.0\n",
 			},
 			ReportSummary: &pureoptimizer.ReportSummary{
 				ReportID:       domain.ReportID("report-example-round-001"),

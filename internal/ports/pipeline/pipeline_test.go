@@ -116,3 +116,17 @@ func TestFormatPipelineFeedbackIsDeterministicAndBounded(t *testing.T) {
 		t.Fatalf("feedback length = %d, want <= 220", len([]rune(feedback)))
 	}
 }
+
+func TestClassifyPytestFailureAsTestFailure(t *testing.T) {
+	t.Parallel()
+
+	classification := Classify([]StepResult{{
+		Name:     "pytest",
+		Command:  []string{"uv", "run", "pytest"},
+		ExitCode: 1,
+		Stderr:   "--- FAIL: TestEvaluator (0.00s)",
+	}})
+	if len(classification.TestFailures) != 1 {
+		t.Fatalf("len(TestFailures) = %d, want 1", len(classification.TestFailures))
+	}
+}

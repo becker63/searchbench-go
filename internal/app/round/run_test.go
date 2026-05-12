@@ -21,7 +21,7 @@ func TestRunGeneratedContinuationEvaluatesCurrentRound(t *testing.T) {
 
 	optimizerModel := modeltest.NewScriptedModel(
 		modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(match):\n    return []\n","summary":"generated challenger narrows the frontier"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n","summary":"generated challenger narrows the frontier"}`, nil),
 		},
 	)
 
@@ -35,6 +35,7 @@ func TestRunGeneratedContinuationEvaluatesCurrentRound(t *testing.T) {
 		OptimizerModelFactory: func() (model.ToolCallingChatModel, error) {
 			return optimizerModel, nil
 		},
+		OptimizerValidateProposal: stubOptimizerPipelinePass(),
 	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)

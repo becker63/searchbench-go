@@ -15,6 +15,7 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [Roadmap](roadmap/todo.md) | High-level implementation pressure |
 | [Fake e2e runs](roadmap/fake-e2e-runs.md) | Offline fake-round commands, manifests, and artifact expectations |
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
+| [Optimizer policy validation](engineering/optimizer-policy-validation.md) | IC NextChallenger pipeline steps, allowlist, canonical `score_fn` |
 | [Issue wave publisher](engineering/issue-wave-manifest.md) | `gh`-backed JSON manifest for batch issue creation (dev tooling) |
 
 Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.

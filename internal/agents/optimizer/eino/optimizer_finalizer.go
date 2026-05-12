@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -62,7 +63,15 @@ func finalizeProposal(raw string, target pureoptimizer.NextChallengerTarget, att
 	if filepath.IsAbs(payload.ArtifactName) || strings.Contains(filepath.ToSlash(filepath.Clean(payload.ArtifactName)), "../") {
 		return nil, invalidProposalFailure("proposal artifact_name must be relative and must not contain '..'", attemptNumber)
 	}
-	if !strings.Contains(payload.Code, "def score(") {
+	if payload.InterfaceID == optimizepolicy.IterativeContextSelectionPolicyInterfaceID {
+		needle := "def " + optimizepolicy.CanonicalICPolicySymbol + "("
+		if !strings.Contains(payload.Code, needle) {
+			return nil, invalidProposalFailure(
+				fmt.Sprintf("proposal code must define %s for iterative context selection policies", needle),
+				attemptNumber,
+			)
+		}
+	} else if !strings.Contains(payload.Code, "def score(") {
 		return nil, invalidProposalFailure("proposal code must define def score(...)", attemptNumber)
 	}
 

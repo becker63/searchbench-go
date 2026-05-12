@@ -9,18 +9,24 @@ import (
 	"time"
 
 	execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
-	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
 	"github.com/becker63/searchbench-go/internal/ports/pipeline"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
-// Validate stages the proposal to a temporary directory and runs
-// `python3 -m py_compile` to confirm it parses. It is the default
-// optimizer.ValidateProposal implementation for Python policies.
-func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (optimizereino.ProposalValidationResult, *pureoptimizer.Failure) {
+// Validate stages the proposal and validates it. Iterative Context selection policies
+// run the full SearchBench IC pipeline; other Python artifacts keep the lightweight
+// py_compile precheck.
+func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
+	if proposal.InterfaceID == IterativeContextSelectionPolicyInterfaceID {
+		return validateIterativeContextProposal(ctx, proposal)
+	}
+	return validatePythonCompileOnly(ctx, proposal)
+}
+
+func validatePythonCompileOnly(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
 	stageDir, err := os.MkdirTemp("", "searchbench-optimizer-stage-*")
 	if err != nil {
-		return optimizereino.ProposalValidationResult{}, &pureoptimizer.Failure{
+		return pureoptimizer.ProposalValidationResult{}, &pureoptimizer.Failure{
 			Phase:   pureoptimizer.PhaseWriteNextChallengerStage,
 			Kind:    pureoptimizer.FailureKindPolicyStageWriteFailed,
 			Message: "create staged policy directory",
@@ -31,7 +37,7 @@ func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal
 
 	stagePath := filepath.Join(stageDir, proposal.ArtifactName)
 	if err := os.WriteFile(stagePath, []byte(proposal.Code), 0o644); err != nil {
-		return optimizereino.ProposalValidationResult{}, &pureoptimizer.Failure{
+		return pureoptimizer.ProposalValidationResult{}, &pureoptimizer.Failure{
 			Phase:   pureoptimizer.PhaseWriteNextChallengerStage,
 			Kind:    pureoptimizer.FailureKindPolicyStageWriteFailed,
 			Message: "write staged policy proposal",
@@ -49,7 +55,7 @@ func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal
 			InfrastructureError: err,
 		}
 		classification := pipeline.Classify([]pipeline.StepResult{step})
-		return optimizereino.ProposalValidationResult{
+		return pureoptimizer.ProposalValidationResult{
 				Results:        []pipeline.StepResult{step},
 				Classification: &classification,
 			}, &pureoptimizer.Failure{
@@ -87,7 +93,7 @@ func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal
 			retryable = false
 			category = "infrastructure"
 		}
-		return optimizereino.ProposalValidationResult{
+		return pureoptimizer.ProposalValidationResult{
 				Results:        results,
 				Classification: &classification,
 			}, &pureoptimizer.Failure{
@@ -100,7 +106,7 @@ func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal
 			}
 	}
 
-	return optimizereino.ProposalValidationResult{
+	return pureoptimizer.ProposalValidationResult{
 		Results:        results,
 		Classification: &classification,
 	}, nil

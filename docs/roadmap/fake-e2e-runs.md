@@ -13,7 +13,7 @@ These paths prove **no-network / no-provider-credential** round execution: bundl
 | Backend audit (manifest declares JC/IC) | `go test ./internal/app/round -run TestFakeE2E_LocalManifestIncumbentUsesJCodeMunchBackend` | No | No | — | — | Documents `local-ic-vs-jcodemunch` |
 | Fake-local backend audit | `go test ./internal/app/round -run TestFakeE2E_FakeLocalManifestUsesFakeBackends` | No | No | — | — | Both sides `backend = fake` |
 | Usage honesty (evidence) | `go test ./internal/app/round -run TestProjectRoundEvidenceLeavesUsageUnavailableWhenRunsOmitUsage` | No | No | — | — | Usage stays **unavailable**, not fake-nonzero |
-| Optimizer smoke (continuation) | `configs/rounds/optimize-ic/round.pkl` amends a completed bundle; not re-run in default fake matrix | — | — | Parent bundle | — | Optional; separate from fake-local |
+| Optimizer smoke (continuation) | `configs/rounds/optimize-ic/round.pkl` amends a completed bundle; round tests stub `OptimizerValidateProposal` so CI does **not** execute the full IC `uv` gate suite | — | — | Parent bundle | — | Fast stub path; production CLI leaves validator unset → full pipeline (`docs/engineering/optimizer-policy-validation.md`) |
 
 ## Manifests
 

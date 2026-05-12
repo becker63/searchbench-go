@@ -52,9 +52,14 @@ func materializeChallenger(ctx context.Context, resolved Resolved, input Input) 
 		return Resolved{}, err
 	}
 
+	validator := optimizepolicy.Validate
+	if input.OptimizerValidateProposal != nil {
+		validator = input.OptimizerValidateProposal
+	}
+
 	executor, err := optimizereino.NewOptimizer(optimizereino.OptimizerConfig{
 		Model:            optimizerModel,
-		ValidateProposal: optimizepolicy.Validate,
+		ValidateProposal: validator,
 	})
 	if err != nil {
 		return Resolved{}, err
@@ -79,7 +84,7 @@ func materializeChallenger(ctx context.Context, resolved Resolved, input Input) 
 		return Resolved{}, fmt.Errorf("round: optimizer returned no generated challenger proposal")
 	}
 
-	policy := domain.NewPythonPolicy(domain.PolicyID(record.Proposal.ArtifactID), record.Proposal.Code, selectionPolicyV1DefaultSymbol)
+	policy := domain.NewPythonPolicy(domain.PolicyID(record.Proposal.ArtifactID), record.Proposal.Code, optimizepolicy.CanonicalICPolicySymbol)
 	plan.Policies.Challenger.Policy = &policy
 	plan.Output.ResolvedPolicyPaths.Challenger = filepath.ToSlash(filepath.Join(string(plan.Output.ExpectedBundlePath), "policies", record.Proposal.ArtifactName))
 	resolved.Round = plan

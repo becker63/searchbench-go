@@ -87,6 +87,7 @@ docs/
     issue-style-guide.md
     issue-wave-manifest.md
     model-testing.md
+    optimizer-policy-validation.md
     pure-center.md
   guides/
     replit.md
@@ -163,8 +164,11 @@ internal/
     pipeline/
       exec/
         doc.go
+        ic_allowlist_test.go
+        ic_allowlist.go
         runner_test.go
         runner.go
+        uv_lookup.go
     providers/
       evaluatormodel/
         doc.go
@@ -230,6 +234,10 @@ internal/
         optimizer_test.go
         optimizer.go
       policy/
+        canonical.go
+        ic_root.go
+        validate_ic.go
+        validate_router_test.go
         validate.go
       prompt/
         input.go
@@ -277,6 +285,7 @@ internal/
       match_execution_test.go
       match_execution.go
       match_source.go
+      optimizer_validate_stub_test.go
       prepared_tools.go
       run_test.go
       run.go
@@ -491,7 +500,7 @@ round = (game.defineFromScratch("fake-local-e2e-001")) {
 </file>
 
 <file path="configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py">
-def score(match)
+def score_fn(node, graph, depth)
 </file>
 
 <file path="configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl">
@@ -6504,6 +6513,63 @@ The next execution issues should be able to move quickly because:
 - execution code can focus on prompting, tooling, finalization, and typed failures instead of rebuilding test scaffolding
 </file>
 
+<file path="docs/engineering/optimizer-policy-validation.md">
+# Optimizer policy validation (Iterative Context)
+
+SearchBench-Go treats **NextChallenger** proposals as **file-backed artifacts**. For manifests targeting **`iterative_context.selection_policy.v1`**, the default optimizer validator runs a **typed local pipeline** (see `internal/ports/pipeline` and `internal/adapters/pipeline/exec`) rather than a single `py_compile` check.
+
+## Why `py_compile` is insufficient
+
+Syntax-only validation does not prove:
+
+- the expected callable exists and matches the IC surface,
+- Iterative Context can load/install/verify the policy,
+- the Iterative Context repo still passes its own type/lint/test gates.
+
+The harness therefore mirrors the old Python SearchBench idea: **structured steps**, **typed `StepResult`s**, **classification**, and **bounded retry feedback** (`pipeline.FormatPipelineFeedback`).
+
+## MCP install is not the artifact gate
+
+`install_score` binds an **already staged file** into a runtime session. Validation must succeed **before** MCP installation during real runs; MCP must never be treated as the proof that a proposal is acceptable Python + IC policy.
+
+## Canonical callable
+
+Generated IC policies must expose **`score_fn(node, graph, depth) -> float`**. The manifest symbol forwarded to MCP `install_score` matches this contract (`internal/agents/optimizer/policy/canonical.go`, `selectionPolicyV1DefaultSymbol` usages).
+
+## Default pipeline steps (IC)
+
+For IC-targeted proposals, `internal/agents/optimizer/policy` stages a workspace and runs, in order:
+
+1. **`stage_policy`** — writes `policy.json` metadata (ids, interface, symbol, sha256) under the staged workspace (Go-only step result).
+2. **`policy_static_precheck`** — `python -m py_compile` on the staged module (fast syntax gate only).
+3. **`ic_validate_policy`** — `uv run python -m iterative_context.validate_policy --policy-path … --policy-id … --symbol score_fn --json` from the **`iterative-context`** submodule root.
+4. **`basedpyright`** — `uv run basedpyright`
+5. **`ruff_check`** — `uv run ruff check`
+6. **`pytest`** — `uv run pytest`
+
+Commands are executed without `sh -c`, without raw `pytest`/`pyright` binaries on PATH, and without `PYTHONPATH` hacks. Dynamic argv is constrained by `execpipeline.ICOptimizerAllowlist`.
+
+## Discovering the submodule root
+
+By default the validator searches upward from the process working directory for `iterative-context/pyproject.toml`.
+
+Override explicitly with:
+
+`SEARCHBENCH_ITERATIVE_CONTEXT_ROOT=/absolute/path/to/iterative-context`
+
+## Tests vs production
+
+Round package tests set `Input.OptimizerValidateProposal` to a lightweight stub (`stubOptimizerPipelinePass`) so CI stays fast and does not require `uv`/full IC gates on every test run. Production paths leave this field **nil**, which selects `optimizepolicy.Validate` (full IC pipeline).
+
+To exercise the full pipeline locally, run an optimizer-backed manifest from the repo root with `uv` installed and leave `OptimizerValidateProposal` unset (CLI / integration harness).
+
+## Related modules
+
+- IC CLI: `iterative-context` → `iterative_context.validate_policy`
+- Go routing: `internal/agents/optimizer/policy/validate.go`
+- Allowlist: `internal/adapters/pipeline/exec/ic_allowlist.go`
+</file>
+
 <file path="docs/engineering/pure-center.md">
 # Expanding the Pure Center
 
@@ -6999,7 +7065,7 @@ These paths prove **no-network / no-provider-credential** round execution: bundl
 | Backend audit (manifest declares JC/IC) | `go test ./internal/app/round -run TestFakeE2E_LocalManifestIncumbentUsesJCodeMunchBackend` | No | No | — | — | Documents `local-ic-vs-jcodemunch` |
 | Fake-local backend audit | `go test ./internal/app/round -run TestFakeE2E_FakeLocalManifestUsesFakeBackends` | No | No | — | — | Both sides `backend = fake` |
 | Usage honesty (evidence) | `go test ./internal/app/round -run TestProjectRoundEvidenceLeavesUsageUnavailableWhenRunsOmitUsage` | No | No | — | — | Usage stays **unavailable**, not fake-nonzero |
-| Optimizer smoke (continuation) | `configs/rounds/optimize-ic/round.pkl` amends a completed bundle; not re-run in default fake matrix | — | — | Parent bundle | — | Optional; separate from fake-local |
+| Optimizer smoke (continuation) | `configs/rounds/optimize-ic/round.pkl` amends a completed bundle; round tests stub `OptimizerValidateProposal` so CI does **not** execute the full IC `uv` gate suite | — | — | Parent bundle | — | Fast stub path; production CLI leaves validator unset → full pipeline (`docs/engineering/optimizer-policy-validation.md`) |
 
 ## Manifests
 
@@ -7172,6 +7238,7 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [Roadmap](roadmap/todo.md) | High-level implementation pressure |
 | [Fake e2e runs](roadmap/fake-e2e-runs.md) | Offline fake-round commands, manifests, and artifact expectations |
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
+| [Optimizer policy validation](engineering/optimizer-policy-validation.md) | IC NextChallenger pipeline steps, allowlist, canonical `score_fn` |
 | [Issue wave publisher](engineering/issue-wave-manifest.md) | `gh`-backed JSON manifest for batch issue creation (dev tooling) |
 
 Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.
@@ -9107,6 +9174,53 @@ func DefaultGitHubRemoteURL(id domain.LCATaskIdentity) string
 package execpipeline
 </file>
 
+<file path="internal/adapters/pipeline/exec/ic_allowlist_test.go">
+package execpipeline
+⋮----
+import (
+	"path/filepath"
+	"testing"
+)
+⋮----
+"path/filepath"
+"testing"
+⋮----
+func TestICOptimizerAllowlistAcceptsValidatePolicyArgv(t *testing.T)
+⋮----
+func TestICOptimizerAllowlistRejectsPolicyPathOutsideWorkspace(t *testing.T)
+⋮----
+func TestICOptimizerAllowlistRejectsArbitraryShell(t *testing.T)
+</file>
+
+<file path="internal/adapters/pipeline/exec/ic_allowlist.go">
+package execpipeline
+⋮----
+import (
+	"path/filepath"
+	"slices"
+	"strings"
+)
+⋮----
+"path/filepath"
+"slices"
+"strings"
+⋮----
+// ICOptimizerAllowlist permits the argv shapes used by Iterative Context optimizer
+// validation. Dynamic path/id/symbol segments are checked against the staged workspace.
+type ICOptimizerAllowlist struct {
+	UvBinary         string
+	WorkspaceRootAbs string
+	PolicyFileAbs    string
+	PolicyID         string
+	Symbol           string
+}
+⋮----
+// Allows implements CommandAllowlist for IC optimizer pipelines.
+func (a ICOptimizerAllowlist) Allows(argv []string) bool
+⋮----
+func (a ICOptimizerAllowlist) allowsValidatePolicy(argv []string) bool
+</file>
+
 <file path="internal/adapters/pipeline/exec/runner_test.go">
 package execpipeline
 ⋮----
@@ -9182,6 +9296,11 @@ type Allowlist struct {
 	commands [][]string
 }
 ⋮----
+// CommandAllowlist names argv predicates enforced before a pipeline command runs.
+type CommandAllowlist interface {
+	Allows(command []string) bool
+}
+⋮----
 // DefaultAllowlist returns the narrow repository-local command allowlist used
 // by typed validation pipelines.
 func DefaultAllowlist() Allowlist
@@ -9192,7 +9311,7 @@ func (a Allowlist) Allows(command []string) bool
 // Runner executes a small allowlisted validation pipeline.
 type Runner struct {
 	CommandRunner CommandRunner
-	Allowlist     Allowlist
+	Allowlist     CommandAllowlist
 }
 ⋮----
 // Run executes the supplied pipeline steps in order and stops at the first
@@ -9205,6 +9324,21 @@ var stderr bytes.Buffer
 var exitErr *exec.ExitError
 ⋮----
 func normalizeResult(spec ports.CommandSpec, result ports.StepResult) ports.StepResult
+</file>
+
+<file path="internal/adapters/pipeline/exec/uv_lookup.go">
+package execpipeline
+⋮----
+import (
+	"fmt"
+	"os/exec"
+)
+⋮----
+"fmt"
+"os/exec"
+⋮----
+// LookupUvBinary resolves the uv executable from PATH.
+func LookupUvBinary() (string, error)
 </file>
 
 <file path="internal/adapters/providers/evaluatormodel/doc.go">
@@ -11211,6 +11345,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 ⋮----
@@ -11220,6 +11355,7 @@ import (
 "path/filepath"
 "strings"
 ⋮----
+optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 ⋮----
 type proposalPayload struct {
@@ -11338,20 +11474,11 @@ pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 // RenderOptimizerPromptFunc renders the optimizer prompt from its typed prompt contract.
 type RenderOptimizerPromptFunc func(ctx context.Context, input optimizerprompt.Input) (string, error)
 ⋮----
-// ProposalValidationResult is the typed output of staged policy validation.
-type ProposalValidationResult struct {
-	Results        []pipeline.StepResult
-	Classification *pipeline.Classification
-}
-⋮----
-// ValidateProposalFunc stages and validates one policy proposal.
-type ValidateProposalFunc func(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (ProposalValidationResult, *pureoptimizer.Failure)
-⋮----
 // OptimizerConfig defines the first next-challenger runner dependencies.
 type OptimizerConfig struct {
 	Model            model.ToolCallingChatModel
 	RenderPrompt     RenderOptimizerPromptFunc
-	ValidateProposal ValidateProposalFunc
+	ValidateProposal pureoptimizer.ValidateProposalFunc
 	RetryPolicy      *pureoptimizer.RetryPolicy
 	WorkDir          string
 }
@@ -11360,7 +11487,7 @@ type OptimizerConfig struct {
 type Optimizer struct {
 	model            model.ToolCallingChatModel
 	renderPrompt     RenderOptimizerPromptFunc
-	validateProposal ValidateProposalFunc
+	validateProposal pureoptimizer.ValidateProposalFunc
 	retryPolicy      pureoptimizer.RetryPolicy
 }
 ⋮----
@@ -11376,9 +11503,107 @@ func defaultRenderOptimizerPrompt(ctx context.Context, input optimizerprompt.Inp
 ⋮----
 func contextCancelledFailure(err error, attemptNumber int) *pureoptimizer.Failure
 ⋮----
-func (r ProposalValidationResult) stepResults() []pipeline.StepResult
+func cloneProposalPipelineResults(r pureoptimizer.ProposalValidationResult) []pipeline.StepResult
 ⋮----
-func (r ProposalValidationResult) classification() *pipeline.Classification
+func cloneProposalPipelineClassification(r pureoptimizer.ProposalValidationResult) *pipeline.Classification
+</file>
+
+<file path="internal/agents/optimizer/policy/canonical.go">
+package policy
+⋮----
+// IterativeContextSelectionPolicyInterfaceID is the manifest interface id for IC selection policies.
+const IterativeContextSelectionPolicyInterfaceID = "iterative_context.selection_policy.v1"
+⋮----
+// CanonicalICPolicySymbol is the harness-expected callable symbol for generated IC policies.
+const CanonicalICPolicySymbol = "score_fn"
+</file>
+
+<file path="internal/agents/optimizer/policy/ic_root.go">
+package policy
+⋮----
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+⋮----
+"fmt"
+"os"
+"path/filepath"
+"strings"
+⋮----
+// ResolveIterativeContextRoot finds the iterative-context submodule checkout.
+// SEARCHBENCH_ITERATIVE_CONTEXT_ROOT overrides discovery.
+func ResolveIterativeContextRoot() (string, error)
+</file>
+
+<file path="internal/agents/optimizer/policy/validate_ic.go">
+package policy
+⋮----
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+	"github.com/becker63/searchbench-go/internal/ports/pipeline"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+)
+⋮----
+"context"
+"crypto/sha256"
+"encoding/hex"
+"encoding/json"
+"errors"
+"fmt"
+"os"
+"path/filepath"
+"strings"
+"time"
+⋮----
+execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+"github.com/becker63/searchbench-go/internal/ports/pipeline"
+pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+⋮----
+func validateIterativeContextProposal(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+⋮----
+func writePipelineArtifacts(dir string, results []pipeline.StepResult, classification pipeline.Classification) error
+⋮----
+func pipelineFailureResult(step pipeline.StepResult) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+⋮----
+func stagePolicyFailure(message string) pipeline.StepResult
+⋮----
+func infraFailure(proposal pureoptimizer.NextChallengerProposal, cause error) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+⋮----
+func failureFromClassification(results []pipeline.StepResult, classification *pipeline.Classification, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+</file>
+
+<file path="internal/agents/optimizer/policy/validate_router_test.go">
+package policy
+⋮----
+import (
+	"context"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+)
+⋮----
+"context"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+⋮----
+func TestValidateICProposalRejectedWhenMarkdownFenceInCode(t *testing.T)
 </file>
 
 <file path="internal/agents/optimizer/policy/validate.go">
@@ -11393,7 +11618,6 @@ import (
 	"time"
 
 	execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
-	optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
 	"github.com/becker63/searchbench-go/internal/ports/pipeline"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
@@ -11406,14 +11630,15 @@ import (
 "time"
 ⋮----
 execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
-optimizereino "github.com/becker63/searchbench-go/internal/agents/optimizer/eino"
 "github.com/becker63/searchbench-go/internal/ports/pipeline"
 pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 ⋮----
-// Validate stages the proposal to a temporary directory and runs
-// `python3 -m py_compile` to confirm it parses. It is the default
-// optimizer.ValidateProposal implementation for Python policies.
-func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (optimizereino.ProposalValidationResult, *pureoptimizer.Failure)
+// Validate stages the proposal and validates it. Iterative Context selection policies
+// run the full SearchBench IC pipeline; other Python artifacts keep the lightweight
+// py_compile precheck.
+func Validate(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+⋮----
+func validatePythonCompileOnly(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
 ⋮----
 func resolvePython() (string, error)
 </file>
@@ -11425,12 +11650,14 @@ import (
 	"encoding/json"
 	"sort"
 
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 ⋮----
 "encoding/json"
 "sort"
 ⋮----
+optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 ⋮----
 // OutputSchemaJSON is the strict JSON contract for optimizer proposals.
@@ -12677,6 +12904,7 @@ import (
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
@@ -12695,6 +12923,7 @@ bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
+optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 "github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 "github.com/becker63/searchbench-go/internal/ports/dataset"
 "github.com/becker63/searchbench-go/internal/pure/domain"
@@ -12859,10 +13088,6 @@ config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 // defaultMatchSource wires JetBrains LCA JSONL loading (manifest-local datasets)
 // and falls back to the evaluator fake for non-JetBrains match selections.
 var defaultMatchSource dataset.MatchSource = newDefaultMatchSource()
-⋮----
-// selectionPolicyV1DefaultSymbol is the runtime callable used for policy
-// artifacts that implement iterative_context.selection_policy.v1.
-const selectionPolicyV1DefaultSymbol = "score"
 ⋮----
 // resolveEvaluation loads one Pkl manifest through the config adapter and
 // projects it into the canonical resolved round plan.
@@ -13377,6 +13602,26 @@ func newDefaultMatchSource() dataset.MatchSource
 func (c compositeMatchSource) Matches(ctx context.Context, req dataset.Request) (domain.NonEmpty[domain.MatchSpec], error)
 </file>
 
+<file path="internal/app/round/optimizer_validate_stub_test.go">
+package round
+⋮----
+import (
+	"context"
+
+	"github.com/becker63/searchbench-go/internal/ports/pipeline"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+)
+⋮----
+"context"
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/pipeline"
+pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+⋮----
+// stubOptimizerPipelinePass returns a validator that skips heavy IC tooling while
+// preserving the optimizer retry/plumbing shape for fast round tests.
+func stubOptimizerPipelinePass() pureoptimizer.ValidateProposalFunc
+</file>
+
 <file path="internal/app/round/prepared_tools.go">
 package round
 ⋮----
@@ -13638,6 +13883,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 
 	"github.com/becker63/searchbench-go/internal/pure/game"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	pureround "github.com/becker63/searchbench-go/internal/pure/round"
 )
@@ -13647,6 +13893,7 @@ import (
 "github.com/cloudwego/eino/components/model"
 ⋮----
 "github.com/becker63/searchbench-go/internal/pure/game"
+pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 "github.com/becker63/searchbench-go/internal/pure/report"
 pureround "github.com/becker63/searchbench-go/internal/pure/round"
 ⋮----
@@ -13666,12 +13913,18 @@ type Input struct {
 	EvaluatorModelFactory EvaluatorModelFactory
 	EvaluatorToolFactory  EvaluatorToolFactory
 	OptimizerModelFactory OptimizerModelFactory
+	// OptimizerValidateProposal overrides default IC optimizer validation (full local pipeline).
+	// Tests use a lightweight stub; production leaves this nil.
+	OptimizerValidateProposal pureoptimizer.ValidateProposalFunc
 
 	// DatasetMaterializeCacheDir triggers JetBrains LCA git materialization during
 	// manifest resolution when non-empty.
 	DatasetMaterializeCacheDir  string
 	DatasetMaterializeRemoteURL string
 }
+⋮----
+// OptimizerValidateProposal overrides default IC optimizer validation (full local pipeline).
+// Tests use a lightweight stub; production leaves this nil.
 ⋮----
 // DatasetMaterializeCacheDir triggers JetBrains LCA git materialization during
 // manifest resolution when non-empty.
@@ -13944,6 +14197,8 @@ func TestClassifyGoTestFailures(t *testing.T)
 func TestClassifyInfrastructureFailures(t *testing.T)
 ⋮----
 func TestFormatPipelineFeedbackIsDeterministicAndBounded(t *testing.T)
+⋮----
+func TestClassifyPytestFailureAsTestFailure(t *testing.T)
 </file>
 
 <file path="internal/ports/pipeline/step.go">
@@ -15252,6 +15507,7 @@ package optimizer
 package optimizer
 ⋮----
 import (
+	"context"
 	"fmt"
 
 	"github.com/becker63/searchbench-go/internal/ports/pipeline"
@@ -15259,6 +15515,7 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/score"
 )
 ⋮----
+"context"
 "fmt"
 ⋮----
 "github.com/becker63/searchbench-go/internal/ports/pipeline"
@@ -15471,6 +15728,15 @@ type NextChallengerRecord struct {
 	RenderedPrompt string                  `json:"rendered_prompt,omitempty"`
 	RawOutput      string                  `json:"raw_output,omitempty"`
 }
+⋮----
+// ProposalValidationResult is the typed output of staged policy validation.
+type ProposalValidationResult struct {
+	Results        []pipeline.StepResult
+	Classification *pipeline.Classification
+}
+⋮----
+// ValidateProposalFunc stages and validates one policy proposal.
+type ValidateProposalFunc func(ctx context.Context, proposal NextChallengerProposal) (ProposalValidationResult, *Failure)
 </file>
 
 <file path="internal/pure/report/comparison.go">

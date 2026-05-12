@@ -45,7 +45,8 @@ func TestWriteExampleRoundFixtures(t *testing.T) {
 		Now: func() time.Time {
 			return time.Date(2026, 5, 12, 14, 0, 0, 0, time.UTC)
 		},
-		OptimizerModelFactory: scriptedExampleOptimizerFactory(),
+		OptimizerModelFactory:     scriptedExampleOptimizerFactory(),
+		OptimizerValidateProposal: stubOptimizerPipelinePass(),
 	}); err != nil {
 		t.Fatalf("write optimize example bundle: %v", err)
 	}
@@ -62,7 +63,7 @@ func scriptedExampleOptimizerFactory() OptimizerModelFactory {
 	return func() (model.ToolCallingChatModel, error) {
 		return modeltest.NewScriptedModel(
 			modeltest.ScriptedResponse{
-				Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(match):\n    return []\n","summary":"generated challenger narrows the frontier"}`, nil),
+				Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n","summary":"generated challenger narrows the frontier"}`, nil),
 			},
 		), nil
 	}

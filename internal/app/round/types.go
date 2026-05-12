@@ -6,6 +6,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 
 	"github.com/becker63/searchbench-go/internal/pure/game"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	pureround "github.com/becker63/searchbench-go/internal/pure/round"
 )
@@ -26,6 +27,9 @@ type Input struct {
 	EvaluatorModelFactory EvaluatorModelFactory
 	EvaluatorToolFactory  EvaluatorToolFactory
 	OptimizerModelFactory OptimizerModelFactory
+	// OptimizerValidateProposal overrides default IC optimizer validation (full local pipeline).
+	// Tests use a lightweight stub; production leaves this nil.
+	OptimizerValidateProposal pureoptimizer.ValidateProposalFunc
 
 	// DatasetMaterializeCacheDir triggers JetBrains LCA git materialization during
 	// manifest resolution when non-empty.

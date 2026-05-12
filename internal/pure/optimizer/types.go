@@ -1,6 +1,7 @@
 package optimizer
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/becker63/searchbench-go/internal/ports/pipeline"
@@ -236,3 +237,12 @@ type NextChallengerRecord struct {
 	RenderedPrompt string                  `json:"rendered_prompt,omitempty"`
 	RawOutput      string                  `json:"raw_output,omitempty"`
 }
+
+// ProposalValidationResult is the typed output of staged policy validation.
+type ProposalValidationResult struct {
+	Results        []pipeline.StepResult
+	Classification *pipeline.Classification
+}
+
+// ValidateProposalFunc stages and validates one policy proposal.
+type ValidateProposalFunc func(ctx context.Context, proposal NextChallengerProposal) (ProposalValidationResult, *Failure)

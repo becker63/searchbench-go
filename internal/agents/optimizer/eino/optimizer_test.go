@@ -19,8 +19,8 @@ func TestOptimizerConstructionIsCold(t *testing.T) {
 	model := modeltest.NewScriptedModel()
 	optimizer, err := NewOptimizer(OptimizerConfig{
 		Model: model,
-		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (ProposalValidationResult, *pureoptimizer.Failure) {
-			return ProposalValidationResult{}, nil
+		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
+			return pureoptimizer.ProposalValidationResult{}, nil
 		},
 	})
 	if err != nil {
@@ -38,12 +38,12 @@ func TestOptimizerRunSuccess(t *testing.T) {
 	t.Parallel()
 
 	model := modeltest.NewScriptedModel(modeltest.ScriptedResponse{
-		Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"small change"}`, nil),
+		Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n","summary":"small change"}`, nil),
 	})
 	optimizer, err := NewOptimizer(OptimizerConfig{
 		Model: model,
-		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (ProposalValidationResult, *pureoptimizer.Failure) {
-			return ProposalValidationResult{
+		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
+			return pureoptimizer.ProposalValidationResult{
 				Results: []pipeline.StepResult{{
 					Name:     "python_compile",
 					Command:  []string{"python3", "-m", "py_compile", "next_next_challenger_policy.round-002.py"},
@@ -82,16 +82,16 @@ func TestOptimizerRunRetriesMalformedProposal(t *testing.T) {
 
 	model := modeltest.NewScriptedModel(
 		modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage("{\"artifact_id\":\"next-challenger-round-002\",\"artifact_name\":\"next_next_challenger_policy.round-002.py\",\"interface_id\":\"iterative_context.selection_policy.v1\",\"code\":\"```python\\ndef score(task):\\n    return []\\n```\"}", nil),
+			Message: schema.AssistantMessage("{\"artifact_id\":\"next-challenger-round-002\",\"artifact_name\":\"next_next_challenger_policy.round-002.py\",\"interface_id\":\"iterative_context.selection_policy.v1\",\"code\":\"```python\\ndef score_fn(node, graph, depth):\\n    return 0.0\\n```\"}", nil),
 		},
 		modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n"}`, nil),
 		},
 	)
 	optimizer, err := NewOptimizer(OptimizerConfig{
 		Model: model,
-		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (ProposalValidationResult, *pureoptimizer.Failure) {
-			return ProposalValidationResult{}, nil
+		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
+			return pureoptimizer.ProposalValidationResult{}, nil
 		},
 	})
 	if err != nil {
@@ -123,16 +123,16 @@ func TestOptimizerRunRetriesPipelineFailure(t *testing.T) {
 
 	model := modeltest.NewScriptedModel(
 		modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n"}`, nil),
 		},
 		modeltest.ScriptedResponse{
-			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n","summary":"retry success"}`, nil),
+			Message: schema.AssistantMessage(`{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n","summary":"retry success"}`, nil),
 		},
 	)
 	callCount := 0
 	optimizer, err := NewOptimizer(OptimizerConfig{
 		Model: model,
-		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (ProposalValidationResult, *pureoptimizer.Failure) {
+		ValidateProposal: func(context.Context, pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
 			callCount++
 			if callCount == 1 {
 				classification := pipeline.Classification{
@@ -143,7 +143,7 @@ func TestOptimizerRunRetriesPipelineFailure(t *testing.T) {
 						Stderr:   "IndentationError: unexpected indent",
 					}},
 				}
-				return ProposalValidationResult{
+				return pureoptimizer.ProposalValidationResult{
 						Results:        []pipeline.StepResult{classification.TypeErrors[0]},
 						Classification: &classification,
 					}, &pureoptimizer.Failure{
@@ -156,7 +156,7 @@ func TestOptimizerRunRetriesPipelineFailure(t *testing.T) {
 						PipelineFeedback: pipeline.FormatPipelineFeedback(classification, 1200),
 					}
 			}
-			return ProposalValidationResult{}, nil
+			return pureoptimizer.ProposalValidationResult{}, nil
 		},
 	})
 	if err != nil {
@@ -188,15 +188,15 @@ func TestFinalizeProposalRejectsTargetMismatch(t *testing.T) {
 	}{
 		{
 			name: "wrong artifact id",
-			raw:  `{"artifact_id":"wrong","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n"}`,
+			raw:  `{"artifact_id":"wrong","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n"}`,
 		},
 		{
 			name: "wrong artifact name",
-			raw:  `{"artifact_id":"next-challenger-round-002","artifact_name":"wrong.py","interface_id":"iterative_context.selection_policy.v1","code":"def score(task):\n    return []\n"}`,
+			raw:  `{"artifact_id":"next-challenger-round-002","artifact_name":"wrong.py","interface_id":"iterative_context.selection_policy.v1","code":"def score_fn(node, graph, depth):\n    return 0.0\n"}`,
 		},
 		{
 			name: "wrong interface",
-			raw:  `{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"wrong","code":"def score(task):\n    return []\n"}`,
+			raw:  `{"artifact_id":"next-challenger-round-002","artifact_name":"next_next_challenger_policy.round-002.py","interface_id":"wrong","code":"def score_fn(node, graph, depth):\n    return 0.0\n"}`,
 		},
 		{
 			name: "empty code",
@@ -233,7 +233,7 @@ func sampleOptimizerSpec() pureoptimizer.Spec {
 			InputPolicy: pureoptimizer.PolicySource{
 				ArtifactID:  domain.ArtifactID("challenger-policy-round-001"),
 				InterfaceID: "iterative_context.selection_policy.v1",
-				Source:      "def score(task):\n    return []\n",
+				Source:      "def score_fn(node, graph, depth):\n    return 0.0\n",
 			},
 		},
 	}

@@ -11,6 +11,7 @@ import (
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
+	optimizepolicy "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
@@ -529,7 +530,7 @@ func resolveRoundSystem(
 	if err != nil {
 		return resolvedSystem{}, fmt.Errorf("read policy source: %w", err)
 	}
-	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), selectionPolicyV1DefaultSymbol)
+	policy := domain.NewPythonPolicy(domain.PolicyID(policyArtifact.Id), string(data), optimizepolicy.CanonicalICPolicySymbol)
 	spec.Policy = &policy
 	return resolvedSystem{spec: spec, policyPath: policyPath}, nil
 }

@@ -26,6 +26,11 @@ type Allowlist struct {
 	commands [][]string
 }
 
+// CommandAllowlist names argv predicates enforced before a pipeline command runs.
+type CommandAllowlist interface {
+	Allows(command []string) bool
+}
+
 // DefaultAllowlist returns the narrow repository-local command allowlist used
 // by typed validation pipelines.
 func DefaultAllowlist() Allowlist {
@@ -51,7 +56,7 @@ func (a Allowlist) Allows(command []string) bool {
 // Runner executes a small allowlisted validation pipeline.
 type Runner struct {
 	CommandRunner CommandRunner
-	Allowlist     Allowlist
+	Allowlist     CommandAllowlist
 }
 
 // Run executes the supplied pipeline steps in order and stops at the first
@@ -61,9 +66,9 @@ func (r Runner) Run(ctx context.Context, steps []ports.CommandSpec) []ports.Step
 	if commandRunner == nil {
 		commandRunner = ExecCommandRunner{}
 	}
-	allowlist := r.Allowlist
-	if len(allowlist.commands) == 0 {
-		allowlist = DefaultAllowlist()
+	predicate := r.Allowlist
+	if predicate == nil {
+		predicate = DefaultAllowlist()
 	}
 
 	results := make([]ports.StepResult, 0, len(steps))
@@ -77,7 +82,7 @@ func (r Runner) Run(ctx context.Context, steps []ports.CommandSpec) []ports.Step
 
 		if err := ctx.Err(); err != nil {
 			result.InfrastructureError = err
-		} else if !allowlist.Allows(spec.Command) {
+		} else if !predicate.Allows(spec.Command) {
 			result.InfrastructureError = fmt.Errorf("command is not allowlisted: %s", strings.Join(spec.Command, " "))
 		} else {
 			runCtx := ctx
