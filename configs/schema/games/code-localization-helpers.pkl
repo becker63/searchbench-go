@@ -69,6 +69,17 @@ function objective(objectivePath: String): schema.Scoring =
     objective = objectivePath
   }
 
+/// fakeRoundPolicy declares a round-side policy whose system uses the in-process
+/// fake backend (no MCP servers).
+function fakeRoundPolicy(policyId: String, displayName: String): schema.RoundPolicy =
+  new schema.RoundPolicy {
+    system {
+      id = policyId
+      name = displayName
+      backend = "fake"
+    }
+  }
+
 function fakeEvaluator(): schema.Evaluator =
   new schema.Evaluator {
     model {

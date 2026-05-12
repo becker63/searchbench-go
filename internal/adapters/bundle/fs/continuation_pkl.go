@@ -95,6 +95,25 @@ func renderContinuationIncumbent(bundleDir string, continuation pureround.Contin
 			`    }`,
 			`  }`,
 		}, nil
+	case domain.BackendFake:
+		if system.Policy == nil {
+			return []string{
+				`  incumbent = game.fakeRoundPolicy(` + pklQuoted(system.ID.String()) + `, ` + pklQuoted(system.Name) + `)`,
+			}, nil
+		}
+		policyPath := filepath.ToSlash(continuation.ResolveArtifactPath(domain.HostPath(bundleDir)))
+		return []string{
+			`  incumbent = (game.iterativeContextPolicy(` + pklQuoted(policyPath) + `)) {`,
+			`    system {`,
+			`      id = ` + pklQuoted(system.ID.String()),
+			`      name = ` + pklQuoted(system.Name),
+			`      backend = ` + pklQuoted("fake"),
+			`    }`,
+			`    selectionPolicy {`,
+			`      id = ` + pklQuoted(system.Policy.ID.String()),
+			`    }`,
+			`  }`,
+		}, nil
 	default:
 		return nil, fmt.Errorf("render continuation.pkl incumbent: backend %q is unsupported", system.Backend)
 	}
@@ -123,6 +142,16 @@ func renderContinuationChallenger(continuation pureround.Continuation) ([]string
 			`      id = ` + pklQuoted(system.ID.String()),
 			`      name = ` + pklQuoted(system.Name),
 			`      backend = ` + pklQuoted("iterative_context"),
+			`    }`,
+			`  }`,
+		}, nil
+	case domain.BackendFake:
+		return []string{
+			`  challenger {`,
+			`    system {`,
+			`      id = ` + pklQuoted(system.ID.String()),
+			`      name = ` + pklQuoted(system.Name),
+			`      backend = ` + pklQuoted("fake"),
 			`    }`,
 			`  }`,
 		}, nil

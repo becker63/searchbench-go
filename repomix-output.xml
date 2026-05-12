@@ -47,6 +47,8 @@ cmd/
     main.go
 configs/
   rounds/
+    fake-local-e2e/
+      round.pkl
     local-ic-vs-jcodemunch/
       datasets/
         JetBrains-Research_lca-bug-localization/
@@ -91,6 +93,7 @@ docs/
   integrations/
     langsmith-integration.md
   roadmap/
+    fake-e2e-runs.md
     todo.md
   README.md
 internal/
@@ -266,6 +269,7 @@ internal/
       evaluator_runtime_test.go
       evaluator.go
       example_fixtures_test.go
+      fake_e2e_guard_test.go
       localization_evidence_test.go
       localization_evidence.go
       localization_graph_scorer_test.go
@@ -447,6 +451,33 @@ import (
 "github.com/becker63/searchbench-go/internal/surface/cli"
 ⋮----
 func main()
+</file>
+
+<file path="configs/rounds/fake-local-e2e/round.pkl">
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "fake-local-e2e-round"
+
+round = (game.defineFromScratch("fake-local-e2e-001")) {
+  incumbent = game.fakeRoundPolicy("incumbent-fake", "Fake Incumbent")
+
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    system {
+      id = "challenger-fake"
+      name = "Fake Challenger"
+      backend = "fake"
+    }
+
+    selectionPolicy {
+      id = "challenger-policy-fake-local-e2e"
+    }
+  }
+
+  matches = game.lca("py", "dev", 5)
+  evaluator = game.fakeEvaluator()
+  scoring = game.objective("scoring/localization-objective.pkl")
+}
 </file>
 
 <file path="configs/rounds/local-ic-vs-jcodemunch/datasets/JetBrains-Research_lca-bug-localization/py/dev.jsonl">
@@ -646,6 +677,17 @@ function lca(datasetConfig: String, datasetSplit: String, datasetMaxItems: Int):
 function objective(objectivePath: String): schema.Scoring =
   new schema.Scoring {
     objective = objectivePath
+  }
+
+/// fakeRoundPolicy declares a round-side policy whose system uses the in-process
+/// fake backend (no MCP servers).
+function fakeRoundPolicy(policyId: String, displayName: String): schema.RoundPolicy =
+  new schema.RoundPolicy {
+    system {
+      id = policyId
+      name = displayName
+      backend = "fake"
+    }
   }
 
 function fakeEvaluator(): schema.Evaluator =
@@ -6941,6 +6983,71 @@ LangSmith can host the traces and round views. SearchBench should continue produ
 [2]: https://mintlify.com/langchain-ai/langsmith-sdk/typescript/evaluators?utm_source=chatgpt.com "Evaluator types - LangSmith SDK"
 </file>
 
+<file path="docs/roadmap/fake-e2e-runs.md">
+# Fake / scripted end-to-end runs
+
+These paths prove **no-network / no-provider-credential** round execution: bundles, evidence, objectives, and decisions are produced using in-process **fake** backends and evaluator models. They are **not** proofs that real jCodeMunch or Iterative Context MCP servers work.
+
+## Run matrix
+
+| Name | Command | Network | Credentials | Bundle output | Decision | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Fake-local CLI round | `go run ./cmd/searchbench run --manifest=configs/rounds/fake-local-e2e/round.pkl --bundle-root=<tmp>` (see `TestSearchBenchFakeLocalRoundRunCLIE2E`) | No | No MCP launcher vars; no LLM keys | Under `--bundle-root` (games layout) | `decision.json` in bundle | Covered by root `e2e_test.go` |
+| Fake-local engine round | `round.Run` with same manifest (see `TestSearchBenchFakeLocalRoundRunEngineE2E`) | No | Same | Same | Same | Covered by root `e2e_test.go` |
+| Example JC/IC manifest (smoke plumbing only) | `TestSearchBenchRoundRunCLIE2E`, `TestSearchBenchRoundRunEngineE2E` | No | MCP env empty → evaluator runs **fail**; bundle still written | Yes | Yes | Documents wiring only |
+| Backend guard (JC/IC require MCP env) | `go test ./internal/app/round -run TestFakeE2E_LocalManifestToolFactoryFailsWithoutMCPEnv` | No | No | — | — | **Honest failure** when launcher vars unset |
+| Backend audit (manifest declares JC/IC) | `go test ./internal/app/round -run TestFakeE2E_LocalManifestIncumbentUsesJCodeMunchBackend` | No | No | — | — | Documents `local-ic-vs-jcodemunch` |
+| Fake-local backend audit | `go test ./internal/app/round -run TestFakeE2E_FakeLocalManifestUsesFakeBackends` | No | No | — | — | Both sides `backend = fake` |
+| Usage honesty (evidence) | `go test ./internal/app/round -run TestProjectRoundEvidenceLeavesUsageUnavailableWhenRunsOmitUsage` | No | No | — | — | Usage stays **unavailable**, not fake-nonzero |
+| Optimizer smoke (continuation) | `configs/rounds/optimize-ic/round.pkl` amends a completed bundle; not re-run in default fake matrix | — | — | Parent bundle | — | Optional; separate from fake-local |
+
+## Manifests
+
+- **`configs/rounds/fake-local-e2e/round.pkl`** — Incumbent and challenger use **`backend = "fake"`**, `game.fakeEvaluator()`, shared **symlinked** LCA JSONL / objective / challenger policy path as `local-ic-vs-jcodemunch`. Safe default for offline CI.
+- **`configs/rounds/local-ic-vs-jcodemunch/round.pkl`** — Declares **jcodemunch** and **iterative_context**. Useful for artifact plumbing tests; **does not** prove MCP backends without `SEARCHBENCH_JCODEMUNCH_COMMAND` / `SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND`.
+
+## Canonical bundle artifacts
+
+After a successful run, the root e2e helpers expect at least:
+
+`COMPLETE`, `resolved-round.json`, `round-report.json`, `round-report.txt`, `evidence.pkl`, `objective.json`, `decision.json`, `metadata.json`.
+
+If the writer adds more files, update expectations only when the contract intentionally changes.
+
+## Local commands
+
+```bash
+nix develop   # optional; preferred toolchain
+
+# Focused fake-local proof (requires `pkl` on PATH)
+go test ./... -run 'TestSearchBenchFakeLocal|TestFakeE2E_'
+
+# Full gate (matches CI helpers)
+nix develop -c searchbench-go-test-all
+nix develop -c searchbench-golangci
+nix develop -c searchbench-staticcheck
+nix develop -c searchbench-architecture-check
+nix flake check
+```
+
+## Env vars intentionally **not** required (fake-local)
+
+- `SEARCHBENCH_JCODEMUNCH_COMMAND`
+- `SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND`
+- Model provider API keys (evaluator `provider = "fake"`)
+
+## What remains unproven here
+
+- Real jCodeMunch and Iterative Context MCP sessions and tool semantics.
+- Real LLM providers and LangSmith-backed traces.
+- Full parity with the legacy Python SearchBench harness (behavioral reference only).
+
+## Next step toward real JC/IC e2e
+
+1. Configure MCP launcher env vars and run `configs/rounds/local-ic-vs-jcodemunch/round.pkl` (or equivalent) **outside** fake-local.
+2. Confirm evaluator executions succeed (`round-report.json` failures empty) and compare evidence/decisions to expectations.
+</file>
+
 <file path="docs/roadmap/todo.md">
 # SearchBench-Go Implementation Roadmap
 
@@ -7063,6 +7170,7 @@ Project vocabulary and layering live under **`architecture/`**. Engineering prac
 | [LangSmith](integrations/langsmith-integration.md) | Trace/evaluator platform positioning |
 | [Replit](guides/replit.md) | Quick environment and tech stack orientation |
 | [Roadmap](roadmap/todo.md) | High-level implementation pressure |
+| [Fake e2e runs](roadmap/fake-e2e-runs.md) | Offline fake-round commands, manifests, and artifact expectations |
 | [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
 | [Issue wave publisher](engineering/issue-wave-manifest.md) | `gh`-backed JSON manifest for batch issue creation (dev tooling) |
 
@@ -13049,6 +13157,36 @@ func resetExampleBundleDir(t *testing.T, path string)
 func scriptedExampleOptimizerFactory() OptimizerModelFactory
 </file>
 
+<file path="internal/app/round/fake_e2e_guard_test.go">
+package round
+⋮----
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"path/filepath"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+func TestFakeE2E_FakeLocalManifestUsesFakeBackends(t *testing.T)
+⋮----
+// TestFakeE2E_LocalManifestIncumbentUsesJCodeMunchBackend documents the example
+// manifest's incumbent backend so fake-e2e auditors know JC wiring is declared.
+func TestFakeE2E_LocalManifestIncumbentUsesJCodeMunchBackend(t *testing.T)
+⋮----
+// TestFakeE2E_LocalManifestToolFactoryFailsWithoutMCPEnv proves default prepared
+// tools cannot start for JC/IC backends when MCP launcher env vars are empty.
+func TestFakeE2E_LocalManifestToolFactoryFailsWithoutMCPEnv(t *testing.T)
+</file>
+
 <file path="internal/app/round/localization_evidence_test.go">
 package round
 ⋮----
@@ -18508,6 +18646,14 @@ bundlefs "github.com/becker63/searchbench-go/internal/adapters/bundle/fs"
 "github.com/becker63/searchbench-go/internal/app/round"
 "github.com/becker63/searchbench-go/internal/pure/score"
 ⋮----
+const (
+	envSearchBenchJCodeMunchCommand       = "SEARCHBENCH_JCODEMUNCH_COMMAND"
+	envSearchBenchIterativeContextCommand = "SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND"
+)
+⋮----
+// TestSearchBenchRoundRunCLIE2E exercises bundle/objective/decision wiring against the
+// example manifest that declares real JC/IC backends. Evaluator executions may fail when
+// MCP launcher env vars are unset; see configs/rounds/fake-local-e2e for an offline fake-backend smoke manifest.
 func TestSearchBenchRoundRunCLIE2E(t *testing.T)
 ⋮----
 var bundlePrefix string
@@ -18518,9 +18664,28 @@ var resolvedCli round.Plan
 ⋮----
 var metadata bundlefs.BundleMetadata
 ⋮----
+// TestSearchBenchRoundRunEngineE2E mirrors TestSearchBenchRoundRunCLIE2E through round.Run;
+// it proves resolver + bundle writers for the JC/IC-declared example manifest, not successful MCP-backed runs.
 func TestSearchBenchRoundRunEngineE2E(t *testing.T)
 ⋮----
 var rd round.Plan
+⋮----
+func TestSearchBenchFakeLocalRoundRunCLIE2E(t *testing.T)
+⋮----
+func TestSearchBenchFakeLocalRoundRunEngineE2E(t *testing.T)
+⋮----
+func envWithoutMCPLauncher(environ []string) []string
+⋮----
+func assertAllEvaluatorRunsSucceeded(tb testing.TB, executions []round.EvaluatorExecution)
+⋮----
+func assertRoundReportJSONHasNoFailures(tb testing.TB, path string)
+⋮----
+var payload struct {
+		Failures struct {
+			Incumbent  []any `json:"incumbent"`
+			Challenger []any `json:"challenger"`
+		} `json:"failures"`
+	}
 ⋮----
 func assertBundleArtifacts(tb testing.TB, bundleDir string)
 ⋮----
