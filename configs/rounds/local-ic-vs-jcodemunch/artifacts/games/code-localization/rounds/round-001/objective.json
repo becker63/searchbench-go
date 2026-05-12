@@ -13,42 +13,42 @@
     {
       "name": "challengerQuality",
       "value": 0.8333333333333334,
-      "kind": ""
+      "kind": "intermediate"
     },
     {
       "name": "parentChallengerQuality",
       "value": 0.8333333333333334,
-      "kind": ""
+      "kind": "intermediate"
     },
     {
       "name": "improvementVsParent",
       "value": 0,
-      "kind": ""
+      "kind": "intermediate"
     },
     {
       "name": "tokenEfficiency",
-      "value": 0.99075,
-      "kind": ""
+      "value": 0.98855,
+      "kind": "intermediate"
     },
     {
       "name": "base",
-      "value": 0.8648166666666668,
-      "kind": ""
+      "value": 0.8643766666666668,
+      "kind": "intermediate"
     },
     {
       "name": "regressionPenalty",
       "value": 1,
-      "kind": ""
+      "kind": "penalty"
     },
     {
       "name": "invalidPredictionPenalty",
       "value": 1,
-      "kind": ""
+      "kind": "penalty"
     },
     {
       "name": "final",
-      "value": 0.8648166666666668,
-      "kind": ""
+      "value": 0.8643766666666668,
+      "kind": "final"
     }
   ],
   "final": "final",

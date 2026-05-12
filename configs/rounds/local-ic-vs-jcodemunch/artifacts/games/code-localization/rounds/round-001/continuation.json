@@ -80,23 +80,22 @@
     "retry": {
       "max_attempts": 2,
       "retry_on_model_error": true,
-      "retry_on_tool_failure": false,
       "retry_on_finalization_failure": true,
       "retry_on_invalid_prediction": true
     },
     "allowed_tools": [
-      "resolve",
       "expand",
+      "resolve",
       "resolve_and_expand"
     ],
     "denied_tools": [
-      "shell",
       "go_test",
-      "write_file",
-      "network"
+      "network",
+      "shell",
+      "write_file"
     ],
     "system_prompt": "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools.",
-    "policy_sha256": ""
+    "policy_sha256": "e5e49e7158ee499ed19d75239557e52ff6f40dc1216aa688c7da9ac20453de7e"
   },
   "scoring": {
     "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",

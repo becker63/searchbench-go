@@ -1,6 +1,6 @@
 {
   "id": "report-round-001",
-  "created_at": "2026-05-09T20:21:40.43525142Z",
+  "created_at": "2026-05-12T16:10:06.249904733Z",
   "spec": {
     "policies": {
       "incumbent": {
@@ -37,7 +37,7 @@
         "policy": {
           "id": "challenger-policy-round-001",
           "language": "python",
-          "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
+          "sha256": "2efb9f6d3b22aec2fcceaac3a63e7a0817dbd74a62f7668b0c41335375ad0d72",
           "entrypoint": "score"
         },
         "runtime": {
@@ -45,7 +45,7 @@
           "max_tool_calls": 24,
           "max_output_tokens": 2000
         },
-        "fingerprint": "eba3813ecd13a659b216f366c49ce262a39f5dc2b5f431d9bcef78e8e73dcbd8"
+        "fingerprint": "4ea7846a1cc6a42d7582a1d3600a8825b02f0732d04f03e35daf004f7fd3bed6"
       }
     },
     "matches": [
@@ -81,12 +81,12 @@
             "reasoning": "incumbent stayed conservative after the fake structural lookup"
           },
           "usage": {
-            "input_tokens": 169,
+            "input_tokens": 213,
             "output_tokens": 12,
-            "total_tokens": 181
+            "total_tokens": 225
           },
-          "started_at": "2026-05-09T20:21:40.435468171Z",
-          "finished_at": "2026-05-09T20:21:40.43632209Z"
+          "started_at": "2026-05-12T16:10:06.250196276Z",
+          "finished_at": "2026-05-12T16:10:06.251382155Z"
         },
         "scores": {
           "gold_hop": {
@@ -123,12 +123,12 @@
             "reasoning": "challenger used the fake structural lookup to narrow onto the search target"
           },
           "usage": {
-            "input_tokens": 169,
+            "input_tokens": 213,
             "output_tokens": 16,
-            "total_tokens": 185
+            "total_tokens": 229
           },
-          "started_at": "2026-05-09T20:21:40.436358715Z",
-          "finished_at": "2026-05-09T20:21:40.436691632Z"
+          "started_at": "2026-05-12T16:10:06.251623948Z",
+          "finished_at": "2026-05-12T16:10:06.251998449Z"
         },
         "scores": {
           "gold_hop": {

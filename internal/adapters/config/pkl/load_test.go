@@ -70,6 +70,28 @@ func TestLoadGeneratedContinuationManifest(t *testing.T) {
 	}
 }
 
+func TestLoadOptimizeICManifest(t *testing.T) {
+	t.Parallel()
+
+	requirePkl(t)
+
+	path := filepath.Join("..", "..", "..", "..", "configs", "rounds", "optimize-ic", "round.pkl")
+	roundSpec, err := LoadFromPath(context.Background(), path)
+	if err != nil {
+		t.Fatalf("LoadFromPath() error = %v", err)
+	}
+
+	if roundSpec.Round == nil || roundSpec.Round.Challenger.Generate == nil {
+		t.Fatalf("roundSpec.Round = %#v, want generated challenger config", roundSpec.Round)
+	}
+	if got, want := roundSpec.Name, "optimize-ic-round-002"; got != want {
+		t.Fatalf("roundSpec.Name = %q, want %q", got, want)
+	}
+	if got, want := roundSpec.Round.Id, "round-002"; got != want {
+		t.Fatalf("roundSpec.Round.Id = %q, want %q", got, want)
+	}
+}
+
 func requirePkl(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("pkl"); err != nil {

@@ -1,7 +1,7 @@
 {
   "manifest_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/round.pkl",
   "round_name": "local-ic-vs-jcodemunch-round-001",
-  "mode": "evaluation",
+  "mode": "round",
   "game": {
     "id": "code-localization",
     "kind": "code_localization"
@@ -51,7 +51,7 @@
       "policy": {
         "id": "challenger-policy-round-001",
         "language": "python",
-        "sha256": "0043e149e3b7bb6c6b64c94eb85fe1d8637b511a5d11d1ff08d62dc778ce3054",
+        "sha256": "2efb9f6d3b22aec2fcceaac3a63e7a0817dbd74a62f7668b0c41335375ad0d72",
         "entrypoint": "score"
       },
       "runtime": {
@@ -59,7 +59,7 @@
         "max_tool_calls": 24,
         "max_output_tokens": 2000
       },
-      "fingerprint": "eba3813ecd13a659b216f366c49ce262a39f5dc2b5f431d9bcef78e8e73dcbd8"
+      "fingerprint": "4ea7846a1cc6a42d7582a1d3600a8825b02f0732d04f03e35daf004f7fd3bed6"
     }
   },
   "matches": [
@@ -87,6 +87,7 @@
     "max_workers": 1,
     "fail_fast": false
   },
+  "candidate_interface_id": "iterative_context.selection_policy.v1",
   "evaluator": {
     "model": {
       "provider": "fake",
@@ -103,6 +104,21 @@
       "retry_on_model_error": true,
       "retry_on_finalization_failure": true,
       "retry_on_invalid_prediction": true
+    },
+    "tool_policy": {
+      "effective_allowed_tools": [
+        "expand",
+        "resolve",
+        "resolve_and_expand"
+      ],
+      "denied_tools": [
+        "go_test",
+        "network",
+        "shell",
+        "write_file"
+      ],
+      "system_prompt": "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools.",
+      "policy_sha256": "e5e49e7158ee499ed19d75239557e52ff6f40dc1216aa688c7da9ac20453de7e"
     }
   },
   "scoring": {
@@ -135,6 +151,10 @@
   "bundle": {
     "id": "round-001"
   },
+  "lineage": {},
+  "challenger_materialization": {
+    "mode": "checked_in"
+  },
   "report_id": "report-round-001",
-  "created_at": "2026-05-09T20:21:40Z"
+  "created_at": "2026-05-12T16:10:06Z"
 }

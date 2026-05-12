@@ -8,8 +8,8 @@ Decision
 
 Systems                                                                                        
 Incumbent  jcodemunch         fake/fake-evaluator  jcodemunch  5d0fe88c46c3  default:dev       
-Challenger iterative-context  fake/fake-evaluator  iterative-context  eba3813ecd13  default:dev
-Policy      python:score  0043e149e3b7                                                         
+Challenger iterative-context  fake/fake-evaluator  iterative-context  4ea7846a1cc6  default:dev
+Policy      python:score  2efb9f6d3b22                                                         
 
 Execution Summary                 
 Incumbent   1 succeeded   0 failed
