@@ -180,7 +180,7 @@ func (e *Evaluator) Run(ctx context.Context, spec run.Spec) Result {
 		attempt := Attempt{Number: attemptNumber}
 
 		recordPhase(PhaseRenderPrompt)
-		input := evaluatorprompt.InputFromMatch(spec.Match, allowedTools)
+		input := evaluatorprompt.InputFromMatch(spec.Match, allowedTools, spec.EvaluatorAppendix.SystemPrompt)
 		for _, previous := range result.Attempts {
 			if feedback := retryFeedbackForFailure(previous.Failure); feedback != "" {
 				input.RetryFeedback = append(input.RetryFeedback, feedback)

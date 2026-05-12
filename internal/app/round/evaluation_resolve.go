@@ -10,7 +10,8 @@ import (
 	"time"
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	datasetfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
@@ -21,7 +22,7 @@ import (
 // caller does not inject a real dataset adapter. It is wired through the
 // MatchSource port so a real adapter can be substituted without touching
 // resolveEvaluation.
-var defaultMatchSource dataset.MatchSource = datasetfake.NewMatchSource()
+var defaultMatchSource dataset.MatchSource = evaluatorfake.NewMatchSource()
 
 // selectionPolicyV1DefaultSymbol is the runtime callable used when adapting
 // the manifest-level iterative_context.selection_policy.v1 interface into the
@@ -117,6 +118,18 @@ func resolveEvaluation(ctx context.Context, request evaluationResolveRequest) (P
 	reportFormats := stringifyReportFormats(evaluation.Report.Formats)
 	renderHumanReport := containsReportFormat(reportFormats, config.ReportFormatText.String())
 
+	effectiveTools, deniedTools, systemPrompt, policyHash, err := evaluatorpolicy.ResolveEvaluatorRunPolicy(
+		evaluator.Tools,
+		evaluator.SystemPrompt,
+		evaluatorpolicy.EvaluatorToolRegistry{
+			Available:      evaluatorfake.LocalEvaluatorToolNames(),
+			DefaultAllowed: evaluatorfake.LocalEvaluatorDefaultAllowedToolNames(),
+		},
+	)
+	if err != nil {
+		return Plan{}, fmt.Errorf("evaluator tool policy: %w", err)
+	}
+
 	return Plan{
 		ManifestPath: manifestPath,
 		RoundName:    cfg.Name,
@@ -155,6 +168,12 @@ func resolveEvaluation(ctx context.Context, request evaluationResolveRequest) (P
 				RetryOnToolFailure:         evaluator.Retry.RetryOnToolFailure,
 				RetryOnFinalizationFailure: evaluator.Retry.RetryOnFinalizationFailure,
 				RetryOnInvalidPrediction:   evaluator.Retry.RetryOnInvalidPrediction,
+			},
+			ToolPolicy: EvaluatorToolPolicyView{
+				EffectiveAllowed: effectiveTools,
+				Denied:           deniedTools,
+				SystemPrompt:     systemPrompt,
+				PolicySHA256:     policyHash,
 			},
 		},
 		Scoring: ScoringConfig{

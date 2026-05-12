@@ -70,12 +70,21 @@ type DatasetConfig struct {
 	MaxItems *int   `json:"max_items,omitempty"`
 }
 
-// EvaluatorConfig records the resolved evaluator model, bounds, and retry
+// EvaluatorConfig records the resolved evaluator model, bounds, retry
 // policy projected from the manifest.
 type EvaluatorConfig struct {
-	Model  EvaluatorModelConfig  `json:"model,omitempty"`
-	Bounds EvaluatorBoundsConfig `json:"bounds,omitempty"`
-	Retry  RetryPolicyConfig     `json:"retry,omitempty"`
+	Model      EvaluatorModelConfig    `json:"model,omitempty"`
+	Bounds     EvaluatorBoundsConfig   `json:"bounds,omitempty"`
+	Retry      RetryPolicyConfig       `json:"retry,omitempty"`
+	ToolPolicy EvaluatorToolPolicyView `json:"tool_policy,omitempty"`
+}
+
+// EvaluatorToolPolicyView is the resolved, reproducible evaluator tool + prompt policy.
+type EvaluatorToolPolicyView struct {
+	EffectiveAllowed []string `json:"effective_allowed_tools,omitempty"`
+	Denied           []string `json:"denied_tools,omitempty"`
+	SystemPrompt     string   `json:"system_prompt,omitempty"`
+	PolicySHA256     string   `json:"policy_sha256,omitempty"`
 }
 
 // EvaluatorModelConfig records the resolved evaluator model choice.

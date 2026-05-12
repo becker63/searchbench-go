@@ -260,8 +260,8 @@ func TestRejectsEmptyToolAllowEntry(t *testing.T) {
 	roundSpec := sampleEvaluationRound()
 	roundSpec.Agents.Evaluator.Tools.Allow = append(roundSpec.Agents.Evaluator.Tools.Allow, " ")
 
-	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrToolAllowEntryEmpty.Error()) {
-		t.Fatalf("Validate() error = %v, want empty allow entry error", err)
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), "agents.evaluator.tools.allow") || !strings.Contains(err.Error(), ErrToolAllowEntryEmpty.Error()) {
+		t.Fatalf("Validate() error = %v, want field path and empty allow entry error", err)
 	}
 }
 
@@ -271,8 +271,8 @@ func TestRejectsDuplicateToolAllowEntry(t *testing.T) {
 	roundSpec := sampleEvaluationRound()
 	roundSpec.Agents.Evaluator.Tools.Allow = append(roundSpec.Agents.Evaluator.Tools.Allow, roundSpec.Agents.Evaluator.Tools.Allow[0])
 
-	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrToolAllowDuplicate.Error()) {
-		t.Fatalf("Validate() error = %v, want duplicate allow entry error", err)
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), `duplicate tool "resolve"`) || !strings.Contains(err.Error(), ErrToolAllowDuplicate.Error()) {
+		t.Fatalf("Validate() error = %v, want duplicate allow entry error with tool name", err)
 	}
 }
 
@@ -282,8 +282,8 @@ func TestRejectsToolAllowDenyOverlap(t *testing.T) {
 	roundSpec := sampleEvaluationRound()
 	roundSpec.Agents.Evaluator.Tools.Deny = append(roundSpec.Agents.Evaluator.Tools.Deny, roundSpec.Agents.Evaluator.Tools.Allow[0])
 
-	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrToolPolicyOverlap.Error()) {
-		t.Fatalf("Validate() error = %v, want tool overlap error", err)
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), `for tool "resolve"`) || !strings.Contains(err.Error(), ErrToolPolicyOverlap.Error()) {
+		t.Fatalf("Validate() error = %v, want overlap error with tool name", err)
 	}
 }
 
@@ -295,8 +295,8 @@ func TestRejectsOversizedSystemPrompt(t *testing.T) {
 	roundSpec.Agents.Evaluator.SystemPrompt = &oversized
 	roundSpec.Evaluation.Agent.SystemPrompt = &oversized
 
-	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), ErrSystemPromptTooLarge.Error()) {
-		t.Fatalf("Validate() error = %v, want oversized prompt error", err)
+	if err := Validate(roundSpec); err == nil || !strings.Contains(err.Error(), "agents.evaluator.systemPrompt exceeds max length") || !strings.Contains(err.Error(), ErrSystemPromptTooLarge.Error()) {
+		t.Fatalf("Validate() error = %v, want field path and oversized prompt error", err)
 	}
 }
 

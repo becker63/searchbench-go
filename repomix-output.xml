@@ -142,6 +142,9 @@ internal/
         doc.go
         graph.go
         scorer.go
+      policy/
+        evaluator_test.go
+        evaluator.go
       prompt/
         input.go
         prompt_templ.go
@@ -200,6 +203,7 @@ internal/
       evaluation_resolve.go
       evaluation_test.go
       evaluation_types.go
+      evaluator_parity_test.go
       evaluator.go
       phases_test.go
       run_test.go
@@ -7425,11 +7429,13 @@ func validateCompletedBundleArtifact(artifact CompletedRoundBundleArtifact) erro
 ⋮----
 func validateAgents(agents Agents) error
 ⋮----
+// Structural shape only: the optimizer agent has no tool registry enforcement yet.
+⋮----
 func validateAgentModel(model Model) error
 ⋮----
-func validateToolPolicy(policy AgentToolPolicy) error
+func validateToolPolicy(prefix string, policy AgentToolPolicy) error
 ⋮----
-func validateSystemPrompt(prompt *string) error
+func validateSystemPrompt(fieldPath string, prompt *string) error
 ⋮----
 func validateEvaluation(spec RoundSpec) error
 ⋮----
@@ -8698,6 +8704,15 @@ func (Decider) Decide(comparisons []report.ScoreComparison, regressions []report
 // ModelFactory returns a deterministic fake ToolCallingChatModel for a spec.
 func ModelFactory(spec run.Spec) (model.ToolCallingChatModel, error)
 ⋮----
+// LocalEvaluatorToolNames returns every tool name registered by ToolFactory (the
+// Available set for policy resolution), sorted lexically.
+func LocalEvaluatorToolNames() []string
+⋮----
+// LocalEvaluatorDefaultAllowedToolNames is the base allow list when the manifest omits
+// evaluator.tools.allow. Each name must be a subset of LocalEvaluatorToolNames.
+// For the local fake, defaults match the full factory surface.
+func LocalEvaluatorDefaultAllowedToolNames() []string
+⋮----
 // ToolFactory returns the deterministic fake repository tool set for a spec.
 func ToolFactory(spec run.Spec) ([]tool.BaseTool, error)
 ⋮----
@@ -8827,16 +8842,156 @@ func NewScorer() Scorer
 func (Scorer) Score(_ context.Context, input score.Input) (score.ScoreSet, error)
 </file>
 
+<file path="internal/agents/evaluator/policy/evaluator_test.go">
+package policy
+⋮----
+import (
+	"strings"
+	"testing"
+
+	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+)
+⋮----
+"strings"
+"testing"
+⋮----
+config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+⋮----
+func testRegistry() EvaluatorToolRegistry
+⋮----
+func TestPromptPolicyHashIgnoresToolListOrder(t *testing.T)
+⋮----
+func TestPromptPolicyHashWhitespaceSystemPromptNormalized(t *testing.T)
+⋮----
+func TestPromptPolicyHashContentChange(t *testing.T)
+⋮----
+func TestPromptPolicyHashEffectiveToolsChange(t *testing.T)
+⋮----
+func TestPromptPolicyHashDeniedChange(t *testing.T)
+⋮----
+func TestResolveDenyOrderProducesSameHash(t *testing.T)
+⋮----
+func TestResolveUnknownAllowRejected(t *testing.T)
+⋮----
+func TestResolveNoToolsAfterDeny(t *testing.T)
+⋮----
+func TestResolveEmptyAllowUsesDefaultsMinusDeny(t *testing.T)
+⋮----
+func TestResolveExplicitAllowOnlyListsAllowed(t *testing.T)
+⋮----
+func TestResolveRegistrySliceOrderDoesNotChangeEffectiveOrHash(t *testing.T)
+⋮----
+func TestResolveDifferentSystemPromptsYieldsDifferentHash(t *testing.T)
+⋮----
+func TestResolveEmptyAllowUsesDefaultAllowedNotFullAvailable(t *testing.T)
+⋮----
+func TestResolveDefaultAllowedNotInAvailableFails(t *testing.T)
+⋮----
+func strPtr(s string) *string
+</file>
+
+<file path="internal/agents/evaluator/policy/evaluator.go">
+// Package policy projects manifest evaluator tool allow/deny and systemPrompt into
+// the effective runtime policy. Tool name validation is against a caller-supplied
+// registry (the tools the evaluator factory can actually register), not the Pkl adapter.
+package policy
+⋮----
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+
+	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+)
+⋮----
+"crypto/sha256"
+"encoding/hex"
+"encoding/json"
+"fmt"
+"sort"
+"strings"
+⋮----
+config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
+⋮----
+// EvaluatorToolRegistry describes which evaluator tools exist at runtime versus which
+// are allowed when the manifest omits an explicit allow list.
+//
+// Available lists every tool the evaluator factory can register; manifest allow entries
+// must name only tools from this set.
+⋮----
+// DefaultAllowed is the base allow set when agents.evaluator.tools.allow is empty;
+// it must be non-empty and every entry must appear in Available. Deny subtracts
+// from DefaultAllowed in that case, or from the explicit allow list when set.
+type EvaluatorToolRegistry struct {
+	Available      []string
+	DefaultAllowed []string
+}
+⋮----
+// ResolveEvaluatorRunPolicy computes the effective allowed tool list, normalized
+// denied names, trimmed system prompt text, and a stable SHA256 hex digest of the
+// final resolved policy (effective allowed tools, denied, trimmed system prompt).
+func ResolveEvaluatorRunPolicy(
+	policy config.AgentToolPolicy,
+	systemPrompt *string,
+	reg EvaluatorToolRegistry,
+) (
+	effectiveAllowed []string,
+	deniedNormalized []string,
+	systemTrimmed string,
+	policySHA256 string,
+	err error,
+)
+⋮----
+func buildAvailableRegistry(names []string) (map[string]struct
+⋮----
+func normalizeDefaultAllowed(defaultNames []string, available map[string]struct
+⋮----
+var out []string
+⋮----
+// NormalizeDenied returns manifest deny entries trimmed and sorted for stable hashing and output.
+func NormalizeDenied(deny []string) []string
+⋮----
+// TrimSystemPrompt returns the manifest systemPrompt with surrounding whitespace removed.
+func TrimSystemPrompt(p *string) string
+⋮----
+// EffectiveAllowed applies allow/deny rules. When the manifest allow list is empty,
+// candidates are DefaultAllowed (caller must pass the normalized sorted slice).
+// When allow is non-empty, each entry must appear in available; candidates are sorted.
+// Deny always subtracts from the chosen candidate set.
+func EffectiveAllowed(
+	policy config.AgentToolPolicy,
+	available map[string]struct
+⋮----
+var candidates []string
+⋮----
+// PromptPolicyHash hashes the normalized resolved policy: sorted effective allowed tools,
+// sorted normalized denied tools, and trimmed system prompt text.
+func PromptPolicyHash(effectiveAllowed, deniedNormalized []string, systemPrompt string) string
+⋮----
+type payload struct {
+		AllowedTools []string `json:"allowed_tools"`
+		DeniedTools  []string `json:"denied_tools"`
+		SystemPrompt string   `json:"system_prompt,omitempty"`
+	}
+</file>
+
 <file path="internal/agents/evaluator/prompt/input.go">
 package prompt
 ⋮----
 import (
 	"sort"
+	"strings"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 )
 ⋮----
 "sort"
+"strings"
 ⋮----
 "github.com/becker63/searchbench-go/internal/pure/domain"
 ⋮----
@@ -8858,14 +9013,15 @@ type Input struct {
 	IssueTitle       string
 	IssueBody        string
 	AllowedTools     []string
+	SystemPrompt     string
 	Constraints      []string
 	RetryFeedback    []string
 	OutputSchemaJSON string
 }
 ⋮----
 // InputFromMatch projects the prompt-safe match data used by the evaluator
-// prompt.
-func InputFromMatch(task domain.MatchSpec, allowedTools []string) Input
+// prompt. systemPrompt is optional; surrounding whitespace is ignored for rendering.
+func InputFromMatch(task domain.MatchSpec, allowedTools []string, systemPrompt string) Input
 </file>
 
 <file path="internal/agents/evaluator/prompt/prompt_templ.go">
@@ -8899,6 +9055,8 @@ var templ_7745c5c3_Var9 string
 ⋮----
 var templ_7745c5c3_Var10 string
 ⋮----
+var templ_7745c5c3_Var11 string
+⋮----
 var _ = templruntime.GeneratedTemplate
 </file>
 
@@ -8922,15 +9080,24 @@ import (
 func TestRenderPromptFromTypedInput(t *testing.T)
 ⋮----
 func TestRenderPromptIncludesRetryFeedbackWithoutOracleLeak(t *testing.T)
+⋮----
+func TestRenderPromptIncludesOptionalSystemPrompt(t *testing.T)
+⋮----
+func TestRenderSystemPromptEscapesSpecialCharacters(t *testing.T)
+⋮----
+func TestRenderOmitsSystemPromptWhenWhitespaceOnly(t *testing.T)
 </file>
 
 <file path="internal/agents/evaluator/prompt/prompt.templ">
 package prompt
 
-templ Prompt(in Input) {
+	templ Prompt(in Input) {
 	<searchbench-prompt>
 		<role>You are the SearchBench evaluator agent.</role>
 		<task>Use the available tools to localize the bug described by the issue.</task>
+		if in.SystemPrompt != "" {
+			<system-prompt>{ in.SystemPrompt }</system-prompt>
+		}
 		<match-id>{ in.MatchID }</match-id>
 		<repo>
 			<name>{ in.RepoName }</name>
@@ -10682,12 +10849,21 @@ type DatasetConfig struct {
 	MaxItems *int   `json:"max_items,omitempty"`
 }
 ⋮----
-// EvaluatorConfig records the resolved evaluator model, bounds, and retry
+// EvaluatorConfig records the resolved evaluator model, bounds, retry
 // policy projected from the manifest.
 type EvaluatorConfig struct {
-	Model  EvaluatorModelConfig  `json:"model,omitempty"`
-	Bounds EvaluatorBoundsConfig `json:"bounds,omitempty"`
-	Retry  RetryPolicyConfig     `json:"retry,omitempty"`
+	Model      EvaluatorModelConfig    `json:"model,omitempty"`
+	Bounds     EvaluatorBoundsConfig   `json:"bounds,omitempty"`
+	Retry      RetryPolicyConfig       `json:"retry,omitempty"`
+	ToolPolicy EvaluatorToolPolicyView `json:"tool_policy,omitempty"`
+}
+⋮----
+// EvaluatorToolPolicyView is the resolved, reproducible evaluator tool + prompt policy.
+type EvaluatorToolPolicyView struct {
+	EffectiveAllowed []string `json:"effective_allowed_tools,omitempty"`
+	Denied           []string `json:"denied_tools,omitempty"`
+	SystemPrompt     string   `json:"system_prompt,omitempty"`
+	PolicySHA256     string   `json:"policy_sha256,omitempty"`
 }
 ⋮----
 // EvaluatorModelConfig records the resolved evaluator model choice.
@@ -10803,7 +10979,8 @@ import (
 	"time"
 
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-	datasetfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 	"github.com/becker63/searchbench-go/internal/ports/dataset"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
@@ -10819,7 +10996,8 @@ import (
 "time"
 ⋮----
 config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
-datasetfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+evaluatorpolicy "github.com/becker63/searchbench-go/internal/agents/evaluator/policy"
 "github.com/becker63/searchbench-go/internal/app/round/internal/compare"
 "github.com/becker63/searchbench-go/internal/ports/dataset"
 "github.com/becker63/searchbench-go/internal/pure/domain"
@@ -10829,7 +11007,7 @@ datasetfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 // caller does not inject a real dataset adapter. It is wired through the
 // MatchSource port so a real adapter can be substituted without touching
 // resolveEvaluation.
-var defaultMatchSource dataset.MatchSource = datasetfake.NewMatchSource()
+var defaultMatchSource dataset.MatchSource = evaluatorfake.NewMatchSource()
 ⋮----
 // selectionPolicyV1DefaultSymbol is the runtime callable used when adapting
 // the manifest-level iterative_context.selection_policy.v1 interface into the
@@ -11024,6 +11202,46 @@ type Result struct {
 }
 </file>
 
+<file path="internal/app/round/evaluator_parity_test.go">
+package round
+⋮----
+import (
+	"context"
+	"os/exec"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+	"github.com/becker63/searchbench-go/internal/agents/evaluator/prompt"
+	"github.com/becker63/searchbench-go/internal/pure/domain"
+	run "github.com/becker63/searchbench-go/internal/pure/execution"
+)
+⋮----
+"context"
+"os/exec"
+"slices"
+"strings"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
+"github.com/becker63/searchbench-go/internal/agents/evaluator/prompt"
+"github.com/becker63/searchbench-go/internal/pure/domain"
+run "github.com/becker63/searchbench-go/internal/pure/execution"
+⋮----
+func TestFilterToolsByAllowSetExcludesDeniedNames(t *testing.T)
+⋮----
+func TestFilterToolNamesMatchEffectiveAllowed(t *testing.T)
+⋮----
+var got []string
+⋮----
+func TestRenderedPromptListsOnlyEffectiveTools(t *testing.T)
+⋮----
+func TestResolvedRoundIncludesEvaluatorToolPolicyFields(t *testing.T)
+⋮----
+func sampleSpec() run.Spec
+</file>
+
 <file path="internal/app/round/evaluator.go">
 package round
 ⋮----
@@ -11033,6 +11251,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/cloudwego/eino/components/tool"
 
 	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
@@ -11048,6 +11268,8 @@ import (
 "sync"
 "time"
 ⋮----
+"github.com/cloudwego/eino/components/tool"
+⋮----
 evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 "github.com/becker63/searchbench-go/internal/app/round/internal/compare"
@@ -11060,11 +11282,9 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 type evaluatorExecutor struct {
 	modelFactory EvaluatorModelFactory
 	toolFactory  EvaluatorToolFactory
-	retryPolicy  evaluatoreino.RetryPolicy
-
-	mu      sync.Mutex
-	records []EvaluatorExecution
-}
+	allowedTools map[string]struct{}
+⋮----
+// evaluatorAppendix holds manifest-only evaluator text (e.g. systemPrompt).
 ⋮----
 func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error)
 ⋮----
@@ -11073,6 +11293,12 @@ func (e *evaluatorExecutor) recordExecution(spec run.Spec, result evaluatoreino.
 func (e *evaluatorExecutor) executions() []EvaluatorExecution
 ⋮----
 func roleForSpec(spec run.Spec) domain.Role
+⋮----
+func mergeEvaluatorAppendix(spec run.Spec, appendix run.EvaluatorRunAppendix) run.Spec
+⋮----
+func filterToolsByAllowSet(ctx context.Context, tools []tool.BaseTool, allow map[string]struct
+⋮----
+var out []tool.BaseTool
 </file>
 
 <file path="internal/app/round/phases_test.go">
@@ -12779,10 +13005,20 @@ import "github.com/becker63/searchbench-go/internal/pure/domain"
 // It should be deterministic and serializable. Runtime state belongs in
 // PreparedRun or ExecutedRun, not here.
 type Spec struct {
-	ID     domain.RunID      `json:"id"`
-	Match  domain.MatchSpec  `json:"match"`
-	System domain.SystemSpec `json:"system"`
+	ID                domain.RunID         `json:"id"`
+	Match             domain.MatchSpec     `json:"match"`
+	System            domain.SystemSpec    `json:"system"`
+	EvaluatorAppendix EvaluatorRunAppendix `json:"evaluator_appendix,omitempty"`
 }
+⋮----
+// EvaluatorRunAppendix carries manifest evaluator text that must reach the
+// evaluator prompt without altering SystemSpec (which is per policy role).
+type EvaluatorRunAppendix struct {
+	// SystemPrompt is optional manifest-controlled text (trimmed); escaped when rendered.
+	SystemPrompt string `json:"system_prompt,omitempty"`
+}
+⋮----
+// SystemPrompt is optional manifest-controlled text (trimmed); escaped when rendered.
 ⋮----
 // NewSpec constructs a planned run request from one match and one executable
 // system.

@@ -49,6 +49,19 @@ func ModelFactory(spec run.Spec) (model.ToolCallingChatModel, error) {
 	return &evaluatorModel{spec: spec}, nil
 }
 
+// LocalEvaluatorToolNames returns every tool name registered by ToolFactory (the
+// Available set for policy resolution), sorted lexically.
+func LocalEvaluatorToolNames() []string {
+	return []string{"expand", "resolve", "resolve_and_expand"}
+}
+
+// LocalEvaluatorDefaultAllowedToolNames is the base allow list when the manifest omits
+// evaluator.tools.allow. Each name must be a subset of LocalEvaluatorToolNames.
+// For the local fake, defaults match the full factory surface.
+func LocalEvaluatorDefaultAllowedToolNames() []string {
+	return []string{"expand", "resolve", "resolve_and_expand"}
+}
+
 // ToolFactory returns the deterministic fake repository tool set for a spec.
 func ToolFactory(spec run.Spec) ([]tool.BaseTool, error) {
 	return []tool.BaseTool{

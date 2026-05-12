@@ -181,10 +181,10 @@ func validateAgents(agents Agents) error {
 		if err := validateAgentModel(agents.Evaluator.Model); err != nil {
 			return err
 		}
-		if err := validateToolPolicy(agents.Evaluator.Tools); err != nil {
+		if err := validateToolPolicy("agents.evaluator.tools", agents.Evaluator.Tools); err != nil {
 			return err
 		}
-		if err := validateSystemPrompt(agents.Evaluator.SystemPrompt); err != nil {
+		if err := validateSystemPrompt("agents.evaluator.systemPrompt", agents.Evaluator.SystemPrompt); err != nil {
 			return err
 		}
 	}
@@ -192,10 +192,11 @@ func validateAgents(agents Agents) error {
 		if err := validateAgentModel(agents.Optimizer.Model); err != nil {
 			return err
 		}
-		if err := validateToolPolicy(agents.Optimizer.Tools); err != nil {
+		// Structural shape only: the optimizer agent has no tool registry enforcement yet.
+		if err := validateToolPolicy("agents.optimizer.tools", agents.Optimizer.Tools); err != nil {
 			return err
 		}
-		if err := validateSystemPrompt(agents.Optimizer.SystemPrompt); err != nil {
+		if err := validateSystemPrompt("agents.optimizer.systemPrompt", agents.Optimizer.SystemPrompt); err != nil {
 			return err
 		}
 	}
@@ -212,15 +213,15 @@ func validateAgentModel(model Model) error {
 	return nil
 }
 
-func validateToolPolicy(policy AgentToolPolicy) error {
+func validateToolPolicy(prefix string, policy AgentToolPolicy) error {
 	seenAllow := make(map[string]struct{}, len(policy.Allow))
 	for _, entry := range policy.Allow {
 		trimmed := strings.TrimSpace(entry)
 		if trimmed == "" {
-			return ErrToolAllowEntryEmpty
+			return fmt.Errorf("%s.allow contains empty tool name: %w", prefix, ErrToolAllowEntryEmpty)
 		}
 		if _, ok := seenAllow[trimmed]; ok {
-			return ErrToolAllowDuplicate
+			return fmt.Errorf("%s.allow contains duplicate tool %q: %w", prefix, trimmed, ErrToolAllowDuplicate)
 		}
 		seenAllow[trimmed] = struct{}{}
 	}
@@ -229,13 +230,13 @@ func validateToolPolicy(policy AgentToolPolicy) error {
 	for _, entry := range policy.Deny {
 		trimmed := strings.TrimSpace(entry)
 		if trimmed == "" {
-			return ErrToolDenyEntryEmpty
+			return fmt.Errorf("%s.deny contains empty tool name: %w", prefix, ErrToolDenyEntryEmpty)
 		}
 		if _, ok := seenDeny[trimmed]; ok {
-			return ErrToolDenyDuplicate
+			return fmt.Errorf("%s.deny contains duplicate tool %q: %w", prefix, trimmed, ErrToolDenyDuplicate)
 		}
 		if _, ok := seenAllow[trimmed]; ok {
-			return ErrToolPolicyOverlap
+			return fmt.Errorf("%s.deny overlaps %s.allow for tool %q: %w", prefix, prefix, trimmed, ErrToolPolicyOverlap)
 		}
 		seenDeny[trimmed] = struct{}{}
 	}
@@ -243,12 +244,12 @@ func validateToolPolicy(policy AgentToolPolicy) error {
 	return nil
 }
 
-func validateSystemPrompt(prompt *string) error {
+func validateSystemPrompt(fieldPath string, prompt *string) error {
 	if prompt == nil {
 		return nil
 	}
 	if len(*prompt) > maxSystemPromptBytes {
-		return ErrSystemPromptTooLarge
+		return fmt.Errorf("%s exceeds max length %d bytes: %w", fieldPath, maxSystemPromptBytes, ErrSystemPromptTooLarge)
 	}
 	return nil
 }

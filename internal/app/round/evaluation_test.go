@@ -171,6 +171,12 @@ func TestRoundWritesDurableBundle(t *testing.T) {
 	if got, want := resolved.Scoring.ObjectivePath, filepath.Join(repoRoot(t), "configs", "rounds", "local-ic-vs-jcodemunch", "scoring", "localization-objective.pkl"); got != want {
 		t.Fatalf("resolved objective path = %q, want %q", got, want)
 	}
+	if len(resolved.Evaluator.ToolPolicy.EffectiveAllowed) == 0 {
+		t.Fatalf("resolved evaluator effective tools = %v", resolved.Evaluator.ToolPolicy.EffectiveAllowed)
+	}
+	if resolved.Evaluator.ToolPolicy.PolicySHA256 == "" {
+		t.Fatal("resolved evaluator policy hash is empty")
+	}
 	if got := resolved.Output.ResolvedPolicyPaths.Challenger; got == "" {
 		t.Fatal("resolved challenger policy path is empty")
 	}

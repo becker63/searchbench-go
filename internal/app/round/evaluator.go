@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudwego/eino/components/tool"
+
 	evaluatoreino "github.com/becker63/searchbench-go/internal/agents/evaluator/eino"
 	evaluatorfake "github.com/becker63/searchbench-go/internal/agents/evaluator/fake"
 	"github.com/becker63/searchbench-go/internal/app/round/internal/compare"
@@ -16,9 +18,17 @@ import (
 )
 
 func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, error) {
+	allowedTools := make(map[string]struct{}, len(plan.Evaluator.ToolPolicy.EffectiveAllowed))
+	for _, name := range plan.Evaluator.ToolPolicy.EffectiveAllowed {
+		allowedTools[name] = struct{}{}
+	}
 	executor := &evaluatorExecutor{
 		modelFactory: request.EvaluatorModelFactory,
 		toolFactory:  request.EvaluatorToolFactory,
+		allowedTools: allowedTools,
+		evaluatorAppendix: run.EvaluatorRunAppendix{
+			SystemPrompt: plan.Evaluator.ToolPolicy.SystemPrompt,
+		},
 		retryPolicy: evaluatoreino.RetryPolicy{
 			MaxAttempts:                plan.Evaluator.Retry.MaxAttempts,
 			RetryOnModelError:          plan.Evaluator.Retry.RetryOnModelError,
@@ -55,13 +65,18 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 type evaluatorExecutor struct {
 	modelFactory EvaluatorModelFactory
 	toolFactory  EvaluatorToolFactory
-	retryPolicy  evaluatoreino.RetryPolicy
+	allowedTools map[string]struct{}
+	// evaluatorAppendix holds manifest-only evaluator text (e.g. systemPrompt).
+	evaluatorAppendix run.EvaluatorRunAppendix
+	retryPolicy       evaluatoreino.RetryPolicy
 
 	mu      sync.Mutex
 	records []EvaluatorExecution
 }
 
 func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.ExecutedRun, error) {
+	spec = mergeEvaluatorAppendix(spec, e.evaluatorAppendix)
+
 	modelFactory := e.modelFactory
 	if modelFactory == nil {
 		modelFactory = evaluatorfake.ModelFactory
@@ -79,6 +94,11 @@ func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.Exe
 	if err != nil {
 		return run.ExecutedRun{}, fmt.Errorf("local evaluator tools: %w", err)
 	}
+	filtered, ferr := filterToolsByAllowSet(ctx, tools, e.allowedTools)
+	if ferr != nil {
+		return run.ExecutedRun{}, ferr
+	}
+	tools = filtered
 
 	evaluator, err := evaluatoreino.New(evaluatoreino.Config{
 		Model:       model,
@@ -127,4 +147,38 @@ func roleForSpec(spec run.Spec) domain.Role {
 		return domain.RoleChallenger
 	}
 	return ""
+}
+
+func mergeEvaluatorAppendix(spec run.Spec, appendix run.EvaluatorRunAppendix) run.Spec {
+	if strings.TrimSpace(appendix.SystemPrompt) == "" {
+		return spec
+	}
+	out := spec
+	out.EvaluatorAppendix = run.EvaluatorRunAppendix{
+		SystemPrompt: strings.TrimSpace(appendix.SystemPrompt),
+	}
+	return out
+}
+
+func filterToolsByAllowSet(ctx context.Context, tools []tool.BaseTool, allow map[string]struct{}) ([]tool.BaseTool, error) {
+	if len(allow) == 0 {
+		return tools, nil
+	}
+	var out []tool.BaseTool
+	for i, t := range tools {
+		info, err := t.Info(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("local evaluator tools: tool %d info: %w", i, err)
+		}
+		if info == nil {
+			continue
+		}
+		if _, ok := allow[info.Name]; ok {
+			out = append(out, t)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("local evaluator tools: manifest tool policy excluded every registered tool")
+	}
+	return out, nil
 }

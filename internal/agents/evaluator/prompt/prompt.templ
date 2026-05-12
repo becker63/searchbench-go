@@ -1,9 +1,12 @@
 package prompt
 
-templ Prompt(in Input) {
+	templ Prompt(in Input) {
 	<searchbench-prompt>
 		<role>You are the SearchBench evaluator agent.</role>
 		<task>Use the available tools to localize the bug described by the issue.</task>
+		if in.SystemPrompt != "" {
+			<system-prompt>{ in.SystemPrompt }</system-prompt>
+		}
 		<match-id>{ in.MatchID }</match-id>
 		<repo>
 			<name>{ in.RepoName }</name>

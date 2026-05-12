@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 )
@@ -24,14 +25,15 @@ type Input struct {
 	IssueTitle       string
 	IssueBody        string
 	AllowedTools     []string
+	SystemPrompt     string
 	Constraints      []string
 	RetryFeedback    []string
 	OutputSchemaJSON string
 }
 
 // InputFromMatch projects the prompt-safe match data used by the evaluator
-// prompt.
-func InputFromMatch(task domain.MatchSpec, allowedTools []string) Input {
+// prompt. systemPrompt is optional; surrounding whitespace is ignored for rendering.
+func InputFromMatch(task domain.MatchSpec, allowedTools []string, systemPrompt string) Input {
 	tools := append([]string(nil), allowedTools...)
 	sort.Strings(tools)
 
@@ -44,6 +46,7 @@ func InputFromMatch(task domain.MatchSpec, allowedTools []string) Input {
 		IssueTitle:       task.Input.Title,
 		IssueBody:        task.Input.Body,
 		AllowedTools:     tools,
+		SystemPrompt:     strings.TrimSpace(systemPrompt),
 		Constraints:      constraints,
 		OutputSchemaJSON: OutputSchemaJSON,
 	}
