@@ -26,24 +26,14 @@ Each **issue** entry:
 
 ## Commands
 
-From `nix develop` (or any environment with the flake tools on `PATH`):
+There is **no** bundled publisher binary in this repo anymore. Use **`gh`** + **`jq`** from any shell with those tools on `PATH` (for example `nix shell nixpkgs#gh nixpkgs#jq -c bash`).
 
-```bash
-# Preview — no GitHub writes
-nix develop -c searchbench-publish-issue-wave --dry-run tooling/issue-wave.example.json
+Workflow sketch:
 
-# Create missing issues (skips open duplicates by title)
-nix develop -c searchbench-publish-issue-wave tooling/my-wave.json
+1. Validate the manifest JSON locally (`jq empty my-wave.json`).
+2. For each issue entry, compose `gh issue create` (or automate with a short script you keep locally).
 
-# Optional: gh issue develop for entries with parallel_safe: true
-nix develop -c searchbench-publish-issue-wave --develop tooling/my-wave.json
-```
-
-Flake app shortcut:
-
-```bash
-nix run .#publish-issue-wave -- --dry-run tooling/issue-wave.example.json
-```
+The historical wave JSON examples under `tooling/` remain valid input for whatever publisher you use.
 
 ## Safety notes
 

@@ -35,7 +35,7 @@ Commands are executed without `sh -c`, without raw `pytest`/`pyright` binaries o
 
 ## Discovering the submodule root
 
-By default the validator searches upward from the process working directory for `iterative-context/pyproject.toml`.
+By default the validator searches upward from the process working directory for `iterative-context/pyproject.toml` or `src/iterative-context/pyproject.toml`.
 
 Override explicitly with:
 

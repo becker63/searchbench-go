@@ -53,14 +53,15 @@ go build -o searchbench ./cmd/searchbench
 ### Nix (optional, recommended for agents)
 
 ```bash
-nix develop                    # dev shell + pre-commit + searchbench-* tools
-nix flake check                # sandboxed checks (no network — quick Nix/shell/format gate)
-nix develop -c searchbench-staticcheck
-nix develop -c searchbench-golangci
-nix develop -c searchbench-e2e
+nix develop                    # dev shell + pre-commit (Buck2 + hygiene)
+nix flake check                # sandboxed checks (no Buck — quick Nix/shell/format gate)
+nix develop -c buck2 test //:check
+nix develop -c buck2 test //:check_full
+cd src/searchbench-go && golangci-lint run ./...
+cd src/searchbench-go && go test -count=1 .
 ```
 
-See the root [`AGENTS.md`](../../AGENTS.md) for Git hook stages (**`git commit`** / **`git push`**), Repomix, and **`searchbench-*`** commands (debugging failed hooks only).
+See the root [`AGENTS.md`](../../AGENTS.md) for Git hook stages (**`git commit`** / **`git push`**) and Repomix.
 
 ---
 
@@ -77,4 +78,4 @@ Strict "Pure Center" layering: `pure/` has no external dependencies. `adapters/`
 ## User Preferences
 
 - CLI tool only — no web frontend
-- Build with `nix develop -c searchbench-go-build-root` or `go build -o searchbench ./cmd/searchbench`
+- Build with `go build -o searchbench ./cmd/searchbench` from `src/searchbench-go`, or `nix develop -c buck2 test //:check` to exercise the same aggregate the hooks use.

@@ -312,10 +312,10 @@ The point is to steadily convert hard-earned project understanding into contract
 
 For the toolchain and automation, use the flake-backed workflow in [`AGENTS.md`](../../AGENTS.md):
 
-- **`nix develop`** installs Git hooks; routine validation is **`git commit`** and **`git push`**, not a mental checklist of `searchbench-*` commands.
+- **`nix develop`** installs Git hooks; routine validation is **`git commit`** and **`git push`**, which run Repomix staging plus **`buck2 test //:check`** / **`buck2 test //:check_full`** — not a checklist of ad hoc shell wrappers.
 - **`nix develop -c pre-commit run --all-files`** reproduces the pre-commit hook set.
 - **`nix flake check`** is a fast, sandboxed, **non-mutating** gate (no network) — not a substitute for the full dev-shell hooks.
 - **Repomix** (`repomix-output.xml`) — deliberately committed for AI review; **`git commit`** (pre-commit) regenerates and stages it, **`git push`** (pre-push) regenerates again and **fails** if the snapshot is not already committed — see [`AGENTS.md`](../../AGENTS.md).
 - **Worktrees, task routing, and merge orchestration** for coding agents live in the **external meta harness**, not in this repository.
 
-Project automation lives in `nix/tools/` (wired from `flake.nix`); do not add a loose `scripts/` directory for SearchBench tooling.
+Project automation is **Buck-first**: targets under `src/**/BUCK`, root **`BUCK`**, and **`toolchains/`** (Nix cell + Repomix gate). The flake only instantiates the dev shell, git-hooks, and Buck’s `nix` cell — see **`AGENTS.md`** and **`docs/architecture/build-system.md`**.

@@ -1,0 +1,24 @@
+load("@prelude//:rules.bzl", "sh_test", "test_suite")
+
+sh_test(
+    name = "go_tests",
+    test = "go_tests.sh",
+)
+
+sh_test(
+    name = "go_cli_build",
+    test = "cli_build.sh",
+)
+
+sh_test(
+    name = "pkl_go_types",
+    test = "pkl_go_types.sh",
+)
+
+test_suite(
+    name = "check",
+    tests = [
+        ":go_tests",
+        ":go_cli_build",
+    ],
+)

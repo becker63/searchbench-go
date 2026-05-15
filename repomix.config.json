@@ -14,13 +14,21 @@
       ".direnv/**",
       ".pre-commit-config.yaml",
       "repomix-output.*",
+      "git-diff-export.patch",
+      "designing-for-two/**",
+      "src/iterative-context/repomix-output.xml",
+      "src/iterative-context/.venv/**",
+      "src/iterative-context/.hypothesis/**",
+      "src/iterative-context/.pytest_cache/**",
+      "src/iterative-context/.ruff_cache/**",
       "node_modules/**",
       "searchbench",
+      "src/searchbench-go/searchbench",
       "coverage.out",
       "*.test",
       "configs/rounds/*/artifacts/**",
       "attached_assets/**",
-      "internal/adapters/config/pkl/generated/**"
+      "src/searchbench-go/internal/adapters/config/pkl/generated/**"
     ]
   }
 }

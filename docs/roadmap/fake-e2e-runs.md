@@ -9,10 +9,10 @@ These paths prove **no-network / no-provider-credential** round execution: bundl
 | Fake-local CLI round | `go run ./cmd/searchbench run --manifest=configs/rounds/fake-local-e2e/round.pkl --bundle-root=<tmp>` (see `TestSearchBenchFakeLocalRoundRunCLIE2E`) | No | No MCP launcher vars; no LLM keys | Under `--bundle-root` (games layout) | `decision.json` in bundle | Covered by root `e2e_test.go` |
 | Fake-local engine round | `round.Run` with same manifest (see `TestSearchBenchFakeLocalRoundRunEngineE2E`) | No | Same | Same | Same | Covered by root `e2e_test.go` |
 | Example JC/IC manifest (smoke plumbing only) | `TestSearchBenchRoundRunCLIE2E`, `TestSearchBenchRoundRunEngineE2E` | No | MCP env empty → evaluator runs **fail**; bundle still written | Yes | Yes | Documents wiring only |
-| Backend guard (JC/IC require MCP env) | `go test ./internal/app/round -run TestFakeE2E_LocalManifestToolFactoryFailsWithoutMCPEnv` | No | No | — | — | **Honest failure** when launcher vars unset |
-| Backend audit (manifest declares JC/IC) | `go test ./internal/app/round -run TestFakeE2E_LocalManifestIncumbentUsesJCodeMunchBackend` | No | No | — | — | Documents `local-ic-vs-jcodemunch` |
-| Fake-local backend audit | `go test ./internal/app/round -run TestFakeE2E_FakeLocalManifestUsesFakeBackends` | No | No | — | — | Both sides `backend = fake` |
-| Usage honesty (evidence) | `go test ./internal/app/round -run TestProjectRoundEvidenceLeavesUsageUnavailableWhenRunsOmitUsage` | No | No | — | — | Usage stays **unavailable**, not fake-nonzero |
+| Backend guard (JC/IC require MCP env) | `cd src/searchbench-go && go test ./internal/app/round -run TestFakeE2E_LocalManifestToolFactoryFailsWithoutMCPEnv` | No | No | — | — | **Honest failure** when launcher vars unset |
+| Backend audit (manifest declares JC/IC) | `cd src/searchbench-go && go test ./internal/app/round -run TestFakeE2E_LocalManifestIncumbentUsesJCodeMunchBackend` | No | No | — | — | Documents `local-ic-vs-jcodemunch` |
+| Fake-local backend audit | `cd src/searchbench-go && go test ./internal/app/round -run TestFakeE2E_FakeLocalManifestUsesFakeBackends` | No | No | — | — | Both sides `backend = fake` |
+| Usage honesty (evidence) | `cd src/searchbench-go && go test ./internal/app/round -run TestProjectRoundEvidenceLeavesUsageUnavailableWhenRunsOmitUsage` | No | No | — | — | Usage stays **unavailable**, not fake-nonzero |
 | Optimizer smoke (continuation) | `configs/rounds/optimize-ic/round.pkl` amends a completed bundle; round tests stub `OptimizerValidateProposal` so CI does **not** execute the full IC `uv` gate suite | — | — | Parent bundle | — | Fast stub path; production CLI leaves validator unset → full pipeline (`docs/engineering/optimizer-policy-validation.md`) |
 
 ## Manifests
@@ -34,13 +34,14 @@ If the writer adds more files, update expectations only when the contract intent
 nix develop   # optional; preferred toolchain
 
 # Focused fake-local proof (requires `pkl` on PATH)
+cd src/searchbench-go
 go test ./... -run 'TestSearchBenchFakeLocal|TestFakeE2E_'
 
 # Full gate (matches CI helpers)
-nix develop -c searchbench-go-test-all
-nix develop -c searchbench-golangci
-nix develop -c searchbench-staticcheck
-nix develop -c searchbench-architecture-check
+nix develop -c buck2 test //:check
+cd src/searchbench-go && golangci-lint run ./...
+cd src/searchbench-go && staticcheck ./...
+cd src/searchbench-go && go test ./internal/architecture/...
 nix flake check
 ```
 

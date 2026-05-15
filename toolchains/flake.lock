@@ -1,0 +1,44 @@
+{
+  "nodes": {
+    "buck2-nix": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1756462063,
+        "narHash": "sha256-FIGJSsPLYmQCVU620vD6t2uVg84G2YEWQzahJO00kVY=",
+        "owner": "tweag",
+        "repo": "buck2.nix",
+        "rev": "038b031b84846101030b9d081445003e82e3be5c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tweag",
+        "repo": "buck2.nix",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1778443072,
+        "narHash": "sha256-zi7/fsqM/kFdNuED//4WOCUtezGtKKqRNORjMvfwjnA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "da5ad661ba4e5ef59ba743f0d112cbc30e474f32",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "buck2-nix": "buck2-nix",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

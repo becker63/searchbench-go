@@ -1,4 +1,7 @@
-iterative-context
+#iterative-context
+# Local diff exports (blog / notes)
+/git-diff-export.patch
+
 .codex
 .tmp/
 #repomix-output.xml
@@ -8,6 +11,8 @@ iterative-context
 /result
 /result-*
 /.direnv
+/buck-out/
+/.buckconfig.d/
 /searchbench
 /coverage.out
 /*.test

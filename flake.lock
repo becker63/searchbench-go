@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "buck2-nix": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1756462063,
+        "narHash": "sha256-FIGJSsPLYmQCVU620vD6t2uVg84G2YEWQzahJO00kVY=",
+        "owner": "tweag",
+        "repo": "buck2.nix",
+        "rev": "038b031b84846101030b9d081445003e82e3be5c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tweag",
+        "repo": "buck2.nix",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -95,6 +111,7 @@
     },
     "root": {
       "inputs": {
+        "buck2-nix": "buck2-nix",
         "flake-utils": "flake-utils",
         "git-hooks": "git-hooks",
         "nixpkgs": "nixpkgs"
