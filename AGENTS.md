@@ -10,7 +10,7 @@ Use everywhere: **Game → Round → Match → Evidence → Decision → NextCha
 
 Read in order:
 
-1. [docs/README.md](docs/README.md) — docs index
+1. [docs/index.md](docs/index.md) — docs index
 2. [docs/start-here.md](docs/start-here.md) — one-page orientation
 3. [docs/architecture.md](docs/architecture.md) — layers and boundaries
 4. [docs/development.md](docs/development.md) — validation commands
@@ -55,7 +55,7 @@ pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
 
 - Live MCP, LangSmith, provider execution, dataset materialization, visualization UI
 - Buck as a requirement for public `local_path` round runs
-- Rewriting `docs/reference/architecture-full.md` when a spine doc update suffices
+- Rewriting long research docs when a spine doc update suffices
 
 ## Key code paths (when implementing)
 

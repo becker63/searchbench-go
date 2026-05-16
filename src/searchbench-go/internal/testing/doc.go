@@ -3,7 +3,7 @@
 // It is the home for reusable helpers that support deterministic tests without
 // leaking test fixtures or external SDK details into the production packages.
 //
-// See docs/reference/model-testing.md for the current testing-tier contract
+// See docs/development.md for validation tiers and testing conventions.
 // and how execution-layer issues should consume the helpers under
 // internal/testing/modeltest.
 package testing

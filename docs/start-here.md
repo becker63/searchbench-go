@@ -1,48 +1,34 @@
 # Start here
 
-SearchBench tests **agent environments**: which tools, search interfaces, and configuration surfaces help the same agent perform better on a fixed benchmark slice.
+SearchBench tests **agent environments**: which tools, search interfaces, and configs help the **same agent** perform better on a fixed benchmark slice.
 
-Vocabulary and definitions: [concepts.md](./concepts.md). Product hook on the repo: [README.md](../README.md).
+**Work in progress** — research harness, not a polished platform. **First game:** code localization (bug-localization slices, symbol/code-search with lookahead).
 
-## What this repo is (today)
+## What you can run today
 
-- A **research / product workbench** for controlled rounds and durable **bundles**
-- **Infra-native** validation (Nix, Buck2, Pkl) for contributors
-- **First game:** code localization — bug-localization slices to compare symbol/code-search interfaces with lookahead
+From the repo root after building the CLI ([README § Run one local round](../README.md#run-one-local-round)):
 
-Not the default story yet: autonomous week-long interface optimization loops. Long term, agents may propose interface changes and SearchBench may evaluate them; today the focus is **comparable candidates** and **trustworthy evidence**.
-
-## How the pieces fit
-
-```text
-Pkl declares intent.
-Providers resolve source identity.
-Candidate workspaces isolate mutation.
-Validation proves the candidate.
-Runtime launches the accepted candidate.
-Bundles record what happened.
+```bash
+./searchbench run \
+  --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
+  --bundle-root="$(pwd)/.tmp-artifacts"
 ```
 
-| Layer | Role |
-| --- | --- |
-| **Pkl manifests** | Round intent: policies, backends, scoring, workspace seeds |
-| **Workspace seeds** | Where Iterative Context (or other backends) copy from before validation |
-| **Round app** | Compare incumbent vs challenger → evidence → decision → bundle |
-| **Agents** | Evaluator and optimizer; optional `NextChallenger` proposal |
-| **Bundles** | Durable round output; input for reports and visualization |
+Offline **fake-local** path (no live MCP or models). Contributor setup: [development.md](./development.md).
 
-## Run one local round
+## How a round works
 
-Copy-paste from the repo root (after build): [README § Run one local round](../README.md#run-one-local-round). Offline fake-local path. Validation: [development.md](./development.md).
+```text
+Pkl manifest → matches (evaluator) → evidence → objective → decision → bundle
+```
+
+Optional optimizer proposes a **NextChallenger** for a later round.
 
 ## Read next
 
-| Doc | When |
-| --- | --- |
-| [concepts.md](./concepts.md) | Game, Interface, dataset slice, Round, bundle |
-| [architecture.md](./architecture.md) | Package layers |
-| [development.md](./development.md) | Nix, Buck2, hooks |
-| [workspace-seeds.md](./workspace-seeds.md) | IC workspace providers |
-| [README.md](./README.md) | Docs index |
+1. [concepts.md](./concepts.md) — Game, Interface, Round, bundle, …
+2. [architecture.md](./architecture.md) — `pure` / `app` / `agents` / `adapters`
+3. [development.md](./development.md) — `nix develop`, `buck2 test //:check_full`
+4. [workspace-seeds.md](./workspace-seeds.md) — IC candidate workspaces
 
-Contributors: [AGENTS.md](../AGENTS.md).
+Docs home: [index.md](./index.md). Contributors: [AGENTS.md](../AGENTS.md).

@@ -31,7 +31,7 @@ Most benchmarks ask which **model** is better. SearchBench also asks which **int
 
 **Not yet:** stable public API, finished autonomous meta-harness, replacement for SWE-bench, polished SaaS.
 
-Broader thesis: [AGENT_INTERFACE_RESEARCH.md](AGENT_INTERFACE_RESEARCH.md) (research notes; not required to use the harness).
+Research: [docs/research/agent-interface-research.md](docs/research/agent-interface-research.md).
 
 ## Core vocabulary
 
@@ -67,8 +67,7 @@ Uses the **offline fake-local** path (no live MCP or model APIs). See [docs/star
 | --- | --- |
 | Everyone | [docs/start-here.md](docs/start-here.md) |
 | Contributors / agents | [AGENTS.md](AGENTS.md) |
-| Full index | [docs/README.md](docs/README.md) |
-| Docs site | [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/) |
+| Docs | [docs/index.md](docs/index.md) · [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/) |
 
 ## Requirements (summary)
 

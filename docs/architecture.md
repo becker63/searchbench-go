@@ -1,72 +1,44 @@
 # Architecture
 
-SearchBench is a **generic evaluation harness**: games wrap benchmark task families; rounds compare interfaces on a dataset slice; bundles capture evidence. The first implemented game is **code localization** (symbol/code-search with lookahead). Package layout below is how the harness is built today — not the product pitch; see [concepts.md](./concepts.md) and [README.md](../README.md).
-
-SearchBench keeps deterministic model code pure, orchestrates rounds in `app`, colocates agent behavior under `agents`, and pushes filesystem/MCP/Pkl edges into `adapters` and `surface`.
+Generic harness shape: **Game** → dataset slice → incumbent vs challenger → **bundle**. First game implemented: **code localization**. Code layout:
 
 ```text
-pure      stable SearchBench model
-ports     project-owned contracts
-app       round lifecycle orchestration
-agents    evaluator + optimizer (prompt, Eino, policy)
-adapters  config, bundles, pipelines, scoring execution
-surface   CLI and human presentation
-games     concrete game wiring (e.g. code localization)
+pure      model (Game, Round, Match, evidence, scores)
+ports     shared contracts (e.g. pipeline steps)
+app       round orchestration (internal/app/round)
+agents    evaluator + optimizer (must not import app)
+adapters  Pkl config, FS bundles, subprocess pipelines
+surface   CLI
+games     game wiring (e.g. code localization)
 ```
-
-Dependency direction:
 
 ```text
-surface / app / adapters / agents
-    → ports (where shared)
-    → pure
+surface / app / adapters / agents  →  ports  →  pure
 ```
-
-`agents` does **not** import `app`; `app/round` composes agents.
 
 ## Round lifecycle
 
-Primary orchestration: `src/searchbench-go/internal/app/round`
+`src/searchbench-go/internal/app/round`:
 
 ```text
-resolve manifest (Pkl)
-  → run matches (evaluator)
-  → evidence + objective (pure + scoring adapters)
-  → decision
-  → persist bundle (adapters/bundle)
+resolve Pkl manifest → run matches → evidence + objective → decision → bundle
   → optional NextChallenger (optimizer)
 ```
 
-## IC optimizer path
+IC optimizer path: [workspace-seeds.md](./workspace-seeds.md) → `ValidateProposalInWorkspace` → MCP launch from the validated workspace.
 
-For Iterative Context selection policies:
+## Buck2
 
-```text
-WorkspaceSeedProvider → WorkspaceSeed → ICCandidateWorkspace
-  → ValidateProposalInWorkspace → AcceptedICCandidate → MCP launch
-```
+Contributor operation graph: `//:check`, `//:check_full`, `//docs:check`, IC `//src/iterative-context:check*`. Not required for public `local_path` round runs.
 
-See [workspace-seeds.md](./workspace-seeds.md).
-
-## Buck in the repo
-
-Buck2 is the **repo operation graph** for contributors: `//:check`, `//:check_full`, IC `//src/iterative-context:check*`, and the optimizable backend descriptor target. It is not required for public round runs that use `local_path` seeds only.
-
-## Boundaries (enforced)
-
-Import rules: `src/searchbench-go/internal/architecture/imports_test.go`. Package ownership and dependency rules: [reference/package-boundaries.md](./reference/package-boundaries.md).
-
-Do not add live MCP, LangSmith, provider execution, or visualization UI unless the task explicitly requires it.
-
-## Reference docs
+## Reference
 
 | Topic | Doc |
 | --- | --- |
-| Full architecture narrative | [reference/architecture-full.md](./reference/architecture-full.md) |
-| Package import rules | [reference/package-boundaries.md](./reference/package-boundaries.md) |
-| Integration / adapter map | [reference/integration-shape.md](./reference/integration-shape.md) |
-| Pkl round manifests | [reference/pkl-round-manifests.md](./reference/pkl-round-manifests.md) |
-| Pkl scoring | [reference/pkl-scoring-interface.md](./reference/pkl-scoring-interface.md) |
-| Build system detail | [reference/build-system.md](./reference/build-system.md) |
-| Visualization plan | [reference/visualization.md](./reference/visualization.md) |
-| LangSmith | [reference/langsmith-integration.md](./reference/langsmith-integration.md) |
+| Import rules | [reference/package-boundaries.md](./reference/package-boundaries.md) |
+| Pkl rounds | [reference/pkl-rounds.md](./reference/pkl-rounds.md) |
+| Pkl objectives | [reference/pkl-objectives.md](./reference/pkl-objectives.md) |
+| Bundles | [reference/bundles.md](./reference/bundles.md) |
+| IC optimizer pipeline | [reference/optimizer-policy-validation.md](./reference/optimizer-policy-validation.md) |
+
+Enforced by `src/searchbench-go/internal/architecture/imports_test.go`.

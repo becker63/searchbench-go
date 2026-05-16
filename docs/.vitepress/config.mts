@@ -4,14 +4,15 @@ export default defineConfig({
   title: "SearchBench",
   description: "Release evidence for agent and tool candidates",
   base: "/searchbench-go/",
-  // Plain Markdown links to repo-root files (AGENTS.md, ../README) stay valid on GitHub.
   ignoreDeadLinks: true,
   srcExclude: [
-    "**/archive/blog-diff-candidates/full-diffs/**",
-    "**/archive/blog-diff-candidates/_embed_patches.py",
+    "**/README.md",
+    "architecture/**",
+    "engineering/**",
   ],
   themeConfig: {
     nav: [
+      { text: "Home", link: "/" },
       { text: "Start", link: "/start-here" },
       { text: "Concepts", link: "/concepts" },
       { text: "Architecture", link: "/architecture" },
@@ -26,25 +27,24 @@ export default defineConfig({
           { text: "Architecture", link: "/architecture" },
           { text: "Development", link: "/development" },
           { text: "Workspace seeds", link: "/workspace-seeds" },
-          { text: "Docs index", link: "/README" },
         ],
       },
       {
         text: "Reference",
         items: [
           { text: "Package boundaries", link: "/reference/package-boundaries" },
-          { text: "Architecture (full)", link: "/reference/architecture-full" },
-          { text: "Integration shape", link: "/reference/integration-shape" },
-          { text: "Build system", link: "/reference/build-system" },
-          { text: "Pkl round manifests", link: "/reference/pkl-round-manifests" },
-          { text: "Pkl scoring", link: "/reference/pkl-scoring-interface" },
+          { text: "Pkl rounds", link: "/reference/pkl-rounds" },
+          { text: "Pkl objectives", link: "/reference/pkl-objectives" },
+          { text: "Bundles", link: "/reference/bundles" },
           { text: "Optimizer policy validation", link: "/reference/optimizer-policy-validation" },
-          { text: "LangSmith", link: "/reference/langsmith-integration" },
         ],
       },
       {
-        text: "Archive",
-        items: [{ text: "Archive index", link: "/archive/README" }],
+        text: "Research",
+        items: [
+          { text: "Agent interface research", link: "/research/agent-interface-research" },
+          { text: "Buck / work-graph (research)", link: "/research/bxl-meta-harness" },
+        ],
       },
     ],
     socialLinks: [

@@ -1,41 +1,35 @@
-# SearchBench documentation
+# SearchBench docs
 
 **Test the interfaces your coding agents use.**
 
-SearchBench is a work-in-progress harness for evaluating agent-facing interfaces over benchmark tasks. It is **not** a mature public API yet.
+SearchBench is a **work-in-progress** harness for evaluating agent-facing interfaces over benchmark tasks — not a stable public API yet. It wraps benchmark families as **games**, compares **incumbent** vs **challenger** interfaces on the same dataset slice, and records **bundles** for promote / review / reject decisions.
 
-## What SearchBench is for
-
-Most benchmarks ask which **model** is better.
-
-SearchBench asks which **interface** makes the **same model** behave better — tools, code-search backends, MCP servers, graph lookahead, configs, and validation surfaces.
-
-The **first game** is **code localization**: bug-localization dataset slices stress **symbol/code-search interfaces with lookahead**. The same `Game` model is intended to wrap other benchmark families later (for example SWE-bench-style issue resolution); those are directions, not shipped products today.
+The **first game** is **code localization** (symbol/code-search with lookahead on bug-localization slices). Other task families are research directions, not shipped products.
 
 ```text
 Game → Round → Match → Evidence → Decision → NextChallenger
 ```
 
-```text
-Bug-localization dataset slice
-  → Code-localization game
-  → Symbol/search interface candidate
-  → Agent run
-  → Predicted files
-  → Evidence bundle
-  → Decision
-```
+## Read next
 
-Research thesis (long form): [AGENT_INTERFACE_RESEARCH.md](https://github.com/becker63/searchbench-go/blob/main/AGENT_INTERFACE_RESEARCH.md) on GitHub.
+| Doc | Purpose |
+| --- | --- |
+| [Start here](./start-here.md) | Fast orientation and one local round |
+| [Concepts](./concepts.md) | Vocabulary |
+| [Architecture](./architecture.md) | Package layers and round lifecycle |
+| [Development](./development.md) | Nix, Buck2, Go, hooks, docs build |
+| [Workspace seeds](./workspace-seeds.md) | `local_path` vs `buck_descriptor` |
 
-## Start here
+## Reference
 
-- [Start here](./start-here.md) — orientation and one local round
-- [Concepts](./concepts.md) — Game, Interface, Round, Evidence, …
-- [Architecture](./architecture.md) — layers and lifecycle
-- [Development](./development.md) — Nix, Buck2, Go, validation
-- [Workspace seeds](./workspace-seeds.md) — `local_path` vs `buck_descriptor`
+Implementation detail: [reference/package-boundaries.md](./reference/package-boundaries.md), [reference/pkl-rounds.md](./reference/pkl-rounds.md), [reference/pkl-objectives.md](./reference/pkl-objectives.md), [reference/bundles.md](./reference/bundles.md), [reference/optimizer-policy-validation.md](./reference/optimizer-policy-validation.md).
 
-Full index: [Docs README](./README.md).
+## Research
 
-Contributors: [AGENTS.md](https://github.com/becker63/searchbench-go/blob/main/AGENTS.md).
+Long-form thesis and experiments: [research/agent-interface-research.md](./research/agent-interface-research.md), [research/bxl-meta-harness.md](./research/bxl-meta-harness.md).
+
+## Links
+
+- [Repository](https://github.com/becker63/searchbench-go)
+- [Hosted docs](https://becker63.github.io/searchbench-go/)
+- [Contributors: AGENTS.md](../AGENTS.md)
