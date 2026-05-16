@@ -93,6 +93,74 @@ func TestMaterializeCleanupRemovesWorkspace(t *testing.T) {
 	}
 }
 
+func TestMaterializeUniqueWorkspaceIDsPerMaterialization(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	mustWrite(t, filepath.Join(src, "pyproject.toml"), "x\n")
+	seed := optimizer.WorkspaceSeed{
+		ID:   "seed-unique",
+		Kind: optimizer.SeedKindLocalPath,
+		Root: src,
+		Identity: optimizer.WorkspaceSeedIdentity{
+			Provider: optimizer.SeedProviderLocalPath,
+			Source:   src,
+			Sha256:   "abc",
+		},
+	}
+	mat := materialize.CandidateMaterializer{}
+	ws1, cleanup1, err := mat.Materialize(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cleanup1() }()
+	ws2, cleanup2, err := mat.Materialize(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cleanup2() }()
+	if ws1.ID == ws2.ID {
+		t.Fatal("candidate workspace IDs must be unique per materialization")
+	}
+	if ws1.Root == ws2.Root {
+		t.Fatal("candidate workspace roots must differ")
+	}
+	if ws1.Seed != ws2.Seed {
+		t.Fatal("seed identity should remain stable across materializations")
+	}
+}
+
+func TestMaterializePreservesExecutableFileMode(t *testing.T) {
+	t.Parallel()
+	src := t.TempDir()
+	script := filepath.Join(src, "buck_pytest.sh")
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env bash\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seed := optimizer.WorkspaceSeed{
+		ID:   "seed-mode",
+		Kind: optimizer.SeedKindLocalPath,
+		Root: src,
+		Identity: optimizer.WorkspaceSeedIdentity{
+			Provider: optimizer.SeedProviderLocalPath,
+			Source:   src,
+			Sha256:   "abc",
+		},
+	}
+	mat := materialize.CandidateMaterializer{}
+	ws, cleanup, err := mat.Materialize(seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cleanup() }()
+	info, err := os.Stat(filepath.Join(ws.Root, "buck_pytest.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("mode = %o, want 0755", info.Mode().Perm())
+	}
+}
+
 func TestMaterializeKeepPreservesWorkspace(t *testing.T) {
 	t.Parallel()
 	src := t.TempDir()

@@ -55,7 +55,7 @@ func (m *CandidateMaterializer) Materialize(seed optimizer.WorkspaceSeed) (optim
 		return optimizer.ICCandidateWorkspace{}, nil, err
 	}
 	ws := optimizer.ICCandidateWorkspace{
-		ID:   seed.ID,
+		ID:   candidateWorkspaceID(seed.ID, dest),
 		Root: dest,
 		Seed: seed.Identity,
 	}
@@ -98,17 +98,32 @@ func copyTree(srcRoot, destRoot string) error {
 	})
 }
 
+func candidateWorkspaceID(seedID, dest string) string {
+	base := filepath.Base(dest)
+	if base == "" || base == "." {
+		base = "candidate"
+	}
+	return seedID + "-" + base
+}
+
 func copyFile(src, dest string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	mode := info.Mode().Perm()
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	out, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return os.Chmod(dest, mode)
 }

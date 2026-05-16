@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-
-	"github.com/becker63/searchbench-go/internal/ports/pipeline"
 )
 
 // Workspace seed kinds supported by the IC candidate lifecycle.
@@ -117,28 +115,11 @@ type PipelineValidationResult struct {
 
 // PipelineStepResult is one IC policy pipeline step outcome.
 type PipelineStepResult struct {
-	Name    string `json:"name"`
-	Passed  bool   `json:"passed"`
-	CWD     string `json:"cwd,omitempty"`
-	Command string `json:"command,omitempty"`
-}
-
-// FromPortSteps maps ports/pipeline step results into lifecycle records.
-func FromPortSteps(results []pipeline.StepResult) PipelineValidationResult {
-	steps := make([]PipelineStepResult, 0, len(results))
-	ok := true
-	for _, r := range results {
-		if r.Failed() {
-			ok = false
-		}
-		steps = append(steps, PipelineStepResult{
-			Name:    r.Name,
-			Passed:  r.Passed,
-			CWD:     r.CWD,
-			Command: r.CommandString(),
-		})
-	}
-	return PipelineValidationResult{OK: ok, Steps: steps}
+	Name     string `json:"name"`
+	Passed   bool   `json:"passed"`
+	CWD      string `json:"cwd,omitempty"`
+	Command  string `json:"command,omitempty"`
+	ExitCode int    `json:"exit_code,omitempty"`
 }
 
 // ICLaunchSpec describes how to start an IC MCP server for an accepted candidate.

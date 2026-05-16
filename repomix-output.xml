@@ -384,6 +384,8 @@ src/
             candidate_pipeline.go
             canonical.go
             ic_root.go
+            pipeline_validation_test.go
+            pipeline_validation.go
             validate_ic.go
             validate_router_test.go
             validate.go
@@ -10954,6 +10956,12 @@ WorkspaceSeedProvider
 ```
 
 Invariant: **the workspace that passes validation is the workspace whose MCP server launches.**
+
+### Seed identity vs candidate workspace identity
+
+`WorkspaceSeedIdentity` is stable across materializations from the same source (provider, source label, tree digest).
+
+`ICCandidateWorkspace.ID` identifies one concrete mutable workspace instance and is unique per materialization (for example `seed-id` + temp directory basename). Evidence can distinguish “same seed, different candidate attempt.”
 
 ## `local_path`
 
@@ -24565,6 +24573,10 @@ func TestMaterializeCopiesAndExcludes(t *testing.T)
 ⋮----
 func TestMaterializeCleanupRemovesWorkspace(t *testing.T)
 ⋮----
+func TestMaterializeUniqueWorkspaceIDsPerMaterialization(t *testing.T)
+⋮----
+func TestMaterializePreservesExecutableFileMode(t *testing.T)
+⋮----
 func TestMaterializeKeepPreservesWorkspace(t *testing.T)
 ⋮----
 func mustWrite(t *testing.T, path, content string)
@@ -24615,6 +24627,8 @@ func (m *CandidateMaterializer) Materialize(seed optimizer.WorkspaceSeed) (optim
 // buck_descriptor Level-2 seeds still point at local_path roots.
 ⋮----
 func copyTree(srcRoot, destRoot string) error
+⋮----
+func candidateWorkspaceID(seedID, dest string) string
 ⋮----
 func copyFile(src, dest string) error
 </file>
@@ -26407,6 +26421,39 @@ import (
 // ResolveIterativeContextRoot finds the iterative-context submodule checkout.
 // SEARCHBENCH_ITERATIVE_CONTEXT_ROOT overrides discovery.
 func ResolveIterativeContextRoot() (string, error)
+</file>
+
+<file path="src/searchbench-go/internal/agents/optimizer/policy/pipeline_validation_test.go">
+package policy_test
+⋮----
+import (
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
+	"github.com/becker63/searchbench-go/internal/ports/pipeline"
+)
+⋮----
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
+"github.com/becker63/searchbench-go/internal/ports/pipeline"
+⋮----
+func TestPipelineValidationFromPortSteps(t *testing.T)
+</file>
+
+<file path="src/searchbench-go/internal/agents/optimizer/policy/pipeline_validation.go">
+package policy
+⋮----
+import (
+	"github.com/becker63/searchbench-go/internal/ports/pipeline"
+	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+)
+⋮----
+"github.com/becker63/searchbench-go/internal/ports/pipeline"
+pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
+⋮----
+// PipelineValidationFromPortSteps maps ports/pipeline step results into pure optimizer records.
+func PipelineValidationFromPortSteps(results []pipeline.StepResult) pureoptimizer.PipelineValidationResult
 </file>
 
 <file path="src/searchbench-go/internal/agents/optimizer/policy/validate_ic.go">
@@ -30671,16 +30718,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-
-	"github.com/becker63/searchbench-go/internal/ports/pipeline"
 )
 ⋮----
 "crypto/sha256"
 "encoding/hex"
 "fmt"
 "strings"
-⋮----
-"github.com/becker63/searchbench-go/internal/ports/pipeline"
 ⋮----
 // Workspace seed kinds supported by the IC candidate lifecycle.
 const (
@@ -30749,14 +30792,12 @@ type PipelineValidationResult struct {
 ⋮----
 // PipelineStepResult is one IC policy pipeline step outcome.
 type PipelineStepResult struct {
-	Name    string `json:"name"`
-	Passed  bool   `json:"passed"`
-	CWD     string `json:"cwd,omitempty"`
-	Command string `json:"command,omitempty"`
+	Name     string `json:"name"`
+	Passed   bool   `json:"passed"`
+	CWD      string `json:"cwd,omitempty"`
+	Command  string `json:"command,omitempty"`
+	ExitCode int    `json:"exit_code,omitempty"`
 }
-⋮----
-// FromPortSteps maps ports/pipeline step results into lifecycle records.
-func FromPortSteps(results []pipeline.StepResult) PipelineValidationResult
 ⋮----
 // ICLaunchSpec describes how to start an IC MCP server for an accepted candidate.
 type ICLaunchSpec struct {

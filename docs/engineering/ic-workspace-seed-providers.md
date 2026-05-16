@@ -15,6 +15,12 @@ WorkspaceSeedProvider
 
 Invariant: **the workspace that passes validation is the workspace whose MCP server launches.**
 
+### Seed identity vs candidate workspace identity
+
+`WorkspaceSeedIdentity` is stable across materializations from the same source (provider, source label, tree digest).
+
+`ICCandidateWorkspace.ID` identifies one concrete mutable workspace instance and is unique per materialization (for example `seed-id` + temp directory basename). Evidence can distinguish “same seed, different candidate attempt.”
+
 ## `local_path`
 
 ### When to use
