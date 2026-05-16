@@ -95,7 +95,7 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Paths:** `flake.nix`, `BUCK`, `toolchains/`, `package.json` (VitePress)
 
-**Owns:** `nix develop` dev shell; **git-hooks.nix** hook installation; Buck gates (`//:check`, `//:check_full`, `//tooling:repomix`, `//tooling:repomix_fresh_check`, `//docs:check`).
+**Owns:** `nix develop` dev shell; **git-hooks.nix** hook installation; Buck gates (`//:check`, `//:check_full`, `//docs:check`).
 
 **Split:**
 

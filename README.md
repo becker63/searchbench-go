@@ -137,7 +137,7 @@ buck2 test //:check
 buck2 test //:check_full
 ```
 
-`git commit` runs the fast gate. `git push` runs the full gate. The full gate covers the Go harness, Iterative Context checks, docs build, generated Pkl binding freshness, and Repomix freshness.
+`git commit` runs the fast gate. `git push` runs the full gate. The full gate covers the Go harness, Iterative Context checks, docs build, and generated Pkl binding freshness.
 
 ## Why this matters
 
@@ -161,7 +161,6 @@ The bet is simple: better interfaces can make agents more reliable, more inspect
 | `src/searchbench-go/` | Go harness: games, rounds, scoring, bundles, CLI |
 | `src/iterative-context/` | Python MCP/code-search backend used as a challenger interface |
 | `docs/` | Product docs, reference docs, and research notes |
-| `tooling/` | Repo lifecycle tools such as Repomix |
 | `BUCK` | Root Buck gates: `//:check`, `//:check_full` |
 
 ## Read next

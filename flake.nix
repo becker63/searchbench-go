@@ -25,16 +25,14 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
-        # Matches AGENTS.md: on commit, refresh Repomix snapshot then run the fast Buck gate.
-        repomixThenBuckCheck = pkgs.writeShellApplication {
-          name = "repomix-then-buck-check";
+        buckCheck = pkgs.writeShellApplication {
+          name = "buck-check";
           runtimeInputs = [
             pkgs.buck2
           ];
           text = ''
             set -euo pipefail
             cd "$(git rev-parse --show-toplevel)"
-            buck2 build //tooling:repomix
             exec buck2 test //:check
           '';
         };
@@ -66,7 +64,6 @@
           trim-trailing-whitespace = {
             enable = true;
             excludes = [
-              "^repomix-output\\.xml$"
               "^configs/rounds/.*/artifacts/"
               "^attached_assets/"
             ];
@@ -74,7 +71,6 @@
           end-of-file-fixer = {
             enable = true;
             excludes = [
-              "^repomix-output\\.xml$"
               "^testdata/"
               "^configs/rounds/.*/artifacts/"
               "^attached_assets/"
@@ -89,10 +85,10 @@
         };
 
         devHooks = flakeCheckHooks // {
-          repomix-then-buck-check = {
+          buck2-check = {
             enable = true;
-            name = "buck2 build //tooling:repomix + buck2 test //:check";
-            entry = "${repomixThenBuckCheck}/bin/repomix-then-buck-check";
+            name = "buck2 test //:check";
+            entry = "${buckCheck}/bin/buck-check";
             pass_filenames = false;
           };
 
@@ -141,7 +137,6 @@
               buck2
               nixfmt
               templ
-              repomix
               nodejs_22
             ])
             ++ preCommitDev.enabledPackages;

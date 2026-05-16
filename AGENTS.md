@@ -38,13 +38,13 @@ nix develop
 buck2 test //:check_full
 ```
 
-Or **`git commit`** (`buck2 build //tooling:repomix` + `buck2 test //:check`) and **`git push`** (`buck2 test //:check_full`) after `nix develop`.
+Or **`git commit`** (`buck2 test //:check`) and **`git push`** (`buck2 test //:check_full`) after `nix develop`.
 
 Targeted checks: `buck2 test //src/searchbench-go:check`, `buck2 test //src/iterative-context:check_full`, `buck2 test //docs:check`.
 
 Pkl schema change: `buck2 build //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`.
 
-Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `npm`, `pkl`, `repomix` are debugging fallbacks only.
+Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `npm`, and `pkl` are debugging fallbacks only.
 
 ## Non-goals (unless the task explicitly asks)
 

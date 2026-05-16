@@ -4,7 +4,8 @@
 
 .codex
 .tmp/
-#repomix-output.xml
+/repomix-output.xml
+/repomix.config.json
 
 # Nix & local tooling (issue #36)
 /.pre-commit-config.yaml
