@@ -27,7 +27,7 @@ resolve Pkl manifest → run matches → evidence + objective → decision → b
   → optional NextChallenger (optimizer)
 ```
 
-IC optimizer path: [workspace-seeds.md](./workspace-seeds.md) → `ValidateProposalInWorkspace` → MCP launch from the validated workspace.
+IC optimizer path: [candidate-workspaces.md](./candidate-workspaces.md) → `ValidateProposalInWorkspace` → MCP launch from the validated workspace.
 
 ## Buck2
 

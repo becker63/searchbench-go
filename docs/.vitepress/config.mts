@@ -27,7 +27,7 @@ export default defineConfig({
           { text: "Components", link: "/components" },
           { text: "Architecture", link: "/architecture" },
           { text: "Development", link: "/development" },
-          { text: "Workspace seeds", link: "/workspace-seeds" },
+          { text: "Candidate workspaces", link: "/candidate-workspaces" },
         ],
       },
       {

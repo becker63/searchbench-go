@@ -20,7 +20,7 @@ Typical manifest fields include round identity, game binding, dataset/match sele
 
 ## Workspace seeds
 
-`runtime.workspaceSeed` — `local_path` or `buck_descriptor`. Details: [../workspace-seeds.md](../workspace-seeds.md).
+`runtime.workspaceSeed` — `local_path` or `buck_descriptor`. Details: [../candidate-workspaces.md](../candidate-workspaces.md).
 
 ## Regenerate Go bindings
 

@@ -19,7 +19,7 @@ Game → Round → Match → Evidence → Decision → NextChallenger
 | [Components](./components.md) | Monorepo source trees — what each path owns |
 | [Architecture](./architecture.md) | Go package layers and round lifecycle |
 | [Development](./development.md) | Nix, Buck2, Go, hooks, docs build |
-| [Workspace seeds](./workspace-seeds.md) | `local_path` vs `buck_descriptor` |
+| [Candidate workspaces](./candidate-workspaces.md) | Sandboxing, validation, launch, seed providers |
 
 ## Reference
 

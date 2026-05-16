@@ -30,6 +30,6 @@ Optional optimizer proposes a **NextChallenger** for a later round.
 2. [components.md](./components.md) — `src/searchbench-go`, `src/iterative-context`, …
 3. [architecture.md](./architecture.md) — `pure` / `app` / `agents` / `adapters`
 4. [development.md](./development.md) — `nix develop`, `buck2 test //:check_full`
-5. [workspace-seeds.md](./workspace-seeds.md) — IC candidate workspaces
+5. [candidate-workspaces.md](./candidate-workspaces.md) — isolated candidate sandboxing
 
 Docs home: [index.md](./index.md). Contributors: [AGENTS.md](../AGENTS.md).

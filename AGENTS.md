@@ -56,7 +56,7 @@ Prefer **Buck targets** over raw commands; see [docs/development.md](docs/develo
 
 - Round lifecycle: `src/searchbench-go/internal/app/round`
 - Schema: `configs/schema/SearchBenchRound.pkl`
-- IC validation: `src/searchbench-go/internal/agents/optimizer/policy/`, [docs/workspace-seeds.md](docs/workspace-seeds.md)
+- IC validation: `src/searchbench-go/internal/agents/optimizer/policy/`, [docs/candidate-workspaces.md](docs/candidate-workspaces.md)
 - Buck gates: root `BUCK` — `//:check`, `//:check_full`
 
 External meta-harness owns worktrees and merge orchestration outside this repo.

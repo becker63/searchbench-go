@@ -31,7 +31,7 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Must not own:** External meta-harness worktree orchestration; Iterative Context Python internals; visualization UI; live provider calls in deterministic CI gates.
 
-**Key docs:** [architecture.md](./architecture.md), [reference/package-boundaries.md](./reference/package-boundaries.md), [workspace-seeds.md](./workspace-seeds.md), [development.md](./development.md).
+**Key docs:** [architecture.md](./architecture.md), [reference/package-boundaries.md](./reference/package-boundaries.md), [candidate-workspaces.md](./candidate-workspaces.md), [development.md](./development.md).
 
 **Validation:** `buck2 test //src/searchbench-go:check` · Pkl regen: `buck2 build //src/searchbench-go:pkl_go_types`
 
@@ -47,7 +47,7 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Must not own:** SearchBench scoring or decisions; bundle layout; public round manifest schema.
 
-**Key docs:** [workspace-seeds.md](./workspace-seeds.md), [development.md](./development.md).
+**Key docs:** [candidate-workspaces.md](./candidate-workspaces.md), [development.md](./development.md).
 
 **Validation:** `buck2 test //src/iterative-context:check` · `buck2 test //src/iterative-context:check_full`
 
