@@ -34,23 +34,17 @@ Enforced by `src/searchbench-go/internal/architecture/imports_test.go`. Details:
 ## Validation (required before handoff)
 
 ```bash
-nix develop   # once per shell
-cd src/searchbench-go && go test ./...
-# from repo root:
-nix develop -c buck2 test //:check_full
+nix develop
+buck2 test //:check_full
 ```
 
-Or rely on **`git commit`** (`//:check`) and **`git push`** (`//:check_full`, includes `//docs:check`) after `nix develop`.
+Or **`git commit`** (`buck2 build //tooling:repomix` + `buck2 test //:check`) and **`git push`** (`buck2 test //:check_full`) after `nix develop`.
 
-Docs site: `npm run docs:dev` / `npm run docs:build`; `buck2 test //docs:check`. GitHub Pages deploys from `main` (not from local hooks).
+Targeted checks: `buck2 test //src/searchbench-go:check`, `buck2 test //src/iterative-context:check_full`, `buck2 test //docs:check`.
 
-Pkl schema change — regenerate bindings:
+Pkl schema change: `buck2 build //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`.
 
-```bash
-cd src/searchbench-go
-pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
-  --output-path=. ../../configs/schema/SearchBenchRound.pkl
-```
+Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `npm`, `pkl`, `repomix` are debugging fallbacks only.
 
 ## Non-goals (unless the task explicitly asks)
 

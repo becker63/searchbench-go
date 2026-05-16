@@ -8,7 +8,7 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 | Component | Path | Role | Language | Main proof |
 | --- | --- | --- | --- | --- |
-| SearchBench-Go | `src/searchbench-go/` | Harness, round execution, bundles, config adapters | Go | `cd src/searchbench-go && go test ./...` |
+| SearchBench-Go | `src/searchbench-go/` | Harness, round execution, bundles, config adapters | Go | `buck2 test //src/searchbench-go:check` |
 | Iterative Context | `src/iterative-context/` | MCP / code-search backend and IC policy surface | Python | `buck2 test //src/iterative-context:check_full` |
 | Visualization | *not in repo yet* | Bundle/trace replay and evidence inspection | TBD | TBD |
 | Configs | `configs/` | Pkl schema and round/objective manifests | Pkl | `buck2 test //:check_full` |
@@ -33,13 +33,7 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Key docs:** [architecture.md](./architecture.md), [reference/package-boundaries.md](./reference/package-boundaries.md), [workspace-seeds.md](./workspace-seeds.md), [development.md](./development.md).
 
-**Validation:**
-
-```bash
-cd src/searchbench-go && go test ./...
-nix develop -c buck2 test //src/searchbench-go:check
-nix develop -c buck2 test //:check_full
-```
+**Validation:** `buck2 test //src/searchbench-go:check` · Pkl regen: `buck2 build //src/searchbench-go:pkl_go_types`
 
 ---
 
@@ -55,12 +49,7 @@ nix develop -c buck2 test //:check_full
 
 **Key docs:** [workspace-seeds.md](./workspace-seeds.md), [development.md](./development.md).
 
-**Validation:**
-
-```bash
-nix develop -c buck2 test //src/iterative-context:check
-nix develop -c buck2 test //src/iterative-context:check_full
-```
+**Validation:** `buck2 test //src/iterative-context:check` · `buck2 test //src/iterative-context:check_full`
 
 ---
 
@@ -98,12 +87,7 @@ nix develop -c buck2 test //src/iterative-context:check_full
 
 **Role:** Onboarding for humans and agents. Hosted at [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/).
 
-**Validation:**
-
-```bash
-npm run docs:build
-nix develop -c buck2 test //docs:check
-```
+**Validation:** `buck2 test //docs:check` · artifact: `buck2 build //docs:site`
 
 ---
 
@@ -111,7 +95,7 @@ nix develop -c buck2 test //docs:check
 
 **Paths:** `flake.nix`, `BUCK`, `toolchains/`, `package.json` (VitePress)
 
-**Owns:** `nix develop` dev shell; **git-hooks.nix** hook installation; named repo gates (`//:check`, `//:check_full`, `//docs:check`); Repomix snapshot lifecycle.
+**Owns:** `nix develop` dev shell; **git-hooks.nix** hook installation; Buck gates (`//:check`, `//:check_full`, `//tooling:repomix`, `//tooling:repomix_fresh_check`, `//docs:check`).
 
 **Split:**
 

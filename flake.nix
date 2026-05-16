@@ -29,20 +29,12 @@
         repomixThenBuckCheck = pkgs.writeShellApplication {
           name = "repomix-then-buck-check";
           runtimeInputs = [
-            pkgs.git
-            pkgs.repomix
             pkgs.buck2
           ];
           text = ''
             set -euo pipefail
-            _root="$(git rev-parse --show-toplevel)"
-            cd "$_root"
-            repomix \
-              --output repomix-output.xml \
-              --style xml \
-              --compress \
-              --no-git-sort-by-changes
-            git add repomix-output.xml
+            cd "$(git rev-parse --show-toplevel)"
+            buck2 build //tooling:repomix
             exec buck2 test //:check
           '';
         };
@@ -99,7 +91,7 @@
         devHooks = flakeCheckHooks // {
           repomix-then-buck-check = {
             enable = true;
-            name = "Repomix + buck2 test //:check";
+            name = "buck2 build //tooling:repomix + buck2 test //:check";
             entry = "${repomixThenBuckCheck}/bin/repomix-then-buck-check";
             pass_filenames = false;
           };

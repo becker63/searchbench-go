@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [[ -z $root || ! -f "$root/src/searchbench-go/go.mod" ]]; then
-	echo "repomix_fresh_check: run from inside the searchbench-go git checkout" >&2
-	exit 1
-fi
-cd "$root"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$here/repomix.sh"
 
-repomix \
-	--output repomix-output.xml \
-	--style xml \
-	--compress \
-	--no-git-sort-by-changes
-git add repomix-output.xml
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
 
 if [[ ! -f repomix-output.xml ]]; then
 	echo "repomix_fresh_check: repomix-output.xml missing after regeneration" >&2

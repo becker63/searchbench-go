@@ -565,11 +565,16 @@ src/
     e2e_test.go
     go_tests.sh
     go.mod
+    pkl_go_types_check.sh
     pkl_go_types.sh
 toolchains/
   BUCK
   flake.lock
   flake.nix
+tooling/
+  BUCK
+  repomix_fresh_check.sh
+  repomix.sh
 .buckconfig
 .gitignore
 .gitmodules
@@ -583,7 +588,6 @@ flake.nix
 package.json
 README.md
 replit.md
-repomix_fresh_check.sh
 repomix.config.json
 </directory_structure>
 
@@ -3406,7 +3410,7 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 | Component | Path | Role | Language | Main proof |
 | --- | --- | --- | --- | --- |
-| SearchBench-Go | `src/searchbench-go/` | Harness, round execution, bundles, config adapters | Go | `cd src/searchbench-go && go test ./...` |
+| SearchBench-Go | `src/searchbench-go/` | Harness, round execution, bundles, config adapters | Go | `buck2 test //src/searchbench-go:check` |
 | Iterative Context | `src/iterative-context/` | MCP / code-search backend and IC policy surface | Python | `buck2 test //src/iterative-context:check_full` |
 | Visualization | *not in repo yet* | Bundle/trace replay and evidence inspection | TBD | TBD |
 | Configs | `configs/` | Pkl schema and round/objective manifests | Pkl | `buck2 test //:check_full` |
@@ -3431,13 +3435,7 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Key docs:** [architecture.md](./architecture.md), [reference/package-boundaries.md](./reference/package-boundaries.md), [workspace-seeds.md](./workspace-seeds.md), [development.md](./development.md).
 
-**Validation:**
-
-```bash
-cd src/searchbench-go && go test ./...
-nix develop -c buck2 test //src/searchbench-go:check
-nix develop -c buck2 test //:check_full
-```
+**Validation:** `buck2 test //src/searchbench-go:check` · Pkl regen: `buck2 build //src/searchbench-go:pkl_go_types`
 
 ---
 
@@ -3453,12 +3451,7 @@ nix develop -c buck2 test //:check_full
 
 **Key docs:** [workspace-seeds.md](./workspace-seeds.md), [development.md](./development.md).
 
-**Validation:**
-
-```bash
-nix develop -c buck2 test //src/iterative-context:check
-nix develop -c buck2 test //src/iterative-context:check_full
-```
+**Validation:** `buck2 test //src/iterative-context:check` · `buck2 test //src/iterative-context:check_full`
 
 ---
 
@@ -3496,12 +3489,7 @@ nix develop -c buck2 test //src/iterative-context:check_full
 
 **Role:** Onboarding for humans and agents. Hosted at [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/).
 
-**Validation:**
-
-```bash
-npm run docs:build
-nix develop -c buck2 test //docs:check
-```
+**Validation:** `buck2 test //docs:check` · artifact: `buck2 build //docs:site`
 
 ---
 
@@ -3509,7 +3497,7 @@ nix develop -c buck2 test //docs:check
 
 **Paths:** `flake.nix`, `BUCK`, `toolchains/`, `package.json` (VitePress)
 
-**Owns:** `nix develop` dev shell; **git-hooks.nix** hook installation; named repo gates (`//:check`, `//:check_full`, `//docs:check`); Repomix snapshot lifecycle.
+**Owns:** `nix develop` dev shell; **git-hooks.nix** hook installation; Buck gates (`//:check`, `//:check_full`, `//tooling:repomix`, `//tooling:repomix_fresh_check`, `//docs:check`).
 
 **Split:**
 
@@ -3571,61 +3559,91 @@ Broader thesis: [research/agent-interface-research.md](./research/agent-interfac
 <file path="docs/development.md">
 # Development
 
+**Nix** supplies the toolchain and installs Git hooks. **Buck** names repo operations. Raw commands below are debugging fallbacks only.
+
 ## Environment
 
 ```bash
-nix develop   # Go, Pkl, buck2, node/npm, repomix, git-hooks (only hook installer)
+nix develop
 ```
 
-`nix flake check` — formatting/Nix/shell only; no Buck tests in the sandbox.
+- Installs Go, Pkl, buck2, node/npm, repomix, pre-commit.
+- Writes `.buckconfig.d/buck2-nix.config` for the Buck Nix cell.
+- Installs Git hooks via git-hooks.nix — **do not** hand-edit `.git/hooks/*`.
 
-## Validation
+`nix flake check` — formatting, Nix, and shell hygiene only (no Buck test graph in the sandbox).
 
-| When | What |
-| --- | --- |
-| `git commit` | Repomix stage + `buck2 test //:check` |
-| `git push` | `buck2 test //:check_full` (Go, IC, **docs build**, Repomix freshness) |
+## Repo gates
+
+| When | Buck target | Role |
+| --- | --- | --- |
+| `git commit` | `buck2 build //tooling:repomix` then `buck2 test //:check` | Stage Repomix snapshot + fast validation |
+| `git push` | `buck2 test //:check_full` | Full deterministic gate |
+| Manual fast | `buck2 test //:check` | Same as commit gate (without Repomix build) |
+| Manual full | `buck2 test //:check_full` | Same as pre-push |
 
 ```bash
-cd src/searchbench-go && go test ./...
 nix develop -c buck2 test //:check
 nix develop -c buck2 test //:check_full
-nix develop -c buck2 test //docs:check
 ```
 
-## Repomix
+## Target catalog
 
-`repomix-output.xml` is committed for AI review. Pre-commit regenerates and stages it; pre-push fails if it is not at `HEAD`.
+| Area | Build (mutating) | Test (proof) |
+| --- | --- | --- |
+| **Whole repo (fast)** | — | `//:check` |
+| **Whole repo (full)** | — | `//:check_full` |
+| **Go harness** | `//src/searchbench-go:pkl_go_types` | `//src/searchbench-go:check`, `//src/searchbench-go:pkl_go_types_check` |
+| **Iterative Context** | — | `//src/iterative-context:check`, `//src/iterative-context:check_full` |
+| **Docs site** | `//docs:site` | `//docs:check` |
+| **Repomix** | `//tooling:repomix` | `//tooling:repomix_fresh_check` (alias `//:repomix_fresh_check`) |
 
-## Pkl Go bindings
+### `//:check` includes
 
-After `configs/schema/SearchBenchRound.pkl` changes:
+- `//src/searchbench-go:check` — `go test ./...` + CLI build
+- `//src/iterative-context:check` — IC import smoke + pytest subset
+
+### `//:check_full` includes
+
+- Everything in `//:check` (via harness + IC full targets)
+- `//src/searchbench-go:pkl_go_types_check` — generated Pkl bindings match `HEAD`
+- `//src/iterative-context:check_full` — adds basedpyright
+- `//docs:check` — VitePress production build
+- `//tooling:repomix_fresh_check` — Repomix snapshot committed at `HEAD`
+
+After editing `configs/schema/SearchBenchRound.pkl`:
 
 ```bash
-cd src/searchbench-go
-pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
-  --output-path=. ../../configs/schema/SearchBenchRound.pkl
+buck2 build //src/searchbench-go:pkl_go_types
+buck2 test //src/searchbench-go:pkl_go_types_check
 ```
 
-Do not run `//src/searchbench-go:pkl_go_types` in parallel with `go_tests`.
-
-## Docs site
+Bump `src/iterative-context` submodule pointer only after:
 
 ```bash
-npm ci
-npm run docs:dev      # preview
-npm run docs:build    # → docs/.vitepress/dist
+buck2 test //src/iterative-context:check_full
+buck2 test //:check_full
 ```
 
-Published: [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/) (GitHub Actions on `main`).
+## Docs site (hosted)
 
-## Submodule
+GitHub Actions deploys `main` to [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/). Local proof: `buck2 test //docs:check`.
 
-`src/iterative-context` — bump pointer with `go test` and `buck2 test //:check_full`.
+## Debugging fallbacks
+
+Not the canonical proof interface. Use when Buck is unavailable or for interactive work.
+
+| Intent | Fallback command |
+| --- | --- |
+| Go tests | `cd src/searchbench-go && go test ./...` |
+| Docs preview | `npm ci && npm run docs:dev` |
+| Docs build | `npm ci && npm run docs:build` |
+| Pkl → Go gen | `cd src/searchbench-go && pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl --output-path=. ../../configs/schema/SearchBenchRound.pkl` |
+| Repomix regen | `repomix --output repomix-output.xml --style xml --compress --no-git-sort-by-changes` |
 
 ## See also
 
-[AGENTS.md](../AGENTS.md) · [index.md](./index.md)
+[components.md](./components.md) · [AGENTS.md](../AGENTS.md) · [index.md](./index.md)
 </file>
 
 <file path="docs/docs_build.sh">
@@ -24157,9 +24175,15 @@ sh_test(
     test = "cli_build.sh",
 )
 
+# Regenerate Go bindings from configs/schema/SearchBenchRound.pkl (mutating).
 sh_test(
     name = "pkl_go_types",
     test = "pkl_go_types.sh",
+)
+
+sh_test(
+    name = "pkl_go_types_check",
+    test = "pkl_go_types_check.sh",
 )
 
 test_suite(
@@ -24346,6 +24370,35 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+</file>
+
+<file path="src/searchbench-go/pkl_go_types_check.sh">
+#!/usr/bin/env bash
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd "$here/../.." && pwd)"
+cd "$root/src/searchbench-go"
+
+if ! command -v pkl >/dev/null 2>&1; then
+	echo "pkl_go_types_check: pkl not on PATH (use nix develop)" >&2
+	exit 1
+fi
+
+pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
+	--output-path=. \
+	"$root/configs/schema/SearchBenchRound.pkl"
+
+if ! git diff --quiet -- internal/adapters/config/pkl/generated/; then
+	echo "pkl_go_types_check: generated Pkl Go bindings differ from HEAD." >&2
+	echo "Run: buck2 build //src/searchbench-go:pkl_go_types" >&2
+	echo "Then commit the updated files under internal/adapters/config/pkl/generated/." >&2
+	exit 1
+fi
+
+if ! git diff --quiet --cached -- internal/adapters/config/pkl/generated/; then
+	echo "pkl_go_types_check: staged generated bindings differ from working tree; commit consistently." >&2
+	exit 1
+fi
 </file>
 
 <file path="src/searchbench-go/pkl_go_types.sh">
@@ -24551,6 +24604,83 @@ flake.package(
 }
 </file>
 
+<file path="tooling/BUCK">
+load("@prelude//:rules.bzl", "sh_test")
+
+# Regenerate and stage repomix-output.xml (mutating; pre-commit uses buck2 build //tooling:repomix).
+sh_test(
+    name = "repomix",
+    test = "repomix.sh",
+)
+
+sh_test(
+    name = "repomix_fresh_check",
+    test = "repomix_fresh_check.sh",
+)
+</file>
+
+<file path="tooling/repomix_fresh_check.sh">
+#!/usr/bin/env bash
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$here/repomix.sh"
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+if [[ ! -f repomix-output.xml ]]; then
+	echo "repomix_fresh_check: repomix-output.xml missing after regeneration" >&2
+	exit 1
+fi
+
+if grep -qE '^<file path="repomix-output\.xml"' repomix-output.xml; then
+	echo "repomix_fresh_check: repomix-output.xml appears to include itself (check repomix ignore patterns)" >&2
+	exit 1
+fi
+if grep -qE '^<file path="configs/rounds/[^"]+/artifacts/' repomix-output.xml; then
+	echo "repomix_fresh_check: repomix-output.xml includes configs/rounds/*/artifacts (should be excluded)" >&2
+	exit 1
+fi
+if grep -q '^<file path="src/searchbench-go/internal/adapters/config/pkl/generated/' repomix-output.xml; then
+	echo "repomix_fresh_check: repomix-output.xml includes generated Pkl paths (should be excluded)" >&2
+	exit 1
+fi
+
+if ! git diff --quiet -- repomix-output.xml || ! git diff --quiet --cached -- repomix-output.xml; then
+	echo "repomix_fresh_check: repomix-output.xml is not committed at HEAD after regeneration." >&2
+	echo "" >&2
+	echo "The Repomix snapshot must be committed before pushing." >&2
+	echo "" >&2
+	echo "Fix with one of:" >&2
+	echo "  git add repomix-output.xml && git commit --amend --no-edit" >&2
+	echo "  git add repomix-output.xml && git commit -m 'Update Repomix snapshot'" >&2
+	echo "" >&2
+	echo "Then push again." >&2
+	exit 1
+fi
+</file>
+
+<file path="tooling/repomix.sh">
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z $root || ! -f "$root/src/searchbench-go/go.mod" ]]; then
+	echo "tooling/repomix: run from inside the searchbench-go git checkout" >&2
+	exit 1
+fi
+cd "$root"
+if ! command -v repomix >/dev/null 2>&1; then
+	echo "tooling/repomix: repomix not on PATH (use nix develop)" >&2
+	exit 1
+fi
+repomix \
+	--output repomix-output.xml \
+	--style xml \
+	--compress \
+	--no-git-sort-by-changes
+git add repomix-output.xml
+</file>
+
 <file path=".buckconfig">
 [cells]
   root = .
@@ -24724,23 +24854,17 @@ Enforced by `src/searchbench-go/internal/architecture/imports_test.go`. Details:
 ## Validation (required before handoff)
 
 ```bash
-nix develop   # once per shell
-cd src/searchbench-go && go test ./...
-# from repo root:
-nix develop -c buck2 test //:check_full
+nix develop
+buck2 test //:check_full
 ```
 
-Or rely on **`git commit`** (`//:check`) and **`git push`** (`//:check_full`, includes `//docs:check`) after `nix develop`.
+Or **`git commit`** (`buck2 build //tooling:repomix` + `buck2 test //:check`) and **`git push`** (`buck2 test //:check_full`) after `nix develop`.
 
-Docs site: `npm run docs:dev` / `npm run docs:build`; `buck2 test //docs:check`. GitHub Pages deploys from `main` (not from local hooks).
+Targeted checks: `buck2 test //src/searchbench-go:check`, `buck2 test //src/iterative-context:check_full`, `buck2 test //docs:check`.
 
-Pkl schema change — regenerate bindings:
+Pkl schema change: `buck2 build //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`.
 
-```bash
-cd src/searchbench-go
-pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
-  --output-path=. ../../configs/schema/SearchBenchRound.pkl
-```
+Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `npm`, `pkl`, `repomix` are debugging fallbacks only.
 
 ## Non-goals (unless the task explicitly asks)
 
@@ -24759,14 +24883,15 @@ External meta-harness owns worktrees and merge orchestration outside this repo.
 </file>
 
 <file path="BUCK">
-load("@prelude//:rules.bzl", "sh_test", "test_suite")
+load("@prelude//:rules.bzl", "alias", "test_suite")
 
-sh_test(
+# Back-compat alias; prefer //tooling:repomix_fresh_check.
+alias(
     name = "repomix_fresh_check",
-    test = "repomix_fresh_check.sh",
+    actual = "//tooling:repomix_fresh_check",
 )
 
-# Fast gate: Go module tests + CLI build + Iterative Context `check` (import smoke + pytest; no Repomix).
+# Fast gate: Go + IC smoke (pre-commit runs //tooling:repomix then //:check).
 test_suite(
     name = "check",
     tests = [
@@ -24775,14 +24900,15 @@ test_suite(
     ],
 )
 
-# Full gate: Go `check` + Iterative Context `check_full` (adds basedpyright) + Repomix snapshot freshness (pre-push / manual).
+# Full gate (pre-push): harness + IC full + docs + Pkl binding freshness + Repomix freshness.
 test_suite(
     name = "check_full",
     tests = [
         "//src/searchbench-go:check",
+        "//src/searchbench-go:pkl_go_types_check",
         "//src/iterative-context:check_full",
         "//docs:check",
-        ":repomix_fresh_check",
+        "//tooling:repomix_fresh_check",
     ],
 )
 </file>
@@ -24960,20 +25086,12 @@ test_suite(
         repomixThenBuckCheck = pkgs.writeShellApplication {
           name = "repomix-then-buck-check";
           runtimeInputs = [
-            pkgs.git
-            pkgs.repomix
             pkgs.buck2
           ];
           text = ''
             set -euo pipefail
-            _root="$(git rev-parse --show-toplevel)"
-            cd "$_root"
-            repomix \
-              --output repomix-output.xml \
-              --style xml \
-              --compress \
-              --no-git-sort-by-changes
-            git add repomix-output.xml
+            cd "$(git rev-parse --show-toplevel)"
+            buck2 build //tooling:repomix
             exec buck2 test //:check
           '';
         };
@@ -25030,7 +25148,7 @@ test_suite(
         devHooks = flakeCheckHooks // {
           repomix-then-buck-check = {
             enable = true;
-            name = "Repomix + buck2 test //:check";
+            name = "buck2 build //tooling:repomix + buck2 test //:check";
             entry = "${repomixThenBuckCheck}/bin/repomix-then-buck-check";
             pass_filenames = false;
           };
@@ -25200,7 +25318,7 @@ Uses the **offline fake-local** path (no live MCP or model APIs). See [docs/star
 | [Pkl](https://pkl-lang.org/) | Round manifests |
 | [Nix](https://nixos.org/) *(optional)* | `nix develop` for buck2, hooks, repomix |
 
-Development: [docs/development.md](docs/development.md). Docs build: `npm run docs:build`, `buck2 test //docs:check`.
+Development: [docs/development.md](docs/development.md). Docs proof: `buck2 test //docs:check` (preview: `npm run docs:dev`).
 
 ## Module
 
@@ -25215,55 +25333,6 @@ Short version: use Go + Pkl as in [`README.md`](README.md).
 **Docs:** [`docs/start-here.md`](docs/start-here.md) · [`docs/development.md`](docs/development.md)
 
 **Nix (flake):** `nix develop` installs Git hooks; **`git commit`** stages Repomix then runs **`buck2 test //:check`**; **`git push`** runs **`buck2 test //:check_full`**. See [`AGENTS.md`](AGENTS.md).
-</file>
-
-<file path="repomix_fresh_check.sh">
-#!/usr/bin/env bash
-set -euo pipefail
-root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [[ -z $root || ! -f "$root/src/searchbench-go/go.mod" ]]; then
-	echo "repomix_fresh_check: run from inside the searchbench-go git checkout" >&2
-	exit 1
-fi
-cd "$root"
-
-repomix \
-	--output repomix-output.xml \
-	--style xml \
-	--compress \
-	--no-git-sort-by-changes
-git add repomix-output.xml
-
-if [[ ! -f repomix-output.xml ]]; then
-	echo "repomix_fresh_check: repomix-output.xml missing after regeneration" >&2
-	exit 1
-fi
-
-if grep -qE '^<file path="repomix-output\.xml"' repomix-output.xml; then
-	echo "repomix_fresh_check: repomix-output.xml appears to include itself (check repomix ignore patterns)" >&2
-	exit 1
-fi
-if grep -qE '^<file path="configs/rounds/[^"]+/artifacts/' repomix-output.xml; then
-	echo "repomix_fresh_check: repomix-output.xml includes configs/rounds/*/artifacts (should be excluded)" >&2
-	exit 1
-fi
-if grep -q '^<file path="src/searchbench-go/internal/adapters/config/pkl/generated/' repomix-output.xml; then
-	echo "repomix_fresh_check: repomix-output.xml includes generated Pkl paths (should be excluded)" >&2
-	exit 1
-fi
-
-if ! git diff --quiet -- repomix-output.xml || ! git diff --quiet --cached -- repomix-output.xml; then
-	echo "repomix_fresh_check: repomix-output.xml is not committed at HEAD after regeneration." >&2
-	echo "" >&2
-	echo "The Repomix snapshot must be committed before pushing." >&2
-	echo "" >&2
-	echo "Fix with one of:" >&2
-	echo "  git add repomix-output.xml && git commit --amend --no-edit" >&2
-	echo "  git add repomix-output.xml && git commit -m 'Update Repomix snapshot'" >&2
-	echo "" >&2
-	echo "Then push again." >&2
-	exit 1
-fi
 </file>
 
 <file path="repomix.config.json">

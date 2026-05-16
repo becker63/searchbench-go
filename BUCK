@@ -1,11 +1,12 @@
-load("@prelude//:rules.bzl", "sh_test", "test_suite")
+load("@prelude//:rules.bzl", "alias", "test_suite")
 
-sh_test(
+# Back-compat alias; prefer //tooling:repomix_fresh_check.
+alias(
     name = "repomix_fresh_check",
-    test = "repomix_fresh_check.sh",
+    actual = "//tooling:repomix_fresh_check",
 )
 
-# Fast gate: Go module tests + CLI build + Iterative Context `check` (import smoke + pytest; no Repomix).
+# Fast gate: Go + IC smoke (pre-commit runs //tooling:repomix then //:check).
 test_suite(
     name = "check",
     tests = [
@@ -14,13 +15,14 @@ test_suite(
     ],
 )
 
-# Full gate: Go `check` + Iterative Context `check_full` (adds basedpyright) + Repomix snapshot freshness (pre-push / manual).
+# Full gate (pre-push): harness + IC full + docs + Pkl binding freshness + Repomix freshness.
 test_suite(
     name = "check_full",
     tests = [
         "//src/searchbench-go:check",
+        "//src/searchbench-go:pkl_go_types_check",
         "//src/iterative-context:check_full",
         "//docs:check",
-        ":repomix_fresh_check",
+        "//tooling:repomix_fresh_check",
     ],
 )

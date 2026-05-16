@@ -77,7 +77,7 @@ Uses the **offline fake-local** path (no live MCP or model APIs). See [docs/star
 | [Pkl](https://pkl-lang.org/) | Round manifests |
 | [Nix](https://nixos.org/) *(optional)* | `nix develop` for buck2, hooks, repomix |
 
-Development: [docs/development.md](docs/development.md). Docs build: `npm run docs:build`, `buck2 test //docs:check`.
+Development: [docs/development.md](docs/development.md). Docs proof: `buck2 test //docs:check` (preview: `npm run docs:dev`).
 
 ## Module
 

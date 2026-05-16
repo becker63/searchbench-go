@@ -1,57 +1,87 @@
 # Development
 
+**Nix** supplies the toolchain and installs Git hooks. **Buck** names repo operations. Raw commands below are debugging fallbacks only.
+
 ## Environment
 
 ```bash
-nix develop   # Go, Pkl, buck2, node/npm, repomix, git-hooks (only hook installer)
+nix develop
 ```
 
-`nix flake check` — formatting/Nix/shell only; no Buck tests in the sandbox.
+- Installs Go, Pkl, buck2, node/npm, repomix, pre-commit.
+- Writes `.buckconfig.d/buck2-nix.config` for the Buck Nix cell.
+- Installs Git hooks via git-hooks.nix — **do not** hand-edit `.git/hooks/*`.
 
-## Validation
+`nix flake check` — formatting, Nix, and shell hygiene only (no Buck test graph in the sandbox).
 
-| When | What |
-| --- | --- |
-| `git commit` | Repomix stage + `buck2 test //:check` |
-| `git push` | `buck2 test //:check_full` (Go, IC, **docs build**, Repomix freshness) |
+## Repo gates
+
+| When | Buck target | Role |
+| --- | --- | --- |
+| `git commit` | `buck2 build //tooling:repomix` then `buck2 test //:check` | Stage Repomix snapshot + fast validation |
+| `git push` | `buck2 test //:check_full` | Full deterministic gate |
+| Manual fast | `buck2 test //:check` | Same as commit gate (without Repomix build) |
+| Manual full | `buck2 test //:check_full` | Same as pre-push |
 
 ```bash
-cd src/searchbench-go && go test ./...
 nix develop -c buck2 test //:check
 nix develop -c buck2 test //:check_full
-nix develop -c buck2 test //docs:check
 ```
 
-## Repomix
+## Target catalog
 
-`repomix-output.xml` is committed for AI review. Pre-commit regenerates and stages it; pre-push fails if it is not at `HEAD`.
+| Area | Build (mutating) | Test (proof) |
+| --- | --- | --- |
+| **Whole repo (fast)** | — | `//:check` |
+| **Whole repo (full)** | — | `//:check_full` |
+| **Go harness** | `//src/searchbench-go:pkl_go_types` | `//src/searchbench-go:check`, `//src/searchbench-go:pkl_go_types_check` |
+| **Iterative Context** | — | `//src/iterative-context:check`, `//src/iterative-context:check_full` |
+| **Docs site** | `//docs:site` | `//docs:check` |
+| **Repomix** | `//tooling:repomix` | `//tooling:repomix_fresh_check` (alias `//:repomix_fresh_check`) |
 
-## Pkl Go bindings
+### `//:check` includes
 
-After `configs/schema/SearchBenchRound.pkl` changes:
+- `//src/searchbench-go:check` — `go test ./...` + CLI build
+- `//src/iterative-context:check` — IC import smoke + pytest subset
+
+### `//:check_full` includes
+
+- Everything in `//:check` (via harness + IC full targets)
+- `//src/searchbench-go:pkl_go_types_check` — generated Pkl bindings match `HEAD`
+- `//src/iterative-context:check_full` — adds basedpyright
+- `//docs:check` — VitePress production build
+- `//tooling:repomix_fresh_check` — Repomix snapshot committed at `HEAD`
+
+After editing `configs/schema/SearchBenchRound.pkl`:
 
 ```bash
-cd src/searchbench-go
-pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
-  --output-path=. ../../configs/schema/SearchBenchRound.pkl
+buck2 build //src/searchbench-go:pkl_go_types
+buck2 test //src/searchbench-go:pkl_go_types_check
 ```
 
-Do not run `//src/searchbench-go:pkl_go_types` in parallel with `go_tests`.
-
-## Docs site
+Bump `src/iterative-context` submodule pointer only after:
 
 ```bash
-npm ci
-npm run docs:dev      # preview
-npm run docs:build    # → docs/.vitepress/dist
+buck2 test //src/iterative-context:check_full
+buck2 test //:check_full
 ```
 
-Published: [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/) (GitHub Actions on `main`).
+## Docs site (hosted)
 
-## Submodule
+GitHub Actions deploys `main` to [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/). Local proof: `buck2 test //docs:check`.
 
-`src/iterative-context` — bump pointer with `go test` and `buck2 test //:check_full`.
+## Debugging fallbacks
+
+Not the canonical proof interface. Use when Buck is unavailable or for interactive work.
+
+| Intent | Fallback command |
+| --- | --- |
+| Go tests | `cd src/searchbench-go && go test ./...` |
+| Docs preview | `npm ci && npm run docs:dev` |
+| Docs build | `npm ci && npm run docs:build` |
+| Pkl → Go gen | `cd src/searchbench-go && pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl --output-path=. ../../configs/schema/SearchBenchRound.pkl` |
+| Repomix regen | `repomix --output repomix-output.xml --style xml --compress --no-git-sort-by-changes` |
 
 ## See also
 
-[AGENTS.md](../AGENTS.md) · [index.md](./index.md)
+[components.md](./components.md) · [AGENTS.md](../AGENTS.md) · [index.md](./index.md)

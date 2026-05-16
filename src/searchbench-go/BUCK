@@ -10,9 +10,15 @@ sh_test(
     test = "cli_build.sh",
 )
 
+# Regenerate Go bindings from configs/schema/SearchBenchRound.pkl (mutating).
 sh_test(
     name = "pkl_go_types",
     test = "pkl_go_types.sh",
+)
+
+sh_test(
+    name = "pkl_go_types_check",
+    test = "pkl_go_types_check.sh",
 )
 
 test_suite(
