@@ -6,4 +6,7 @@ type Runtime struct {
 	MaxSteps int `pkl:"maxSteps"`
 
 	TimeoutSeconds int `pkl:"timeoutSeconds"`
+
+	// Optional IC workspace seed via Buck optimizable backend descriptor.
+	WorkspaceSeed *WorkspaceSeedConfig `pkl:"workspaceSeed"`
 }

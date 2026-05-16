@@ -44,9 +44,9 @@ func Classify(results []StepResult) Classification {
 			classification.GenerationFailures = append(classification.GenerationFailures, result)
 		case "gofmt_check":
 			classification.FormatErrors = append(classification.FormatErrors, result)
-		case "python_compile", "policy_static_precheck", "basedpyright":
+		case "python_compile", "policy_static_precheck", "py_compile", "basedpyright":
 			classification.TypeErrors = append(classification.TypeErrors, result)
-		case "stage_policy", "ic_validate_policy":
+		case "stage_policy", "ic_validate_policy", "validate_policy":
 			classification.FormatErrors = append(classification.FormatErrors, result)
 		case "ruff_check":
 			classification.LintErrors = append(classification.LintErrors, result)

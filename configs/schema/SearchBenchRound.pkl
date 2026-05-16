@@ -28,6 +28,9 @@ typealias Backend = "iterative_context" | "jcodemunch" | "fake"
 /// LLM provider id for agent models.
 typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
 
+/// IC workspace seed provider (Buck-backed descriptor on this integration branch).
+typealias WorkspaceSeedProvider = "buck_descriptor"
+
 /// Formats written for the round report.
 typealias ReportFormat = "json" | "text"
 
@@ -84,6 +87,14 @@ class PromptBundle {
 class Runtime {
   maxSteps: Int(this > 0) = 16
   timeoutSeconds: Int(this > 0) = 300
+  /// Optional IC workspace seed via Buck optimizable backend descriptor.
+  workspaceSeed: WorkspaceSeedConfig?
+}
+
+/// Buck-descriptor workspace seed for IC-backed optimizable systems (Level 2: descriptor points at local_path source).
+class WorkspaceSeedConfig {
+  provider: WorkspaceSeedProvider = "buck_descriptor"
+  buckDescriptorTarget: String?
 }
 
 /// A versioned policy artifact implementing a declared interface.
