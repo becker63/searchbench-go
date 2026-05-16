@@ -1,0 +1,23 @@
+amends "../../../../../../../../../../home/becker/projects/searchbench-go/configs/schema/games/code-localization.pkl"
+import "../../../../../../../../../../home/becker/projects/searchbench-go/configs/schema/games/code-localization-helpers.pkl" as game
+
+name = "live-ic-vs-jcodemunch-001-continuation"
+
+round = (game.continueFrom(".")) {
+  id = "live-ic-vs-jcodemunch-001"
+  incumbent = (game.iterativeContextPolicy("/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds/live-ic-vs-jcodemunch-001/policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-live-smoke"
+    }
+  }
+  challenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+  }
+  matches = game.lca("py", "dev", 1)
+  scoring = game.objective("/home/becker/projects/searchbench-go/configs/rounds/live-ic-vs-jcodemunch/scoring/localization-objective.pkl")
+  evaluator = game.cerebrasEvaluator("gpt-oss-120b")
+}

@@ -1,0 +1,150 @@
+{
+  "manifest_path": "/home/becker/projects/searchbench-go/configs/rounds/live-ic-vs-jcodemunch/round.pkl",
+  "round_name": "live-ic-vs-jcodemunch-smoke",
+  "mode": "round",
+  "game": {
+    "id": "code-localization",
+    "kind": "code_localization"
+  },
+  "round": {
+    "id": "live-ic-vs-jcodemunch-001"
+  },
+  "dataset": {
+    "kind": "lca",
+    "name": "JetBrains-Research/lca-bug-localization",
+    "config": "py",
+    "split": "dev",
+    "max_items": 1
+  },
+  "policies": {
+    "incumbent": {
+      "id": "jcodemunch",
+      "name": "jCodeMunch",
+      "backend": "jcodemunch",
+      "model": {
+        "provider": "cerebras",
+        "name": "gpt-oss-120b"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      },
+      "fingerprint": "0d62b733ea72014b56251fd43ca0aa6a3b8e70e4e2a860defbd3ce466034ed1f"
+    },
+    "challenger": {
+      "id": "iterative-context",
+      "name": "Iterative Context",
+      "backend": "iterative-context",
+      "model": {
+        "provider": "cerebras",
+        "name": "gpt-oss-120b"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "policy": {
+        "id": "challenger-policy-live-smoke",
+        "language": "python",
+        "sha256": "035b5a8f656eae53bacdb431761c188542dbd9efd9f264a5f581a8c7462ac0f2",
+        "entrypoint": "score_fn"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      },
+      "fingerprint": "fa6f9c07ee23a8cf2d2d89e4e37be90019e9368cdf7f1e8d32fb9eb021f0b8c3"
+    }
+  },
+  "matches": [
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:google/jax@69d1a2c0637369bb2303738b4d082b9c1bfd2680:https://github.com/google/jax/issues/10813",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "google/jax",
+        "sha": "69d1a2c0637369bb2303738b4d082b9c1bfd2680",
+        "path": "/home/becker/projects/searchbench-go/.cache/searchbench/materialized-repos/checkouts/google/jax/69d1a2c0637369bb2303738b4d082b9c1bfd2680"
+      },
+      "input": {
+        "title": "[x64] Reductions are too eager to promote to 64-bit",
+        "body": "```python\r\nIn [1]: import jax.numpy as jnp\r\n\r\nIn [2]: jnp.arange(4, dtype='int8').sum()\r\nOut[2]: DeviceArray(6, dtype=int64)\r\n```\r\n\r\nThe root cause is this line: https://github.com/google/jax/blob/d849f495193c69e8c133d0c6a424ba80d72938cb/jax/_src/numpy/reductions.py#L81\r\n\r\nIt's not an issue for floating-point types, because numpy does not promote those in most cases"
+      },
+      "oracle": {
+        "gold_files": [
+          "jax/_src/numpy/reductions.py",
+          "tests/lax_numpy_test.py"
+        ]
+      }
+    }
+  ],
+  "parallelism": {
+    "mode": "sequential",
+    "max_workers": 1,
+    "fail_fast": false
+  },
+  "candidate_interface_id": "iterative_context.selection_policy.v1",
+  "evaluator": {
+    "model": {
+      "provider": "cerebras",
+      "name": "gpt-oss-120b",
+      "max_output_tokens": 2000
+    },
+    "bounds": {
+      "max_model_turns": 8,
+      "max_tool_calls": 24,
+      "timeout_seconds": 300
+    },
+    "retry": {
+      "max_attempts": 2,
+      "retry_on_model_error": true,
+      "retry_on_finalization_failure": true,
+      "retry_on_invalid_prediction": true
+    },
+    "tool_policy": {
+      "system_prompt": "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools.",
+      "policy_sha256": "cee30d7aa05e1b9a18dffbda600ab49457e8f4745e9d157a83d1be48396393ef"
+    }
+  },
+  "scoring": {
+    "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/live-ic-vs-jcodemunch/scoring/localization-objective.pkl",
+    "current_evidence": {
+      "name": "current",
+      "bundle_path": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds/live-ic-vs-jcodemunch-001",
+      "evidence_path": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds/live-ic-vs-jcodemunch-001/evidence.pkl",
+      "report_path": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds/live-ic-vs-jcodemunch-001/round-report.json"
+    }
+  },
+  "output": {
+    "bundle_root": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds",
+    "bundle_writer_root": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2",
+    "report_formats": [
+      "json",
+      "text"
+    ],
+    "render_human_report": true,
+    "resolved_policy_path": {
+      "challenger": "/home/becker/projects/searchbench-go/configs/rounds/live-ic-vs-jcodemunch/policies/challenger_policy.py"
+    }
+  },
+  "report_options": {
+    "formats": [
+      "json",
+      "text"
+    ]
+  },
+  "bundle": {
+    "id": "live-ic-vs-jcodemunch-001"
+  },
+  "lineage": {},
+  "challenger_materialization": {
+    "mode": "checked_in"
+  },
+  "report_id": "report-live-ic-vs-jcodemunch-001",
+  "created_at": "2026-05-16T20:34:08Z"
+}

@@ -2,6 +2,7 @@
 # Local diff exports (blog / notes)
 /git-diff-export.patch
 
+.cache/
 .codex
 .tmp/
 /repomix-output.xml
@@ -28,3 +29,7 @@
 
 # Live LCA slice exported from Hugging Face (see tooling/lca_hf_export.py)
 /configs/rounds/live-ic-vs-jcodemunch/datasets/**/*.jsonl
+
+# Live e2e staging only; published bundles live under configs/rounds/live-ic-vs-jcodemunch/artifacts/
+/.cache/searchbench/live-e2e-bundle-staging/
+/.cache/searchbench/live-e2e-bundle-latest/

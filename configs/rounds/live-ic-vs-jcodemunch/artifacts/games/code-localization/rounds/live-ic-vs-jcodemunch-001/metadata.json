@@ -1,0 +1,72 @@
+{
+  "schema_version": "searchbench.bundle.v1",
+  "bundle_id": "live-ic-vs-jcodemunch-001",
+  "created_at": "2026-05-16T20:34:08.855437818Z",
+  "files": [
+    {
+      "kind": "resolved_round",
+      "path": "resolved-round.json",
+      "media_type": "application/json",
+      "sha256": "c1d0ef1b64a73c3bbf145b21ab21f161b86f71103ce742508223d814cffc7e91"
+    },
+    {
+      "kind": "round_report",
+      "path": "round-report.json",
+      "media_type": "application/json",
+      "sha256": "9bcd62fec20043e90b215384ae6ad384c93b08abc62b67700540069731549b07"
+    },
+    {
+      "kind": "rendered_report",
+      "path": "round-report.txt",
+      "media_type": "text/plain",
+      "sha256": "9ce25478135665a63c5fef88428c5b4f5b7918c0570febb510bb08f2eae65da1"
+    },
+    {
+      "kind": "round_evidence",
+      "path": "evidence.pkl",
+      "media_type": "text/plain",
+      "sha256": "47bfd1bdf13f13ea782dfd7f87006970de89270b6f6483e4901d1ae31cbc0799"
+    },
+    {
+      "kind": "decision",
+      "path": "decision.json",
+      "media_type": "application/json",
+      "sha256": "14446b3dce9ec0b30e48596fc332f00bd3a87d9c2519963489ee824816510f72"
+    },
+    {
+      "kind": "objective",
+      "path": "objective.json",
+      "media_type": "application/json",
+      "sha256": "d6d36e9086904ce5aab0018f1c3e4e828b5b7b69a1ecf8cf6a3b88166c83b215"
+    },
+    {
+      "kind": "policy",
+      "path": "policies/challenger_policy.py",
+      "media_type": "text/x-python",
+      "sha256": "035b5a8f656eae53bacdb431761c188542dbd9efd9f264a5f581a8c7462ac0f2"
+    },
+    {
+      "kind": "continuation",
+      "path": "continuation.json",
+      "media_type": "application/json",
+      "sha256": "a357c85291e1b385f0dec7df2b83c9ed59faf5fb7cdb8d1a42652e5d815ceb3e"
+    },
+    {
+      "kind": "continuation_pkl",
+      "path": "continuation.pkl",
+      "media_type": "text/plain",
+      "sha256": "d7fa8c6506a4531bd0b652c0641ba8bf2003e6e9a3eccc8d77570264709da1fc"
+    },
+    {
+      "kind": "metadata",
+      "path": "metadata.json",
+      "media_type": "application/json"
+    },
+    {
+      "kind": "complete",
+      "path": "COMPLETE",
+      "media_type": "text/plain",
+      "sha256": "37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1"
+    }
+  ]
+}

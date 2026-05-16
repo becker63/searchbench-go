@@ -1,0 +1,199 @@
+{
+  "id": "report-live-ic-vs-jcodemunch-001",
+  "created_at": "2026-05-16T20:34:08.855437818Z",
+  "spec": {
+    "policies": {
+      "incumbent": {
+        "id": "jcodemunch",
+        "name": "jCodeMunch",
+        "backend": "jcodemunch",
+        "model": {
+          "provider": "cerebras",
+          "name": "gpt-oss-120b"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "0d62b733ea72014b56251fd43ca0aa6a3b8e70e4e2a860defbd3ce466034ed1f"
+      },
+      "challenger": {
+        "id": "iterative-context",
+        "name": "Iterative Context",
+        "backend": "iterative-context",
+        "model": {
+          "provider": "cerebras",
+          "name": "gpt-oss-120b"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "policy": {
+          "id": "challenger-policy-live-smoke",
+          "language": "python",
+          "sha256": "035b5a8f656eae53bacdb431761c188542dbd9efd9f264a5f581a8c7462ac0f2",
+          "entrypoint": "score_fn"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "fa6f9c07ee23a8cf2d2d89e4e37be90019e9368cdf7f1e8d32fb9eb021f0b8c3"
+      }
+    },
+    "matches": [
+      {
+        "id": "JetBrains-Research/lca-bug-localization:py:dev:google/jax@69d1a2c0637369bb2303738b4d082b9c1bfd2680:https://github.com/google/jax/issues/10813",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "google/jax",
+          "sha": "69d1a2c0637369bb2303738b4d082b9c1bfd2680",
+          "path": "/home/becker/projects/searchbench-go/.cache/searchbench/materialized-repos/checkouts/google/jax/69d1a2c0637369bb2303738b4d082b9c1bfd2680"
+        },
+        "input": {
+          "title": "[x64] Reductions are too eager to promote to 64-bit",
+          "body": "```python\r\nIn [1]: import jax.numpy as jnp\r\n\r\nIn [2]: jnp.arange(4, dtype='int8').sum()\r\nOut[2]: DeviceArray(6, dtype=int64)\r\n```\r\n\r\nThe root cause is this line: https://github.com/google/jax/blob/d849f495193c69e8c133d0c6a424ba80d72938cb/jax/_src/numpy/reductions.py#L81\r\n\r\nIt's not an issue for floating-point types, because numpy does not promote those in most cases"
+        },
+        "oracle": {
+          "gold_files": [
+            "jax/_src/numpy/reductions.py",
+            "tests/lax_numpy_test.py"
+          ]
+        }
+      }
+    ]
+  },
+  "runs": {
+    "incumbent": [
+      {
+        "execution": {
+          "session_id": "eino-local",
+          "prediction": {
+            "files": [
+              "jax/_src/numpy/reductions.py"
+            ],
+            "reasoning": "The issue explicitly points to the problematic line in the JAX source: https://github.com/google/jax/blob/d849f495193c69e8c133d0c6a424ba80d72938cb/jax/_src/numpy/reductions.py#L81. The bug is about reductions promoting integer types to int64, which is implemented in the `reductions.py` module. Therefore the file containing the bug is `jax/_src/numpy/reductions.py`."
+          },
+          "usage": {
+            "input_tokens": 44234,
+            "output_tokens": 851,
+            "total_tokens": 45085
+          },
+          "started_at": "2026-05-16T20:34:09.511113897Z",
+          "finished_at": "2026-05-16T20:34:15.265862741Z"
+        },
+        "scores": {
+          "gold_hop": {
+            "name": "gold_hop",
+            "value": 6
+          },
+          "issue_hop": {
+            "name": "issue_hop",
+            "value": 7
+          },
+          "token_efficiency": {
+            "name": "token_efficiency",
+            "value": 0.35
+          },
+          "cost": {
+            "name": "cost",
+            "value": 0.6
+          },
+          "composite": {
+            "name": "composite",
+            "value": 0.3
+          }
+        }
+      }
+    ],
+    "challenger": [
+      {
+        "execution": {
+          "session_id": "eino-local",
+          "prediction": {
+            "files": [
+              "jax/_src/numpy/reductions.py"
+            ]
+          },
+          "usage": {
+            "input_tokens": 264778,
+            "output_tokens": 896,
+            "total_tokens": 265674
+          },
+          "started_at": "2026-05-16T20:34:16.097984562Z",
+          "finished_at": "2026-05-16T20:35:14.99377272Z"
+        },
+        "scores": {
+          "gold_hop": {
+            "name": "gold_hop",
+            "value": 2
+          },
+          "issue_hop": {
+            "name": "issue_hop",
+            "value": 3
+          },
+          "token_efficiency": {
+            "name": "token_efficiency",
+            "value": 0.85
+          },
+          "cost": {
+            "name": "cost",
+            "value": 0.15
+          },
+          "composite": {
+            "name": "composite",
+            "value": 0.9
+          }
+        }
+      }
+    ]
+  },
+  "failures": {
+    "incumbent": [],
+    "challenger": []
+  },
+  "comparisons": [
+    {
+      "metric": "gold_hop",
+      "incumbent": 6,
+      "challenger": 2,
+      "delta": -4
+    },
+    {
+      "metric": "issue_hop",
+      "incumbent": 7,
+      "challenger": 3,
+      "delta": -4
+    },
+    {
+      "metric": "token_efficiency",
+      "incumbent": 0.35,
+      "challenger": 0.85,
+      "delta": 0.5
+    },
+    {
+      "metric": "cost",
+      "incumbent": 0.6,
+      "challenger": 0.15,
+      "delta": -0.44999999999999996
+    },
+    {
+      "metric": "composite",
+      "incumbent": 0.3,
+      "challenger": 0.9,
+      "delta": 0.6000000000000001
+    }
+  ],
+  "regressions": null,
+  "decision": {
+    "decision": "PROMOTE_CHALLENGER",
+    "reason": "challenger improves the composite score in local fake comparison"
+  }
+}

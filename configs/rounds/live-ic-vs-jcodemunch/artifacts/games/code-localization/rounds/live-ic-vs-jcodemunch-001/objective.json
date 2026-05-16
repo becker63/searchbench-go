@@ -1,0 +1,59 @@
+{
+  "schema_version": "searchbench.objective_result.v1",
+  "objective_id": "localization-v1",
+  "evidence_refs": [
+    {
+      "name": "current",
+      "bundle_path": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds/live-ic-vs-jcodemunch-001",
+      "evidence_path": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds/live-ic-vs-jcodemunch-001/evidence.pkl",
+      "report_path": "/tmp/nix-shell.Gb07L8/nix-shell.zdz4gn/TestSearchBenchLiveICVsJCodeMunchE2E4142402796/001/live-artifacts-2/games/code-localization/rounds/live-ic-vs-jcodemunch-001/round-report.json"
+    }
+  ],
+  "values": [
+    {
+      "name": "challengerQuality",
+      "value": 0.8333333333333334,
+      "kind": "intermediate"
+    },
+    {
+      "name": "parentChallengerQuality",
+      "value": 0.8333333333333334,
+      "kind": "intermediate"
+    },
+    {
+      "name": "improvementVsParent",
+      "value": 0,
+      "kind": "intermediate"
+    },
+    {
+      "name": "tokenEfficiency",
+      "value": 0,
+      "kind": "intermediate"
+    },
+    {
+      "name": "base",
+      "value": 0.6666666666666667,
+      "kind": "intermediate"
+    },
+    {
+      "name": "regressionPenalty",
+      "value": 1,
+      "kind": "penalty"
+    },
+    {
+      "name": "invalidPredictionPenalty",
+      "value": 1,
+      "kind": "penalty"
+    },
+    {
+      "name": "final",
+      "value": 0.6666666666666667,
+      "kind": "final"
+    }
+  ],
+  "final": "final",
+  "bounds": {
+    "min": 0,
+    "max": 1
+  }
+}

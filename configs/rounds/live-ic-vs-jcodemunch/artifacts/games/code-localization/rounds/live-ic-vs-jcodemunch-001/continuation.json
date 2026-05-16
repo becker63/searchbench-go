@@ -1,0 +1,110 @@
+{
+  "schema_version": "searchbench.continuation.v1",
+  "bundle_id": "live-ic-vs-jcodemunch-001",
+  "game": {
+    "id": "code-localization",
+    "kind": "code_localization"
+  },
+  "round": {
+    "id": "live-ic-vs-jcodemunch-001"
+  },
+  "candidate_interface": {
+    "id": "iterative_context.selection_policy.v1"
+  },
+  "surviving_candidate": {
+    "role": "challenger",
+    "system": {
+      "id": "iterative-context",
+      "name": "Iterative Context",
+      "backend": "iterative-context",
+      "model": {
+        "provider": "cerebras",
+        "name": "gpt-oss-120b"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "policy": {
+        "id": "challenger-policy-live-smoke",
+        "language": "python",
+        "sha256": "035b5a8f656eae53bacdb431761c188542dbd9efd9f264a5f581a8c7462ac0f2",
+        "entrypoint": "score_fn",
+        "source": "def score_fn(node, graph, depth):\n    data = getattr(node, \"data\", None)\n    if data is None and isinstance(node, dict):\n        data = node.get(\"data\", {})\n    if data is None:\n        data = {}\n\n    score = 0.0\n\n    kind = str(data.get(\"kind\", \"\")).lower()\n    path = str(data.get(\"file\", data.get(\"path\", \"\"))).lower()\n    symbol = str(data.get(\"symbol\", data.get(\"name\", \"\"))).lower()\n\n    if kind in {\"function\", \"method\", \"class\", \"symbol\", \"file\"}:\n        score += 2.0\n\n    if path.endswith(\".py\"):\n        score += 1.5\n\n    if \"/test\" in path or path.startswith(\"test\") or \"_test.\" in path:\n        score -= 1.0\n\n    if any(part in path for part in [\".venv\", \"__pycache__\", \"vendor\", \"generated\"]):\n        score -= 3.0\n\n    if symbol:\n        score += 0.5\n\n    try:\n        score -= 0.25 * float(depth)\n    except Exception:\n        pass\n\n    return float(score)\n"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      }
+    },
+    "artifact_path": "policies/challenger_policy.py"
+  },
+  "default_continuation": {
+    "incumbent_from": "surviving_candidate",
+    "matches_from": "continuation",
+    "objective_from": "continuation",
+    "evaluator_from": "continuation"
+  },
+  "dataset": {
+    "kind": "lca",
+    "name": "JetBrains-Research/lca-bug-localization",
+    "config": "py",
+    "split": "dev",
+    "max_items": 1
+  },
+  "matches": [
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:google/jax@69d1a2c0637369bb2303738b4d082b9c1bfd2680:https://github.com/google/jax/issues/10813",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "google/jax",
+        "sha": "69d1a2c0637369bb2303738b4d082b9c1bfd2680",
+        "path": "/home/becker/projects/searchbench-go/.cache/searchbench/materialized-repos/checkouts/google/jax/69d1a2c0637369bb2303738b4d082b9c1bfd2680"
+      },
+      "input": {
+        "title": "[x64] Reductions are too eager to promote to 64-bit",
+        "body": "```python\r\nIn [1]: import jax.numpy as jnp\r\n\r\nIn [2]: jnp.arange(4, dtype='int8').sum()\r\nOut[2]: DeviceArray(6, dtype=int64)\r\n```\r\n\r\nThe root cause is this line: https://github.com/google/jax/blob/d849f495193c69e8c133d0c6a424ba80d72938cb/jax/_src/numpy/reductions.py#L81\r\n\r\nIt's not an issue for floating-point types, because numpy does not promote those in most cases"
+      },
+      "oracle": {
+        "gold_files": [
+          "jax/_src/numpy/reductions.py",
+          "tests/lax_numpy_test.py"
+        ]
+      }
+    }
+  ],
+  "evaluator": {
+    "model": {
+      "provider": "cerebras",
+      "name": "gpt-oss-120b",
+      "max_output_tokens": 2000
+    },
+    "bounds": {
+      "max_model_turns": 8,
+      "max_tool_calls": 24,
+      "timeout_seconds": 300
+    },
+    "retry": {
+      "max_attempts": 2,
+      "retry_on_model_error": true,
+      "retry_on_finalization_failure": true,
+      "retry_on_invalid_prediction": true
+    },
+    "system_prompt": "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools.",
+    "policy_sha256": "cee30d7aa05e1b9a18dffbda600ab49457e8f4745e9d157a83d1be48396393ef"
+  },
+  "scoring": {
+    "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/live-ic-vs-jcodemunch/scoring/localization-objective.pkl",
+    "report_formats": [
+      "json",
+      "text"
+    ]
+  },
+  "evidence": {
+    "round_evidence_path": "evidence.pkl",
+    "objective_path": "objective.json",
+    "report_path": "round-report.json",
+    "decision_path": "decision.json"
+  }
+}

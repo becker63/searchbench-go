@@ -3,6 +3,7 @@
 Real end-to-end round with Cerebras evaluator, jCodeMunch incumbent, and Iterative Context challenger.
 
 **Manifest:** `configs/rounds/live-ic-vs-jcodemunch/round.pkl`
+**Published bundle (on success):** `configs/rounds/live-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/live-ic-vs-jcodemunch-001/`
 **Not in default CI** — requires API keys, MCP launcher commands, and a Hugging Face download for the LCA slice.
 
 ## Environment
@@ -28,17 +29,25 @@ Optional:
 | `SEARCHBENCH_SKIP_HF_EXPORT` | — | Use existing JSONL under the live round `datasets/` tree |
 | `SEARCHBENCH_LCA_HF_SKIP` | `50` | Skip N streaming HF rows before export (avoids huge default repos) |
 | `SEARCHBENCH_LIVE_USE_HF_ROW` | `1` | Export HF slice (default); set `0` for local monorepo row |
-| `SEARCHBENCH_LIVE_E2E_VERIFY_ARCHIVE_ONLY` | — | Validate `.cache/searchbench/live-e2e-bundle-latest` only |
+| `SEARCHBENCH_LIVE_E2E_VERIFY_ARCHIVE_ONLY` | — | Validate the published bundle under `artifacts/` only |
 
-Successful bundles are archived to `.cache/searchbench/live-e2e-bundle-latest/` (includes `round-report.json`, `COMPLETE`, …).
+## Publish flow
+
+On a successful live e2e run:
+
+1. The CLI writes a bundle under a temp `--bundle-root` (test-only).
+2. The test **stages** that tree in `.cache/searchbench/live-e2e-bundle-staging/` (gitignored).
+3. The test **publishes** it to `configs/rounds/live-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/live-ic-vs-jcodemunch-001/` (checked in, like other example rounds).
+
+If a fresh live run fails but that published directory still has `COMPLETE`, the test can validate the last published bundle instead of failing outright.
 
 ## LCA slice from Hugging Face
 
-The live manifest uses `game.lca("py", "dev", 1)`. Rows are **not** checked in; they are exported from [JetBrains-Research/lca-bug-localization](https://huggingface.co/datasets/JetBrains-Research/lca-bug-localization) before the round:
+The live manifest uses `game.lca("py", "dev", 1)`. Rows are **not** checked in under `datasets/`; export from [JetBrains-Research/lca-bug-localization](https://huggingface.co/datasets/JetBrains-Research/lca-bug-localization) before the round:
 
 ```bash
 ./tooling/lca_hf_export.sh \
-  --config py --split dev --max-items 1 \
+  --config py --split dev --max-items 1 --skip 50 \
   --output-dir configs/rounds/live-ic-vs-jcodemunch
 ```
 
@@ -57,14 +66,16 @@ buck2 test //src/searchbench-go:live_e2e
 **CLI** (export the slice first, then):
 
 ```bash
-./tooling/lca_hf_export.sh --config py --split dev --max-items 1 \
+./tooling/lca_hf_export.sh --config py --split dev --max-items 1 --skip 50 \
   --output-dir configs/rounds/live-ic-vs-jcodemunch
 
 cd src/searchbench-go && go build -o ../../searchbench ./cmd/searchbench
 ./searchbench run \
   --manifest=configs/rounds/live-ic-vs-jcodemunch/round.pkl \
-  --bundle-root=.searchbench/artifacts
+  --bundle-root=configs/rounds/live-ic-vs-jcodemunch/artifacts
 ```
+
+After a successful manual run, move or re-run via the live test so artifacts land under `artifacts/games/code-localization/rounds/live-ic-vs-jcodemunch-001/`.
 
 ## What it proves
 
@@ -72,7 +83,7 @@ cd src/searchbench-go && go build -o ../../searchbench ./cmd/searchbench
 - Local git materialization into `SEARCHBENCH_MATERIALIZE_CACHE_DIR` (required for MCP backends)
 - Real MCP tool loops for both backends
 - Cerebras model via Eino (`provider = "cerebras"`)
-- Complete bundle (`evidence.pkl`, `objective.json`, `decision.json`, `COMPLETE`, …)
+- Complete bundle (`evidence.pkl`, `objective.json`, `decision.json`, `COMPLETE`, …) under the live round `artifacts/` tree
 
 Fast manifest resolver test (no secrets, stub JSONL in a temp round copy): `TestLiveICVsJCodeMunchManifestResolves` in `internal/app/round/live_manifest_test.go`.
 

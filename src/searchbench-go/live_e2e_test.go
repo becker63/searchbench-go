@@ -31,6 +31,8 @@ const (
 	envLCAHFSkip             = "SEARCHBENCH_LCA_HF_SKIP"
 	envLiveUseHFRow          = "SEARCHBENCH_LIVE_USE_HF_ROW"
 	envLiveVerifyArchiveOnly = "SEARCHBENCH_LIVE_E2E_VERIFY_ARCHIVE_ONLY"
+	liveRoundID              = "live-ic-vs-jcodemunch-001"
+	liveE2EStagingCacheRel   = ".cache/searchbench/live-e2e-bundle-staging"
 	defaultLiveE2ETimeout    = 20 * time.Minute
 	defaultLCAHFConfig       = "py"
 	defaultLCAHFSplit        = "dev"
@@ -70,7 +72,12 @@ func TestSearchBenchLiveICVsJCodeMunchE2E(t *testing.T) {
 
 	root := reporoot.MonorepoRoot(t)
 	if os.Getenv(envLiveVerifyArchiveOnly) == "1" {
-		verifyArchivedLiveBundle(t, filepath.Join(root, ".cache", "searchbench", "live-e2e-bundle-latest"))
+		manifestDir := filepath.Join(root, "configs", "rounds", "live-ic-vs-jcodemunch")
+		published, err := publishedLiveBundleDir(manifestDir)
+		if err != nil {
+			t.Fatalf("published bundle: %v", err)
+		}
+		verifyPublishedLiveBundle(t, published)
 		return
 	}
 	modRoot := reporoot.GoModuleRoot(t)
@@ -112,10 +119,9 @@ func TestSearchBenchLiveICVsJCodeMunchE2E(t *testing.T) {
 		}
 	}
 	if roundErr != nil {
-		archive := filepath.Join(root, ".cache", "searchbench", "live-e2e-bundle-latest")
-		if _, err := os.Stat(filepath.Join(archive, "COMPLETE")); err == nil {
-			t.Logf("live round failed (%v); validating last successful archived bundle", roundErr)
-			verifyArchivedLiveBundle(t, archive)
+		if published, err := publishedLiveBundleDir(manifestDir); err == nil {
+			t.Logf("live round failed (%v); validating last published bundle at %s", roundErr, published)
+			verifyPublishedLiveBundle(t, published)
 			return
 		}
 		t.Fatal(roundErr)
@@ -131,7 +137,10 @@ func TestSearchBenchLiveICVsJCodeMunchE2E(t *testing.T) {
 
 	reportPath := filepath.Join(bundlePrefix, "round-report.json")
 	assertLiveRoundReport(t, reportPath)
-	archiveLiveBundle(t, root, bundlePrefix)
+
+	staging := stageLiveBundleInCache(t, root, bundlePrefix)
+	published := publishLiveBundleFromCache(t, manifestDir, staging)
+	assertLiveRoundReport(t, filepath.Join(published, "round-report.json"))
 }
 
 func runLiveRoundCLI(
@@ -224,10 +233,56 @@ func checkRoleRuns(role string, runs []runView) error {
 	return nil
 }
 
-func verifyArchivedLiveBundle(tb testing.TB, bundleDir string) {
+func liveRoundBundleDest(manifestDir, roundID string) string {
+	return filepath.Join(manifestDir, "artifacts", "games", "code-localization", "rounds", roundID)
+}
+
+func publishedLiveBundleDir(manifestDir string) (string, error) {
+	dir := liveRoundBundleDest(manifestDir, liveRoundID)
+	if _, err := os.Stat(filepath.Join(dir, "COMPLETE")); err != nil {
+		return "", fmt.Errorf("no published bundle at %s: %w", dir, err)
+	}
+	return dir, nil
+}
+
+func stageLiveBundleInCache(tb testing.TB, repoRoot, bundlePrefix string) string {
+	tb.Helper()
+	staging := filepath.Join(repoRoot, liveE2EStagingCacheRel)
+	if err := replaceTree(bundlePrefix, staging); err != nil {
+		tb.Fatalf("stage live bundle in cache: %v", err)
+	}
+	tb.Logf("staged live bundle in %s", staging)
+	return staging
+}
+
+func publishLiveBundleFromCache(tb testing.TB, manifestDir, stagingDir string) string {
+	tb.Helper()
+	dest := liveRoundBundleDest(manifestDir, liveRoundID)
+	if err := replaceTree(stagingDir, dest); err != nil {
+		tb.Fatalf("publish live bundle to manifest artifacts: %v", err)
+	}
+	tb.Logf("published live bundle to %s", dest)
+	return dest
+}
+
+func replaceTree(src, dst string) error {
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	cmd := exec.Command("cp", "-a", src+string(os.PathSeparator)+".", dst)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w\n%s", err, out)
+	}
+	return nil
+}
+
+func verifyPublishedLiveBundle(tb testing.TB, bundleDir string) {
 	tb.Helper()
 	if _, err := os.Stat(filepath.Join(bundleDir, "COMPLETE")); err != nil {
-		tb.Fatalf("archived bundle missing COMPLETE: %v", err)
+		tb.Fatalf("published bundle missing COMPLETE: %v", err)
 	}
 	assertBundleArtifacts(tb, bundleDir)
 	reportPath := filepath.Join(bundleDir, "round-report.json")
@@ -235,19 +290,7 @@ func verifyArchivedLiveBundle(tb testing.TB, bundleDir string) {
 		tb.Fatal(err)
 	}
 	assertLiveRoundReport(tb, reportPath)
-	tb.Logf("verified archived live bundle at %s", bundleDir)
-}
-
-func archiveLiveBundle(tb testing.TB, repoRoot, bundlePrefix string) {
-	tb.Helper()
-	dest := filepath.Join(repoRoot, ".cache", "searchbench", "live-e2e-bundle-latest")
-	_ = os.RemoveAll(dest)
-	cmd := exec.Command("cp", "-a", bundlePrefix, dest)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		tb.Logf("archive bundle to %s: %v\n%s", dest, err, out)
-		return
-	}
-	tb.Logf("archived live bundle: %s", dest)
+	tb.Logf("verified published live bundle at %s", bundleDir)
 }
 
 func ensureLCADatasetForLiveRound(tb testing.TB, manifestDir string) {

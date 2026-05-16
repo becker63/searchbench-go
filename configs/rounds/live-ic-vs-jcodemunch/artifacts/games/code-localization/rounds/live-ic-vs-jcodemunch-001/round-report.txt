@@ -1,0 +1,30 @@
+SearchBench Round Report  report-live-ic-vs-jcodemunch-001
+
+Decision                                                            
+╭──────────────────────────────────────────────────────────────────╮
+│ PROMOTE_CHALLENGER                                               │
+│ challenger improves the composite score in local fake comparison │
+╰──────────────────────────────────────────────────────────────────╯
+
+Systems                                                                                          
+Incumbent  jcodemunch         cerebras/gpt-oss-120b  jcodemunch  0d62b733ea72  default:dev       
+Challenger iterative-context  cerebras/gpt-oss-120b  iterative-context  fa6f9c07ee23  default:dev
+Policy      python:score_fn  035b5a8f656e                                                        
+
+Execution Summary                 
+Incumbent   1 succeeded   0 failed
+Challenger  1 succeeded   0 failed
+
+Metrics                                                           
+Metric              Incumbent   Challenger  Delta       Result    
+gold_hop            6.00        2.00        -4.00       improved  
+issue_hop           7.00        3.00        -4.00       improved  
+token_efficiency    0.35        0.85        +0.50       improved  
+cost                0.60        0.15        -0.45       improved  
+composite           0.30        0.90        +0.60       improved  
+
+Regressions
+none       
+
+Failures
+none    
