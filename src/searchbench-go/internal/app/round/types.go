@@ -1,6 +1,8 @@
 package round
 
 import (
+	"os"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/components/model"
@@ -67,6 +69,12 @@ type Record struct {
 func normalizeInput(input Input) Input {
 	if input.Now == nil {
 		input.Now = func() time.Time { return time.Now().UTC() }
+	}
+	if strings.TrimSpace(input.DatasetMaterializeCacheDir) == "" {
+		input.DatasetMaterializeCacheDir = strings.TrimSpace(os.Getenv("SEARCHBENCH_MATERIALIZE_CACHE_DIR"))
+	}
+	if strings.TrimSpace(input.DatasetMaterializeRemoteURL) == "" {
+		input.DatasetMaterializeRemoteURL = strings.TrimSpace(os.Getenv("SEARCHBENCH_MATERIALIZE_REMOTE_URL"))
 	}
 	return input
 }

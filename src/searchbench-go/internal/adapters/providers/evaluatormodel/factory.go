@@ -2,6 +2,7 @@ package evaluatormodel
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -27,13 +28,23 @@ func NewFactory(cfg Config) func(spec run.Spec) (model.ToolCallingChatModel, err
 	switch normalizeProvider(cfg.Provider) {
 	case "", "fake":
 		return evaluatorfake.ModelFactory
-	case "openai", "openrouter", "cerebras":
+	case "openai", "openrouter":
 		m, ok := newOpenAIChatModel(cfg)
 		if !ok {
 			return evaluatorfake.ModelFactory
 		}
 		return func(run.Spec) (model.ToolCallingChatModel, error) {
 			return m, nil
+		}
+	case "cerebras":
+		m, ok := newOpenAIChatModel(cfg)
+		if !ok {
+			return func(run.Spec) (model.ToolCallingChatModel, error) {
+				return nil, fmt.Errorf("cerebras evaluator: CEREBRAS_API_KEY is required")
+			}
+		}
+		return func(run.Spec) (model.ToolCallingChatModel, error) {
+			return wrapCerebrasCompat(m), nil
 		}
 	default:
 		return evaluatorfake.ModelFactory

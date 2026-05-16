@@ -50,6 +50,31 @@ local function fakeEvaluator(): Evaluator =
     """
   }
 
+/// Live evaluator using Cerebras via Eino. Empty tools.allow exposes each backend's
+/// advertised MCP tools at runtime (not the fake IC-only allowlist).
+local function cerebrasEvaluator(modelName: String): Evaluator =
+  new Evaluator {
+    model {
+      provider = "cerebras"
+      name = modelName
+      maxOutputTokens = 2000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 24
+      timeoutSeconds = 300
+    }
+
+    tools {}
+
+    systemPrompt = """
+    Use structural code evidence before guessing.
+    Prefer the smallest plausible file set.
+    Do not invent files that were not returned by tools.
+    """
+  }
+
 local function fakeOptimizer(): Optimizer =
   new Optimizer {
     model {

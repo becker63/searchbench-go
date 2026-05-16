@@ -31,6 +31,16 @@ func TestNewFactoryFakeProviderUsesLocalFake(t *testing.T) {
 	}
 }
 
+func TestNewFactoryCerebrasWithoutCredentialsFails(t *testing.T) {
+	t.Setenv("CEREBRAS_API_KEY", "")
+
+	f := NewFactory(Config{Provider: "cerebras", Model: "gpt-oss-120b"})
+	_, err := f(sampleSpec())
+	if err == nil {
+		t.Fatal("expected error when CEREBRAS_API_KEY is missing for cerebras provider")
+	}
+}
+
 func TestNewFactoryOpenAIWithoutCredentialsUsesLocalFake(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")

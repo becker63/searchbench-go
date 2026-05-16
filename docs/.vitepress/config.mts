@@ -37,6 +37,7 @@ export default defineConfig({
           { text: "Pkl rounds", link: "/reference/pkl-rounds" },
           { text: "Pkl objectives", link: "/reference/pkl-objectives" },
           { text: "Bundles", link: "/reference/bundles" },
+          { text: "Live MCP e2e", link: "/reference/live-e2e" },
           { text: "Optimizer policy validation", link: "/reference/optimizer-policy-validation" },
         ],
       },

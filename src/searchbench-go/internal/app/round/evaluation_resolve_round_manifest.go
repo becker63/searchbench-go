@@ -274,16 +274,32 @@ func resolveRoundMatches(
 
 func resolveRoundEvaluator(round *config.RoundManifest, parent *pureround.Continuation) (EvaluatorConfig, domain.ModelSpec, EvaluatorBoundsConfig, int, error) {
 	if round != nil && round.Evaluator != nil {
-		effectiveTools, deniedTools, systemPrompt, policyHash, err := evaluatorpolicy.ResolveEvaluatorRunPolicy(
-			round.Evaluator.Tools,
-			round.Evaluator.SystemPrompt,
-			evaluatorpolicy.EvaluatorToolRegistry{
-				Available:      evaluatorfake.LocalEvaluatorToolNames(),
-				DefaultAllowed: evaluatorfake.LocalEvaluatorDefaultAllowedToolNames(),
-			},
+		provider := strings.TrimSpace(round.Evaluator.Model.Provider.String())
+		var (
+			effectiveTools []string
+			deniedTools    []string
+			systemPrompt   string
+			policyHash     string
+			err            error
 		)
-		if err != nil {
-			return EvaluatorConfig{}, domain.ModelSpec{}, EvaluatorBoundsConfig{}, 0, fmt.Errorf("evaluator tool policy: %w", err)
+		if evaluatorUsesBackendToolSurface(provider) && len(round.Evaluator.Tools.Allow) == 0 {
+			// Live MCP rounds: empty allow exposes each backend's advertised tools at runtime.
+			effectiveTools = nil
+			deniedTools = evaluatorpolicy.NormalizeDenied(round.Evaluator.Tools.Deny)
+			systemPrompt = evaluatorpolicy.TrimSystemPrompt(round.Evaluator.SystemPrompt)
+			policyHash = evaluatorpolicy.PromptPolicyHash(effectiveTools, deniedTools, systemPrompt)
+		} else {
+			effectiveTools, deniedTools, systemPrompt, policyHash, err = evaluatorpolicy.ResolveEvaluatorRunPolicy(
+				round.Evaluator.Tools,
+				round.Evaluator.SystemPrompt,
+				evaluatorpolicy.EvaluatorToolRegistry{
+					Available:      evaluatorfake.LocalEvaluatorToolNames(),
+					DefaultAllowed: evaluatorfake.LocalEvaluatorDefaultAllowedToolNames(),
+				},
+			)
+			if err != nil {
+				return EvaluatorConfig{}, domain.ModelSpec{}, EvaluatorBoundsConfig{}, 0, fmt.Errorf("evaluator tool policy: %w", err)
+			}
 		}
 		configView := EvaluatorConfig{
 			Model: EvaluatorModelConfig{
@@ -564,4 +580,13 @@ func stringifyDeniedEvidenceKinds(values []config.OptimizerDeniedEvidenceKind) [
 		out = append(out, value.String())
 	}
 	return out
+}
+
+func evaluatorUsesBackendToolSurface(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "cerebras", "openai", "openrouter":
+		return true
+	default:
+		return false
+	}
 }

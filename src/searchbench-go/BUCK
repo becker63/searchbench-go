@@ -21,6 +21,11 @@ sh_test(
     test = "pkl_go_types_check.sh",
 )
 
+sh_test(
+    name = "live_e2e",
+    test = "live_e2e.sh",
+)
+
 test_suite(
     name = "check",
     tests = [

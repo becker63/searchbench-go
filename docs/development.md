@@ -41,6 +41,8 @@ buck2 test //:check_full     # full — same as pre-push
 - `//src/iterative-context:check_full`
 - `//docs:check`
 
+Opt-in live MCP proof (not in `//:check`): `buck2 test //src/searchbench-go:live_e2e` — see [reference/live-e2e.md](./reference/live-e2e.md).
+
 After editing `configs/schema/SearchBenchRound.pkl`:
 
 ```bash

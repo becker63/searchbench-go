@@ -116,6 +116,13 @@
           excludes = hookExcludes;
           hooks = devHooks;
         };
+
+        lcaExportPython = pkgs.python3.withPackages (
+          ps: with ps; [
+            datasets
+            huggingface-hub
+          ]
+        );
       in
       {
         formatter = pkgs.nixfmt;
@@ -138,6 +145,7 @@
               nixfmt
               templ
               nodejs_22
+              lcaExportPython
             ])
             ++ preCommitDev.enabledPackages;
 

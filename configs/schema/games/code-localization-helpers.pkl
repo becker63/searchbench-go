@@ -116,6 +116,29 @@ function fakeEvaluator(): schema.Evaluator =
     """
   }
 
+function cerebrasEvaluator(modelName: String): schema.Evaluator =
+  new schema.Evaluator {
+    model {
+      provider = "cerebras"
+      name = modelName
+      maxOutputTokens = 2000
+    }
+
+    bounds {
+      maxModelTurns = 8
+      maxToolCalls = 24
+      timeoutSeconds = 300
+    }
+
+    tools {}
+
+    systemPrompt = """
+    Use structural code evidence before guessing.
+    Prefer the smallest plausible file set.
+    Do not invent files that were not returned by tools.
+    """
+  }
+
 function fakeOptimizer(): schema.Optimizer =
   new schema.Optimizer {
     model {

@@ -177,6 +177,16 @@ func renderContinuationMatches(continuation pureround.Continuation) (string, err
 
 func renderContinuationEvaluator(continuation pureround.Continuation) (string, error) {
 	evaluator := continuation.Evaluator
+	sharedPrompt := "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools."
+	if evaluator.Model.Provider == "cerebras" &&
+		evaluator.Bounds.MaxModelTurns == 8 &&
+		evaluator.Bounds.MaxToolCalls == 24 &&
+		evaluator.Bounds.TimeoutSeconds == 300 &&
+		len(evaluator.AllowedTools) == 0 &&
+		len(evaluator.DeniedTools) == 0 &&
+		evaluator.SystemPrompt == sharedPrompt {
+		return fmt.Sprintf("game.cerebrasEvaluator(%s)", pklQuoted(evaluator.Model.Name)), nil
+	}
 	if evaluator.Model.Provider != "fake" ||
 		evaluator.Model.Name != "fake-evaluator" ||
 		evaluator.Model.MaxOutputTokens != 2000 ||
@@ -188,10 +198,10 @@ func renderContinuationEvaluator(continuation pureround.Continuation) (string, e
 		evaluator.Retry.RetryOnToolFailure ||
 		!evaluator.Retry.RetryOnFinalizationFailure ||
 		!evaluator.Retry.RetryOnInvalidPrediction ||
-		evaluator.SystemPrompt != "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools." ||
+		evaluator.SystemPrompt != sharedPrompt ||
 		!sameStrings(evaluator.AllowedTools, []string{"resolve", "expand", "resolve_and_expand"}) ||
 		!sameStrings(evaluator.DeniedTools, []string{"shell", "go_test", "write_file", "network"}) {
-		return "", fmt.Errorf("render continuation.pkl evaluator: only the fake local evaluator shape is currently supported")
+		return "", fmt.Errorf("render continuation.pkl evaluator: unsupported evaluator shape")
 	}
 	return "game.fakeEvaluator()", nil
 }

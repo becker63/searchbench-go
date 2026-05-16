@@ -1,0 +1,27 @@
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "live-ic-vs-jcodemunch-smoke"
+
+round = (game.defineFromScratch("live-ic-vs-jcodemunch-001")) {
+  incumbent = (game.jcodemunch()) {
+    system {
+      runtime {
+        maxSteps = 8
+      }
+    }
+  }
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    system {
+      runtime {
+        maxSteps = 8
+      }
+    }
+    selectionPolicy {
+      id = "challenger-policy-live-smoke"
+    }
+  }
+  matches = game.lca("py", "dev", 1)
+  evaluator = game.cerebrasEvaluator("gpt-oss-120b")
+  scoring = game.objective("scoring/localization-objective.pkl")
+}
