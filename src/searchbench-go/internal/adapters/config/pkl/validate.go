@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/backend"
 )
 
 const maxSystemPromptBytes = 8 * 1024
@@ -127,6 +129,9 @@ func validateRoundPolicy(fieldPath string, policy RoundPolicy) error {
 	if strings.TrimSpace(policy.System.Id) == "" {
 		return fmt.Errorf("%s.system.id: %w", fieldPath, ErrMissingIncumbentPolicyID)
 	}
+	if err := validateICWorkspaceSeed(fieldPath+".system", policy.System); err != nil {
+		return err
+	}
 	if policy.SelectionPolicy != nil {
 		if err := validatePolicyArtifact(*policy.SelectionPolicy); err != nil {
 			return err
@@ -142,8 +147,13 @@ func validateRoundChallenger(challenger RoundChallenger) error {
 	if challenger.SelectionPolicy == nil && challenger.Generate == nil {
 		return ErrMissingRoundChallenger
 	}
-	if challenger.System != nil && strings.TrimSpace(challenger.System.Id) == "" {
-		return ErrMissingChallengerPolicyID
+	if challenger.System != nil {
+		if strings.TrimSpace(challenger.System.Id) == "" {
+			return ErrMissingChallengerPolicyID
+		}
+		if err := validateICWorkspaceSeed("round.challenger.system", *challenger.System); err != nil {
+			return err
+		}
 	}
 	if challenger.SelectionPolicy != nil {
 		if err := validatePolicyArtifact(*challenger.SelectionPolicy); err != nil {
@@ -164,6 +174,20 @@ func validateRoundChallenger(challenger RoundChallenger) error {
 		if filepath.IsAbs(name) || containsParentPath(name) || name == "" {
 			return ErrRoundGenerateArtifactNameInvalid
 		}
+	}
+	return nil
+}
+
+func validateICWorkspaceSeed(fieldPath string, sys System) error {
+	if sys.Backend != backend.IterativeContext {
+		return nil
+	}
+	if sys.Runtime.WorkspaceSeed == nil {
+		return nil
+	}
+	ws := sys.Runtime.WorkspaceSeed
+	if err := ValidateWorkspaceSeedConfig(string(ws.Provider), ws.LocalPath); err != nil {
+		return fmt.Errorf("%s.runtime.workspaceSeed: %w", fieldPath, err)
 	}
 	return nil
 }

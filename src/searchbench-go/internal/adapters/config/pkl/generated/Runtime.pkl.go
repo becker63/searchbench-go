@@ -6,4 +6,7 @@ type Runtime struct {
 	MaxSteps int `pkl:"maxSteps"`
 
 	TimeoutSeconds int `pkl:"timeoutSeconds"`
+
+	// Optional IC workspace seed (local path copy into candidate workspace).
+	WorkspaceSeed *WorkspaceSeedConfig `pkl:"workspaceSeed"`
 }

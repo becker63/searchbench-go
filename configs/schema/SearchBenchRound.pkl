@@ -28,6 +28,9 @@ typealias Backend = "iterative_context" | "jcodemunch" | "fake"
 /// LLM provider id for agent models.
 typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
 
+/// IC workspace seed provider (local file copy path on this integration branch).
+typealias WorkspaceSeedProvider = "local_path"
+
 /// Formats written for the round report.
 typealias ReportFormat = "json" | "text"
 
@@ -84,6 +87,14 @@ class PromptBundle {
 class Runtime {
   maxSteps: Int(this > 0) = 16
   timeoutSeconds: Int(this > 0) = 300
+  /// Optional IC workspace seed (local path copy into candidate workspace).
+  workspaceSeed: WorkspaceSeedConfig?
+}
+
+/// Local-path workspace seed for IC-backed optimizable systems.
+class WorkspaceSeedConfig {
+  provider: WorkspaceSeedProvider = "local_path"
+  localPath: String?
 }
 
 /// A versioned policy artifact implementing a declared interface.

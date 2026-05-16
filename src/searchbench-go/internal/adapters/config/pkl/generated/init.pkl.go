@@ -25,4 +25,5 @@ func init() {
 	pkl.RegisterStrictMapping("searchbench.config.SearchBenchRound#Runtime", Runtime{})
 	pkl.RegisterStrictMapping("searchbench.config.SearchBenchRound#Scoring", Scoring{})
 	pkl.RegisterStrictMapping("searchbench.config.SearchBenchRound#System", System{})
+	pkl.RegisterStrictMapping("searchbench.config.SearchBenchRound#WorkspaceSeedConfig", WorkspaceSeedConfig{})
 }
