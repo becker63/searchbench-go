@@ -12,6 +12,7 @@ import (
 	"time"
 
 	execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
 	"github.com/becker63/searchbench-go/internal/ports/pipeline"
@@ -50,6 +51,29 @@ func ValidateProposalWithLocalPathSeed(
 	if err != nil {
 		return infraFailure(proposal, err)
 	}
+	return validateProposalWithSeed(ctx, seed, proposal)
+}
+
+// ValidateProposalWithBuckDescriptor resolves a Buck optimizable backend descriptor seed, then validates.
+func ValidateProposalWithBuckDescriptor(
+	ctx context.Context,
+	proposal pureoptimizer.NextChallengerProposal,
+) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
+	provider := buckdescriptor.Provider{
+		DescriptorTarget: "//src/iterative-context:optimizable_backend",
+	}
+	seed, err := provider.PrepareSeed(ctx)
+	if err != nil {
+		return infraFailure(proposal, fmt.Errorf("buck descriptor seed: %w", err))
+	}
+	return validateProposalWithSeed(ctx, seed, proposal)
+}
+
+func validateProposalWithSeed(
+	ctx context.Context,
+	seed pureoptimizer.WorkspaceSeed,
+	proposal pureoptimizer.NextChallengerProposal,
+) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
 	mat := materialize.CandidateMaterializer{}
 	candidate, cleanup, err := mat.Materialize(seed)
 	if err != nil {

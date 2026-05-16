@@ -7,6 +7,6 @@ type Runtime struct {
 
 	TimeoutSeconds int `pkl:"timeoutSeconds"`
 
-	// Optional IC workspace seed (local path copy into candidate workspace).
+	// Optional IC workspace seed provider wiring (logical; repo Buck targets stay internal).
 	WorkspaceSeed *WorkspaceSeedConfig `pkl:"workspaceSeed"`
 }

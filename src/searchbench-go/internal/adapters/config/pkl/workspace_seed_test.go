@@ -6,16 +6,23 @@ import (
 	config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 )
 
-func TestValidateWorkspaceSeedConfigLocalPath(t *testing.T) {
+func TestValidateWorkspaceSeedConfig(t *testing.T) {
 	t.Parallel()
 	local := "src/iterative-context"
-	if err := config.ValidateWorkspaceSeedConfig("local_path", &local); err != nil {
+	buck := "//src/iterative-context:optimizable_backend"
+	if err := config.ValidateWorkspaceSeedConfig("local_path", &local, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := config.ValidateWorkspaceSeedConfig("local_path", nil); err == nil {
+	if err := config.ValidateWorkspaceSeedConfig("buck_descriptor", nil, &buck); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.ValidateWorkspaceSeedConfig("local_path", nil, nil); err == nil {
 		t.Fatal("expected local path required")
 	}
-	if err := config.ValidateWorkspaceSeedConfig("buck_descriptor", &local); err == nil {
-		t.Fatal("expected unknown provider on localpath branch")
+	if err := config.ValidateWorkspaceSeedConfig("buck_descriptor", nil, nil); err == nil {
+		t.Fatal("expected buck target required")
+	}
+	if err := config.ValidateWorkspaceSeedConfig("git", &local, nil); err == nil {
+		t.Fatal("expected git unsupported")
 	}
 }

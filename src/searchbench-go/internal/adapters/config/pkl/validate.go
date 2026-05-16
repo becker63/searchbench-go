@@ -186,7 +186,7 @@ func validateICWorkspaceSeed(fieldPath string, sys System) error {
 		return nil
 	}
 	ws := sys.Runtime.WorkspaceSeed
-	if err := ValidateWorkspaceSeedConfig(string(ws.Provider), ws.LocalPath); err != nil {
+	if err := ValidateWorkspaceSeedConfig(string(ws.Provider), ws.LocalPath, ws.BuckDescriptorTarget); err != nil {
 		return fmt.Errorf("%s.runtime.workspaceSeed: %w", fieldPath, err)
 	}
 	return nil

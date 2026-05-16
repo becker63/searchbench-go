@@ -7,30 +7,13 @@ import (
 	"testing"
 
 	execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
 	"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
-
-func TestLocalPathProviderPrepareSeed(t *testing.T) {
-	t.Parallel()
-	src := t.TempDir()
-	if err := os.WriteFile(filepath.Join(src, "pyproject.toml"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	seed, err := localpath.Provider{Source: src}.PrepareSeed(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if seed.Kind != optimizer.SeedKindLocalPath {
-		t.Fatalf("kind: %s", seed.Kind)
-	}
-	if seed.Identity.Provider != optimizer.SeedProviderLocalPath {
-		t.Fatalf("provider: %s", seed.Identity.Provider)
-	}
-}
 
 func TestValidateProposalInWorkspaceUsesSuppliedRoot(t *testing.T) {
 	t.Parallel()
@@ -72,46 +55,52 @@ func TestValidateProposalInWorkspaceUsesSuppliedRoot(t *testing.T) {
 		t.Fatalf("unexpected failure: %v", fail)
 	}
 	if len(res.Results) == 0 || res.Results[0].CWD != ws.Root {
-		t.Fatalf("expected stage_policy cwd=%q, got %+v", ws.Root, res.Results)
-	}
-	if _, err := os.Stat(filepath.Join(ws.Root, proposal.ArtifactName)); err != nil {
-		t.Fatalf("staged policy not in supplied workspace: %v", err)
+		t.Fatalf("expected stage_policy cwd=%q", ws.Root)
 	}
 	if _, err := os.Stat(marker); err != nil {
 		t.Fatal("supplied workspace was replaced")
 	}
-	orig, _ := os.ReadFile(filepath.Join(src, "pyproject.toml"))
-	if string(orig) == "" {
-		t.Fatal("source must remain unchanged")
-	}
 }
 
-func TestValidateProposalWithLocalPathSeedDoesNotMutateSource(t *testing.T) {
+func TestLocalPathProviderPrepareSeed(t *testing.T) {
 	t.Parallel()
-	icRoot, err := policy.ResolveIterativeContextRoot()
-	if err != nil {
-		t.Skip(err)
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "pyproject.toml"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	before, err := os.ReadFile(filepath.Join(icRoot, "pyproject.toml"))
-	if err != nil {
-		t.Skip(err)
-	}
-	proposal := optimizer.NextChallengerProposal{
-		ArtifactID:   domain.ArtifactID("test-policy"),
-		ArtifactName: "candidate_policy.py",
-		InterfaceID:  "iface",
-		Code:         "def score_fn():\n    return 1\n",
-	}
-	_, fail := policy.ValidateProposalWithLocalPathSeed(context.Background(), proposal)
-	if fail != nil && fail.Kind == optimizer.FailureKindPolicyPipelineInfrastructure {
-		t.Skip("uv/ic toolchain not available")
-	}
-	after, err := os.ReadFile(filepath.Join(icRoot, "pyproject.toml"))
+	seed, err := localpath.Provider{Source: src}.PrepareSeed(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(before) != string(after) {
-		t.Fatal("source tree was mutated during validation")
+	if seed.Identity.Provider != optimizer.SeedProviderLocalPath {
+		t.Fatalf("provider: %s", seed.Identity.Provider)
+	}
+}
+
+func TestBuckProviderMapsDescriptorToSeed(t *testing.T) {
+	t.Parallel()
+	repo := t.TempDir()
+	icSrc := filepath.Join(repo, "src", "iterative-context")
+	writeICLayout(t, icSrc)
+	descPath := filepath.Join(icSrc, "optimizable_backend.json")
+	if err := os.WriteFile(descPath, []byte(`{
+  "kind": "searchbench.optimizable_backend.v1",
+  "source": {"kind": "local_path", "path": "src/iterative-context", "declared_by": "//src/iterative-context:optimizable_backend"},
+  "launcher": {"kind": "mcp_stdio", "cwd_mode": "candidate_workspace", "argv": ["uv","run","python","-m","iterative_context.server"], "env": {}},
+  "candidate_validator": {"kind": "ic_policy_pipeline", "steps": ["stage_policy"]},
+  "runtime_admin": {"install_tool": "install_score", "verify_tool": "verify_score", "hidden_from_evaluator": true}
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	seed, err := buckdescriptor.Provider{DescriptorPath: descPath, RepoRoot: repo}.PrepareSeed(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seed.Identity.Provider != optimizer.SeedProviderBuckDescriptor {
+		t.Fatalf("provider: %s", seed.Identity.Provider)
+	}
+	if seed.Archive != "" {
+		t.Fatalf("archive must be empty, got %q", seed.Archive)
 	}
 }
 

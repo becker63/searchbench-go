@@ -106,8 +106,12 @@ docs/
     agents-need-fewer-commands.md
   engineering/
     agentic-development-flow.md
+    ic-buck-descriptor-provider.md
+    ic-config-provider-wiring.md
     ic-issues-61-68-consolidated.diff
     ic-localpath-provider.md
+    ic-provider-comparison.md
+    ic-workspace-seed-providers.md
     issue-style-guide.md
     issue-wave-manifest.md
     model-testing.md
@@ -319,6 +323,12 @@ src/
             factory_test.go
             factory.go
         workspace/
+          buckdescriptor/
+            descriptor_test.go
+            descriptor.go
+            provider.go
+          compare/
+            compare_test.go
           localpath/
             provider_test.go
             provider.go
@@ -1206,8 +1216,8 @@ typealias Backend = "iterative_context" | "jcodemunch" | "fake"
 /// LLM provider id for agent models.
 typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
 
-/// IC workspace seed provider (local file copy path on this integration branch).
-typealias WorkspaceSeedProvider = "local_path"
+/// IC workspace seed provider for optimizable IC-backed systems.
+typealias WorkspaceSeedProvider = "local_path" | "buck_descriptor" | "git" | "archive"
 
 /// Formats written for the round report.
 typealias ReportFormat = "json" | "text"
@@ -1265,14 +1275,17 @@ class PromptBundle {
 class Runtime {
   maxSteps: Int(this > 0) = 16
   timeoutSeconds: Int(this > 0) = 300
-  /// Optional IC workspace seed (local path copy into candidate workspace).
+  /// Optional IC workspace seed provider wiring (logical; repo Buck targets stay internal).
   workspaceSeed: WorkspaceSeedConfig?
 }
 
-/// Local-path workspace seed for IC-backed optimizable systems.
+/// Declares how an IC optimizable backend seed is obtained for candidate workspaces.
 class WorkspaceSeedConfig {
   provider: WorkspaceSeedProvider = "local_path"
+  /// Required when provider is local_path (repo-relative or absolute path).
   localPath: String?
+  /// Required when provider is buck_descriptor (repo-internal Buck label).
+  buckDescriptorTarget: String?
 }
 
 /// A versioned policy artifact implementing a declared interface.
@@ -8292,6 +8305,131 @@ For the toolchain and automation, use the flake-backed workflow in [`AGENTS.md`]
 Project automation is **Buck-first**: targets under `src/**/BUCK`, root **`BUCK`**, and **`toolchains/`** (Nix cell + Repomix gate). The flake only instantiates the dev shell, git-hooks, and Buck’s `nix` cell — see **`AGENTS.md`** and **`docs/architecture/build-system.md`**.
 </file>
 
+<file path="docs/engineering/ic-buck-descriptor-provider.md">
+# IC Buck descriptor workspace seed provider
+
+Complete **Buck-backed optimizable backend descriptor** integration for the SearchBench ↔ Iterative Context candidate lifecycle. This branch does not ship `LocalPathProvider` as the primary public path.
+
+## Level 2 semantics
+
+```text
+buck2 build //src/iterative-context:optimizable_backend
+  → validates the descriptor target exists in the Buck graph
+
+BuckBackendDescriptorProvider
+  → loads src/iterative-context/optimizable_backend.json from the repo checkout
+  → source.kind = local_path (descriptor-internal)
+  → materializer copies that path into ICCandidateWorkspace
+```
+
+Archive snapshots and source manifests are **deferred**. The provider does not pretend they exist.
+
+## What Buck buys
+
+- Graph-addressable backend: `//src/iterative-context:optimizable_backend`
+- Candidate-facing JSON contract: launcher, validator steps, runtime admin
+- Stable evidence identity: `provider=buck_descriptor`, `source=<Buck label>`
+
+## Repo checks boundary
+
+Backend descriptors must **not** include `repo_checks`. Contributor validation stays on ordinary targets:
+
+```text
+//:check
+//:check_full
+//src/iterative-context:check
+//src/iterative-context:check_full
+```
+
+## Config example
+
+```pkl
+runtime {
+  workspaceSeed {
+    provider = "buck_descriptor"
+    buckDescriptorTarget = "//src/iterative-context:optimizable_backend"
+  }
+}
+```
+
+## Validation
+
+```sh
+cd src/searchbench-go
+go test ./...
+
+nix develop -c buck2 build //src/iterative-context:optimizable_backend
+nix develop -c buck2 test //:check
+nix develop -c buck2 test //:check_full
+```
+</file>
+
+<file path="docs/engineering/ic-config-provider-wiring.md">
+# IC config and workspace seed provider wiring
+
+## Split of responsibilities
+
+| Layer | Declares |
+| --- | --- |
+| **Pkl** (`configs/schema/SearchBenchRound.pkl`) | Provider intent: `local_path` or `buck_descriptor` |
+| **Buck** | Legal repo operations (`//src/iterative-context:optimizable_backend`, `//:check`, …) |
+| **Bundle / evidence** | What happened: seed identity, validation steps, runtime identity |
+
+Buck is **not** required for public users. Pkl remains logical and provider-neutral at the schema level.
+
+## Schema
+
+```pkl
+typealias WorkspaceSeedProvider = "local_path" | "buck_descriptor" | "git" | "archive"
+
+class Runtime {
+  workspaceSeed: WorkspaceSeedConfig?
+}
+
+class WorkspaceSeedConfig {
+  provider: WorkspaceSeedProvider = "local_path"
+  localPath: String?
+  buckDescriptorTarget: String?
+}
+```
+
+Go validation: `internal/adapters/config/pkl/workspace_seed.go`
+
+- `local_path` → `localPath` required
+- `buck_descriptor` → `buckDescriptorTarget` required
+- `git` / `archive` → rejected (reserved)
+
+## Examples
+
+### Public / default (`local_path`)
+
+```pkl
+system = new System {
+  id = "iterative-context"
+  backend = "iterative_context"
+  runtime = new Runtime {
+    workspaceSeed = new WorkspaceSeedConfig {
+      provider = "local_path"
+      localPath = "src/iterative-context"
+    }
+  }
+}
+```
+
+### Internal (`buck_descriptor`)
+
+```pkl
+runtime = new Runtime {
+  workspaceSeed = new WorkspaceSeedConfig {
+    provider = "buck_descriptor"
+    buckDescriptorTarget = "//src/iterative-context:optimizable_backend"
+  }
+}
+```
+
+See also [ic-workspace-seed-providers.md](./ic-workspace-seed-providers.md).
+</file>
+
 <file path="docs/engineering/ic-issues-61-68-consolidated.diff">
 # Consolidated diff: GitHub issues #61–#68 vs main
 #
@@ -10764,6 +10902,170 @@ From repo root (after `nix develop`):
 ```sh
 buck2 test //:check
 buck2 test //:check_full
+```
+</file>
+
+<file path="docs/engineering/ic-provider-comparison.md">
+# IC provider comparison (integration result)
+
+Comparison branches `compare/ic-localpath-provider-complete` and `compare/ic-buck-descriptor-provider-complete` informed this integration. The union lives on `integrate/ic-workspace-seed-providers`.
+
+## Summary
+
+| Dimension | `local_path` | `buck_descriptor` |
+| --- | --- | --- |
+| implementation complexity | Low | Medium (+ descriptor schema) |
+| LOC / new concepts | `localpath` + shared materializer | `buckdescriptor` + submodule target |
+| runtime overhead | One tree copy | Descriptor load + same copy (Level 2) |
+| debuggability | High (plain paths) | Medium (descriptor + Buck label) |
+| failure modes | Missing path, copy I/O | Malformed descriptor, Buck unavailable |
+| workspace purity | Same excludes (`.git`, caches, …) | Same |
+| evidence identity | path + digest | Buck label + digest |
+| public ergonomics | Best | Repo-internal |
+| meta-harness legibility | Weaker | Stronger (graph-addressable) |
+| archive pressure | None | Deferred explicitly |
+
+## Decision
+
+1. **LocalPathProvider is sufficient for now** — default optimizer validation uses it.
+2. **BuckBackendDescriptorProvider is worth adopting internally** — keep behind `buck_descriptor` config.
+3. **Archive snapshots are deferred** — Level 2 `local_path` inside descriptor only.
+4. **Final integration keeps both** behind `ports/workspace.SeedProvider`.
+
+## Smoke test
+
+`internal/adapters/workspace/compare/compare_test.go` runs both providers through materialization and checks key IC files exist in each candidate workspace.
+</file>
+
+<file path="docs/engineering/ic-workspace-seed-providers.md">
+# IC workspace seed providers
+
+`WorkspaceSeedProvider` is the core abstraction. `LocalPathProvider` and `BuckBackendDescriptorProvider` are competing implementations that feed the **same** candidate workspace lifecycle.
+
+## Shared lifecycle
+
+```text
+WorkspaceSeedProvider
+  → WorkspaceSeed
+  → ICCandidateWorkspace (materializer)
+  → ValidateProposalInWorkspace (candidate validation)
+  → AcceptedICCandidate + MCP launch
+  → bundle/evidence (seed + policy identity)
+```
+
+Invariant: **the workspace that passes validation is the workspace whose MCP server launches.**
+
+## `local_path`
+
+### When to use
+
+- Public users and examples
+- Quick local development and debugging
+- Tests that should not require Buck
+- Simple backends where a directory path is enough
+
+### What it buys
+
+- Simplest mental model
+- No Buck dependency for consumers
+- Easiest failure modes to reason about
+- Best public ergonomics
+
+### Config
+
+```pkl
+runtime {
+  workspaceSeed {
+    provider = "local_path"
+    localPath = "src/iterative-context"
+  }
+}
+```
+
+### Go
+
+```go
+seed, err := localpath.Provider{Source: "src/iterative-context"}.PrepareSeed(ctx)
+```
+
+## `buck_descriptor`
+
+### When to use
+
+- Internal SearchBench-Go / IC optimization
+- Meta-harnesses and graph-addressable backend identity
+- Config bundle targets tied to Buck labels
+- Release/evidence provenance experiments
+
+### What it buys
+
+- Stable Buck label as backend identity (`//src/iterative-context:optimizable_backend`)
+- Candidate-facing JSON descriptor (launcher, validator, runtime admin)
+- Better repo-graph legibility for infra agents
+
+### Level 2 semantics (current)
+
+```text
+buck2 build //src/iterative-context:optimizable_backend
+  → validates the descriptor target in the Buck graph
+
+BuckBackendDescriptorProvider
+  → loads src/iterative-context/optimizable_backend.json from the repo checkout
+  → source.kind = local_path inside the descriptor
+  → same materializer copies that path into ICCandidateWorkspace
+```
+
+Archive snapshots and source manifests are **deferred**.
+
+### Config
+
+```pkl
+runtime {
+  workspaceSeed {
+    provider = "buck_descriptor"
+    buckDescriptorTarget = "//src/iterative-context:optimizable_backend"
+  }
+}
+```
+
+### Go
+
+```go
+seed, err := buckdescriptor.Provider{
+    DescriptorTarget: "//src/iterative-context:optimizable_backend",
+}.PrepareSeed(ctx)
+```
+
+## Boundary: backend descriptor vs repo checks
+
+| Layer | Role |
+| --- | --- |
+| Backend descriptor | Candidate-facing runtime/optimization contract |
+| Repo Buck targets | Contributor / CI / meta-harness validation |
+
+Backend descriptors must **not** include `repo_checks`. Repo checks stay on:
+
+```text
+//:check
+//:check_full
+//src/iterative-context:check
+//src/iterative-context:check_full
+```
+
+## Decision summary
+
+- **LocalPathProvider** is sufficient and should be the **public/default** path (`validateIterativeContextProposal` uses it today).
+- **BuckBackendDescriptorProvider** is worth keeping as an **internal** infra/meta-harness path.
+- **Archive snapshots** remain deferred.
+
+## Validation
+
+```sh
+cd src/searchbench-go
+go test ./internal/adapters/workspace/... ./internal/agents/optimizer/policy/...
+
+nix develop -c buck2 build //src/iterative-context:optimizable_backend
+nix develop -c buck2 test //:check
 ```
 </file>
 
@@ -21199,13 +21501,15 @@ ic "github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontex
 ⋮----
 func TestLaunchCWDMismatchErrors(t *testing.T)
 ⋮----
-func TestRuntimeIdentityIncludesSeedAndPolicy(t *testing.T)
+func TestRuntimeIdentityLocalPath(t *testing.T)
+⋮----
+func TestRuntimeIdentityBuckDescriptor(t *testing.T)
 ⋮----
 func TestAdminToolsExcludedFromEvaluatorList(t *testing.T)
 ⋮----
-// Regression guard: excludedEvaluatorToolNames in runtime.go hides install/verify.
-⋮----
 var visible []string
+⋮----
+func acceptedCandidate(root, provider, source string) optimizer.AcceptedICCandidate
 </file>
 
 <file path="src/searchbench-go/internal/adapters/backend/iterativecontext/candidate_launch.go">
@@ -22805,7 +23109,7 @@ import (
 ⋮----
 config "github.com/becker63/searchbench-go/internal/adapters/config/pkl"
 ⋮----
-func TestValidateWorkspaceSeedConfigLocalPath(t *testing.T)
+func TestValidateWorkspaceSeedConfig(t *testing.T)
 </file>
 
 <file path="src/searchbench-go/internal/adapters/config/pkl/workspace_seed.go">
@@ -22813,17 +23117,19 @@ package config
 ⋮----
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 ⋮----
 "errors"
+"fmt"
 "strings"
 ⋮----
 var (
-	ErrWorkspaceSeedLocalPathRequired = errors.New("config: workspaceSeed.localPath is required when provider is local_path")
+	ErrWorkspaceSeedProviderRequired      = errors.New("config: workspace seed provider is required")
 ⋮----
-// ValidateWorkspaceSeedConfig checks local-path IC workspace seed wiring.
-func ValidateWorkspaceSeedConfig(provider string, localPath *string) error
+// ValidateWorkspaceSeedConfig checks IC workspace seed provider wiring.
+func ValidateWorkspaceSeedConfig(provider string, localPath, buckTarget *string) error
 </file>
 
 <file path="src/searchbench-go/internal/adapters/dataset/lca/load.go">
@@ -23912,6 +24218,212 @@ func NewHandlerFactory(cfg Config) (HandlerFactory, error)
 // HandlerFactoryFromEnv builds a factory from LANGSMITH_API_KEY /
 // LANGSMITH_API_URL. When the API key is unset, returns (nil, nil).
 func HandlerFactoryFromEnv() (HandlerFactory, error)
+</file>
+
+<file path="src/searchbench-go/internal/adapters/workspace/buckdescriptor/descriptor_test.go">
+package buckdescriptor_test
+⋮----
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
+	"github.com/becker63/searchbench-go/internal/pure/optimizer"
+)
+⋮----
+"context"
+"os"
+"path/filepath"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
+"github.com/becker63/searchbench-go/internal/pure/optimizer"
+⋮----
+const sampleDescriptor = `{
+  "kind": "searchbench.optimizable_backend.v1",
+  "source": {
+    "kind": "local_path",
+    "path": "ic-src",
+    "declared_by": "//src/iterative-context:optimizable_backend"
+  },
+  "launcher": {
+    "kind": "mcp_stdio",
+    "cwd_mode": "candidate_workspace",
+    "argv": ["uv", "run", "python", "-m", "iterative_context.server"],
+    "env": {}
+  },
+  "candidate_validator": {
+    "kind": "ic_policy_pipeline",
+    "steps": ["stage_policy", "pytest"]
+  },
+  "runtime_admin": {
+    "install_tool": "install_score",
+    "verify_tool": "verify_score",
+    "hidden_from_evaluator": true
+  }
+}`
+⋮----
+func TestParseDescriptorRejectsRepoChecks(t *testing.T)
+⋮----
+func TestParseDescriptorOK(t *testing.T)
+⋮----
+func TestBuckProviderMapsDescriptorToSeed(t *testing.T)
+⋮----
+func TestLoadCommittedDescriptor(t *testing.T)
+⋮----
+// Walk up to repo root from package dir.
+</file>
+
+<file path="src/searchbench-go/internal/adapters/workspace/buckdescriptor/descriptor.go">
+package buckdescriptor
+⋮----
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+)
+⋮----
+"encoding/json"
+"fmt"
+"os"
+"strings"
+⋮----
+const KindOptimizableBackendV1 = "searchbench.optimizable_backend.v1"
+⋮----
+// Descriptor is the candidate-facing SearchBench ↔ IC backend contract (not repo checks).
+type Descriptor struct {
+	Kind               string             `json:"kind"`
+	Source             Source             `json:"source"`
+	Launcher           Launcher           `json:"launcher"`
+	CandidateValidator CandidateValidator `json:"candidate_validator"`
+	RuntimeAdmin       RuntimeAdmin       `json:"runtime_admin"`
+	RepoChecks         map[string]string  `json:"repo_checks,omitempty"`
+}
+⋮----
+type Source struct {
+	Kind       string `json:"kind"`
+	Path       string `json:"path"`
+	DeclaredBy string `json:"declared_by,omitempty"`
+}
+⋮----
+type Launcher struct {
+	Kind    string            `json:"kind"`
+	CWDMode string            `json:"cwd_mode"`
+	Argv    []string          `json:"argv"`
+	Env     map[string]string `json:"env"`
+}
+⋮----
+type CandidateValidator struct {
+	Kind  string   `json:"kind"`
+	Steps []string `json:"steps"`
+}
+⋮----
+type RuntimeAdmin struct {
+	InstallTool         string `json:"install_tool"`
+	VerifyTool          string `json:"verify_tool"`
+	HiddenFromEvaluator bool   `json:"hidden_from_evaluator"`
+}
+⋮----
+// ParseDescriptorJSON loads and validates a backend descriptor.
+func ParseDescriptorJSON(data []byte) (Descriptor, error)
+⋮----
+var d Descriptor
+⋮----
+// LoadDescriptorFile reads descriptor JSON from path.
+func LoadDescriptorFile(path string) (Descriptor, error)
+⋮----
+// ValidateDescriptor rejects unknown kinds, malformed fields, and repo_checks.
+func ValidateDescriptor(d Descriptor) error
+</file>
+
+<file path="src/searchbench-go/internal/adapters/workspace/buckdescriptor/provider.go">
+package buckdescriptor
+⋮----
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
+	"github.com/becker63/searchbench-go/internal/pure/optimizer"
+)
+⋮----
+"context"
+"fmt"
+"os"
+"os/exec"
+"path/filepath"
+"strings"
+⋮----
+"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
+"github.com/becker63/searchbench-go/internal/pure/optimizer"
+⋮----
+// Provider resolves a Buck-backed optimizable backend descriptor into a WorkspaceSeed.
+type Provider struct {
+	// DescriptorPath is explicit JSON path; when empty, DescriptorTarget or default discovery is used.
+	DescriptorPath string
+	// DescriptorTarget is the Buck label (default //src/iterative-context:optimizable_backend).
+	DescriptorTarget string
+	// RepoRoot anchors relative source.path values.
+	RepoRoot string
+	// RunBuck when true runs buck2 build on DescriptorTarget before loading output.
+	RunBuck bool
+}
+⋮----
+// DescriptorPath is explicit JSON path; when empty, DescriptorTarget or default discovery is used.
+⋮----
+// DescriptorTarget is the Buck label (default //src/iterative-context:optimizable_backend).
+⋮----
+// RepoRoot anchors relative source.path values.
+⋮----
+// RunBuck when true runs buck2 build on DescriptorTarget before loading output.
+⋮----
+// PrepareSeed implements workspace.SeedProvider.
+func (p Provider) PrepareSeed(ctx context.Context) (optimizer.WorkspaceSeed, error)
+⋮----
+func (p Provider) resolveDescriptorPath(ctx context.Context) (string, error)
+⋮----
+func (p Provider) repoRoot() (string, error)
+⋮----
+func (p Provider) seedFromDescriptor(desc Descriptor) (optimizer.WorkspaceSeed, error)
+</file>
+
+<file path="src/searchbench-go/internal/adapters/workspace/compare/compare_test.go">
+package compare_test
+⋮----
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
+	"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
+	"github.com/becker63/searchbench-go/internal/pure/optimizer"
+)
+⋮----
+"context"
+"os"
+"path/filepath"
+"testing"
+⋮----
+"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
+"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
+"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
+"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
+"github.com/becker63/searchbench-go/internal/pure/optimizer"
+⋮----
+func TestProviderComparisonSmoke(t *testing.T)
+⋮----
+func repoRootFromIC(icRoot string) string
 </file>
 
 <file path="src/searchbench-go/internal/adapters/workspace/localpath/provider_test.go">
@@ -25763,6 +26275,7 @@ import (
 	"testing"
 
 	execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
 	"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
@@ -25776,17 +26289,18 @@ import (
 "testing"
 ⋮----
 execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 "github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 "github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
 "github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 "github.com/becker63/searchbench-go/internal/pure/domain"
 "github.com/becker63/searchbench-go/internal/pure/optimizer"
 ⋮----
-func TestLocalPathProviderPrepareSeed(t *testing.T)
-⋮----
 func TestValidateProposalInWorkspaceUsesSuppliedRoot(t *testing.T)
 ⋮----
-func TestValidateProposalWithLocalPathSeedDoesNotMutateSource(t *testing.T)
+func TestLocalPathProviderPrepareSeed(t *testing.T)
+⋮----
+func TestBuckProviderMapsDescriptorToSeed(t *testing.T)
 ⋮----
 func TestAllowlistBlocksUnsafeCommand(t *testing.T)
 ⋮----
@@ -25808,6 +26322,7 @@ import (
 	"time"
 
 	execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
 	"github.com/becker63/searchbench-go/internal/ports/pipeline"
@@ -25825,6 +26340,7 @@ import (
 "time"
 ⋮----
 execpipeline "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec"
+"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 "github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 "github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
 "github.com/becker63/searchbench-go/internal/ports/pipeline"
@@ -25841,6 +26357,18 @@ func ValidateProposalInWorkspace(
 // ValidateProposalWithLocalPathSeed materializes IC from a local path seed, then validates in that workspace.
 func ValidateProposalWithLocalPathSeed(
 	ctx context.Context,
+	proposal pureoptimizer.NextChallengerProposal,
+) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+⋮----
+// ValidateProposalWithBuckDescriptor resolves a Buck optimizable backend descriptor seed, then validates.
+func ValidateProposalWithBuckDescriptor(
+	ctx context.Context,
+	proposal pureoptimizer.NextChallengerProposal,
+) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+⋮----
+func validateProposalWithSeed(
+	ctx context.Context,
+	seed pureoptimizer.WorkspaceSeed,
 	proposal pureoptimizer.NextChallengerProposal,
 ) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
 ⋮----
@@ -25907,6 +26435,8 @@ import (
 pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 ⋮----
 func validateIterativeContextProposal(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure)
+⋮----
+// Default optimizer validation uses the public-friendly local path provider.
 ⋮----
 func writePipelineArtifacts(dir string, results []pipeline.StepResult, classification pipeline.Classification) error
 ⋮----

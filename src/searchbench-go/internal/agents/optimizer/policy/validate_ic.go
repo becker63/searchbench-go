@@ -13,6 +13,7 @@ import (
 )
 
 func validateIterativeContextProposal(ctx context.Context, proposal pureoptimizer.NextChallengerProposal) (pureoptimizer.ProposalValidationResult, *pureoptimizer.Failure) {
+	// Default optimizer validation uses the public-friendly local path provider.
 	return ValidateProposalWithLocalPathSeed(ctx, proposal)
 }
 

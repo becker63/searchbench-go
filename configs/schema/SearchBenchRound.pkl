@@ -28,8 +28,8 @@ typealias Backend = "iterative_context" | "jcodemunch" | "fake"
 /// LLM provider id for agent models.
 typealias Provider = "openai" | "openrouter" | "cerebras" | "fake"
 
-/// IC workspace seed provider (local file copy path on this integration branch).
-typealias WorkspaceSeedProvider = "local_path"
+/// IC workspace seed provider for optimizable IC-backed systems.
+typealias WorkspaceSeedProvider = "local_path" | "buck_descriptor" | "git" | "archive"
 
 /// Formats written for the round report.
 typealias ReportFormat = "json" | "text"
@@ -87,14 +87,17 @@ class PromptBundle {
 class Runtime {
   maxSteps: Int(this > 0) = 16
   timeoutSeconds: Int(this > 0) = 300
-  /// Optional IC workspace seed (local path copy into candidate workspace).
+  /// Optional IC workspace seed provider wiring (logical; repo Buck targets stay internal).
   workspaceSeed: WorkspaceSeedConfig?
 }
 
-/// Local-path workspace seed for IC-backed optimizable systems.
+/// Declares how an IC optimizable backend seed is obtained for candidate workspaces.
 class WorkspaceSeedConfig {
   provider: WorkspaceSeedProvider = "local_path"
+  /// Required when provider is local_path (repo-relative or absolute path).
   localPath: String?
+  /// Required when provider is buck_descriptor (repo-internal Buck label).
+  buckDescriptorTarget: String?
 }
 
 /// A versioned policy artifact implementing a declared interface.

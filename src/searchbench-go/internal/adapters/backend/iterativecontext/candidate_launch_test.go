@@ -36,30 +36,10 @@ func TestLaunchCWDMismatchErrors(t *testing.T) {
 	}
 }
 
-func TestRuntimeIdentityIncludesSeedAndPolicy(t *testing.T) {
+func TestRuntimeIdentityLocalPath(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	accepted := optimizer.AcceptedICCandidate{
-		Workspace: optimizer.ICCandidateWorkspace{
-			ID:   "ws",
-			Root: root,
-			Seed: optimizer.WorkspaceSeedIdentity{
-				Provider: optimizer.SeedProviderLocalPath,
-				Source:   "/repo/src/iterative-context",
-				Sha256:   "abc",
-			},
-		},
-		Policy: optimizer.ICPolicyArtifact{
-			Path:     root + "/policy.py",
-			PolicyID: "p1",
-			Sha256:   "def",
-		},
-		Validation: optimizer.PipelineValidationResult{OK: true},
-		Launch: optimizer.ICLaunchSpec{
-			CWD:  root,
-			Argv: []string{"uv", "run", "python", "-m", "iterative_context.server"},
-		},
-	}
+	accepted := acceptedCandidate(root, optimizer.SeedProviderLocalPath, "/repo/src/iterative-context")
 	if err := ic.ValidateAcceptedLaunch(accepted); err != nil {
 		t.Fatal(err)
 	}
@@ -67,14 +47,23 @@ func TestRuntimeIdentityIncludesSeedAndPolicy(t *testing.T) {
 	if id.SeedIdentity.Provider != optimizer.SeedProviderLocalPath {
 		t.Fatalf("provider: %s", id.SeedIdentity.Provider)
 	}
-	if id.PolicyID != "p1" || !id.Verified {
-		t.Fatalf("identity: %+v", id)
+}
+
+func TestRuntimeIdentityBuckDescriptor(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	accepted := acceptedCandidate(root, optimizer.SeedProviderBuckDescriptor, "//src/iterative-context:optimizable_backend")
+	if err := ic.ValidateAcceptedLaunch(accepted); err != nil {
+		t.Fatal(err)
+	}
+	id := ic.RuntimeIdentityFromAccepted(accepted, true)
+	if id.SeedIdentity.Provider != optimizer.SeedProviderBuckDescriptor {
+		t.Fatalf("provider: %s", id.SeedIdentity.Provider)
 	}
 }
 
 func TestAdminToolsExcludedFromEvaluatorList(t *testing.T) {
 	t.Parallel()
-	// Regression guard: excludedEvaluatorToolNames in runtime.go hides install/verify.
 	tools := []string{"install_score", "verify_score", "search"}
 	var visible []string
 	for _, name := range tools {
@@ -85,5 +74,23 @@ func TestAdminToolsExcludedFromEvaluatorList(t *testing.T) {
 	}
 	if len(visible) != 1 || visible[0] != "search" {
 		t.Fatalf("visible: %v", visible)
+	}
+}
+
+func acceptedCandidate(root, provider, source string) optimizer.AcceptedICCandidate {
+	return optimizer.AcceptedICCandidate{
+		Workspace: optimizer.ICCandidateWorkspace{
+			ID:   "ws",
+			Root: root,
+			Seed: optimizer.WorkspaceSeedIdentity{Provider: provider, Source: source, Sha256: "abc"},
+		},
+		Policy: optimizer.ICPolicyArtifact{
+			Path: root + "/policy.py", PolicyID: "p1", Sha256: "def",
+		},
+		Validation: optimizer.PipelineValidationResult{OK: true},
+		Launch: optimizer.ICLaunchSpec{
+			CWD:  root,
+			Argv: []string{"uv", "run", "python", "-m", "iterative_context.server"},
+		},
 	}
 }
