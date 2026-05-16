@@ -1,6 +1,6 @@
 # Expanding the Pure Center
 
-**Docs hub:** [Documentation index](../README.md) · [Package boundaries](../architecture/package-boundaries.md) · [Architecture](../architecture/architecture.md)
+**Docs hub:** [Documentation index](../README.md) · [Package boundaries](./package-boundaries.md) · [Architecture spine](../architecture.md)
 
 SearchBench-Go keeps its stable product model in deterministic packages and pushes world-touching behavior to adapter edges.
 

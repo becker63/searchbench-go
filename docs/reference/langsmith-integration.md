@@ -1,6 +1,6 @@
 # LangSmith integration notes
 
-**Related docs:** [Integration shape](../architecture/integration-shape.md) · [Architecture spine](../architecture/architecture.md)
+**Related docs:** [Integration shape](./integration-shape.md) · [Architecture spine](../architecture.md)
 
 I think your instinct is right: **SearchBench is already the evaluator**.
 

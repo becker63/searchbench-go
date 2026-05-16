@@ -1,6 +1,6 @@
 # Agentic Development Flow
 
-**Docs hub:** [Documentation index](../README.md) · [Package boundaries](../architecture/package-boundaries.md) · [Architecture](../architecture/architecture.md)
+**Docs hub:** [Documentation index](../README.md) · [Package boundaries](./package-boundaries.md) · [Architecture spine](../architecture.md)
 
 ## Purpose
 
@@ -318,4 +318,4 @@ For the toolchain and automation, use the flake-backed workflow in [`AGENTS.md`]
 - **Repomix** (`repomix-output.xml`) — deliberately committed for AI review; **`git commit`** (pre-commit) regenerates and stages it, **`git push`** (pre-push) regenerates again and **fails** if the snapshot is not already committed — see [`AGENTS.md`](../../AGENTS.md).
 - **Worktrees, task routing, and merge orchestration** for coding agents live in the **external meta harness**, not in this repository.
 
-Project automation is **Buck-first**: targets under `src/**/BUCK`, root **`BUCK`**, and **`toolchains/`** (Nix cell + Repomix gate). The flake only instantiates the dev shell, git-hooks, and Buck’s `nix` cell — see **`AGENTS.md`** and **`docs/architecture/build-system.md`**.
+Project automation is **Buck-first**: targets under `src/**/BUCK`, root **`BUCK`**, and **`toolchains/`** (Nix cell + Repomix gate). The flake only instantiates the dev shell, git-hooks, and Buck’s `nix` cell — see **`AGENTS.md`** and **`docs/reference/build-system.md`**.

@@ -1,0 +1,40 @@
+diff --git a/docs/architecture/build-system.md b/docs/architecture/build-system.md
+new file mode 100644
+index 0000000..7cea62e
+--- /dev/null
++++ b/docs/architecture/build-system.md
+@@ -0,0 +1,34 @@
++# Build system (Nix + Buck2)
++
++SearchBench uses a **small monorepo layout**: the Go module lives under `src/searchbench-go/`, the **Iterative Context** submodule under `src/iterative-context/`, and shared **Pkl schemas + round manifests** stay at the repository root under `configs/`.
++
++## Nix
++
++- **`nix develop`** is the primary dev shell (Go, Pkl, `buck2`, `repomix`, `pre-commit`, optional `golangci-lint` for manual runs). The flake wires **git-hooks.nix** and writes **`.buckconfig.d/buck2-nix.config`** so Buck’s **`nix`** external cell pins the same [buck2.nix](https://github.com/tweag/buck2.nix) revision as the flake input.
++- **`nix flake check`** runs only **lightweight, sandbox-safe** hygiene (formatting, Nix lint, shell lint). It does **not** run Buck tests.
++
++## Buck2
++
++- **Cell layout** follows the default Meta prelude + Tweag `nix` cell: see root **`.buckconfig`** and **`toolchains/`** (`toolchains/flake.nix` exposes packages; **`toolchains/BUCK`** wires `flake.package` targets for Starlark plus prelude toolchains). Repomix freshness lives as **`//:repomix_fresh_check`** next to root **`BUCK`**.
++- **`buck2 test //:check`** runs **`//src/searchbench-go:check`** (Go tests + CLI build) and **`//src/iterative-context:check`** (locked `uv sync`, import smoke, **`pytest`** excluding tests that require **`TEST_REPO_SMALL` / `TEST_REPO_MEDIUM`**). Git **pre-commit** (after Repomix staging) delegates here.
++- **`buck2 test //:check_full`** runs **`//src/searchbench-go:check`**, **`//src/iterative-context:check_full`** (adds **`basedpyright`** on `src` + `tests`), and **`//:repomix_fresh_check`** (regenerates Repomix and fails if `repomix-output.xml` is not already committed at `HEAD`). Git **pre-push** delegates here.
++- **`//src/searchbench-go:pkl_go_types`** remains a separate opt-in target: it regenerates Pkl Go bindings in-tree and must not run in parallel with **`//src/searchbench-go:go_tests`** (file races on generated sources). Regenerate manually with the Pkl command in **`AGENTS.md`**.
++
++## Go commands
++
++Run module-scoped Go commands from **`src/searchbench-go/`**:
++
++```bash
++cd src/searchbench-go
++go test ./...
++go build -o ../../searchbench ./cmd/searchbench
++```
++
++Regenerate Pkl Go bindings after schema edits:
++
++```bash
++cd src/searchbench-go
++pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
++  --output-path=. \
++  ../../configs/schema/SearchBenchRound.pkl
++```

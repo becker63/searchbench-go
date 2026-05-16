@@ -24,7 +24,7 @@ Generated IC policies must expose **`score_fn(node, graph, depth) -> float`**. T
 
 For IC-targeted proposals, `internal/agents/optimizer/policy`:
 
-1. Materializes a **candidate workspace** copy of Iterative Context (see [ic-workspace-seed-providers.md](./ic-workspace-seed-providers.md); default seed provider is `local_path`).
+1. Materializes a **candidate workspace** copy of Iterative Context (see [../workspace-seeds.md](../workspace-seeds.md); default seed provider is `local_path`).
 2. Stages the proposal and runs the pipeline with **cwd = candidate workspace root** (not the original source tree).
 
 Steps, in order:
@@ -63,4 +63,4 @@ To exercise the full pipeline locally, run an optimizer-backed manifest from the
 - IC CLI: `iterative-context` → `iterative_context.validate_policy`
 - Go routing: `internal/agents/optimizer/policy/validate.go` → `candidate_pipeline.go`
 - Allowlist: `internal/adapters/pipeline/exec/ic_allowlist.go`
-- Workspace seeds: [ic-workspace-seed-providers.md](./ic-workspace-seed-providers.md)
+- Workspace seeds: [../workspace-seeds.md](../workspace-seeds.md)

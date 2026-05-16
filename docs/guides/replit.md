@@ -1,6 +1,6 @@
 # SearchBench-Go (Replit)
 
-**Documentation:** [Documentation index](../README.md) · [Architecture](../architecture/architecture.md) · [Package boundaries](../architecture/package-boundaries.md) · [Roadmap](../roadmap/todo.md)
+**Documentation:** [Documentation index](../README.md) · [Architecture](../architecture.md) · [Package boundaries](../reference/package-boundaries.md) · [Roadmap](../roadmap/todo.md)
 
 ## Overview
 

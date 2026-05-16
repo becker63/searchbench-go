@@ -1,22 +1,44 @@
-# SearchBench-Go documentation
+# SearchBench docs
 
-Project vocabulary and layering live under **`architecture/`**. Engineering practices under **`engineering/`**, and **`roadmap/`** tracks high-level implementation pressure.
+Canonical documentation map. Start at [start-here.md](./start-here.md) or root [AGENTS.md](../AGENTS.md).
 
-| Area | Contents |
-| --- | --- |
-| [Architecture](architecture/architecture.md) | Naming model, flows, bundles, migrations |
-| [Visualization](architecture/visualization.md) | Product visualization plan |
-| [Build system](architecture/build-system.md) | Monorepo layout, Nix shell, Buck2 `//:check` |
-| [Integration shape](architecture/integration-shape.md) | Package layering and adapters vs agents |
-| [Package boundaries](architecture/package-boundaries.md) | `internal/` import rules (mirrors [`src/searchbench-go/internal/architecture/imports_test.go`](../src/searchbench-go/internal/architecture/imports_test.go)) |
-| [Pkl round manifests](architecture/pkl-round-manifests.md) | Manifest-facing notes |
-| [Pkl scoring interface](architecture/pkl-scoring-interface.md) | Scoring interface notes |
-| [LangSmith](integrations/langsmith-integration.md) | Trace/evaluator platform positioning |
-| [Replit](guides/replit.md) | Quick environment and tech stack orientation |
-| [Roadmap](roadmap/todo.md) | High-level implementation pressure |
-| [Fake e2e runs](roadmap/fake-e2e-runs.md) | Offline fake-round commands, manifests, and artifact expectations |
-| [Engineering](engineering/) | Agentic workflow, issue style, testing, pure center |
-| [Optimizer policy validation](engineering/optimizer-policy-validation.md) | IC NextChallenger pipeline steps, allowlist, canonical `score_fn` |
-| [Issue wave publisher](engineering/issue-wave-manifest.md) | `gh`-backed JSON manifest for batch issue creation (dev tooling) |
+## Start here
 
-Read **`AGENTS.md`** at the repository root first; it lists the canonical “start here” paths for contributors and automation.
+- [Start here](./start-here.md) — one-page intro for humans and agents
+- [Concepts](./concepts.md) — Game, Round, Match, Evidence, Decision, NextChallenger
+- [Architecture](./architecture.md) — system spine and package boundaries
+- [Development](./development.md) — Nix, Buck2, Go, Repomix, validation commands
+- [Workspace seed providers](./workspace-seeds.md) — `local_path` vs `buck_descriptor`, Pkl config, decision record
+
+## Reference
+
+- [Architecture (full)](./reference/architecture-full.md) — extended narrative, bundles, migrations
+- [Package boundaries](./reference/package-boundaries.md)
+- [Integration shape](./reference/integration-shape.md)
+- [Build system](./reference/build-system.md)
+- [Pkl round manifests](./reference/pkl-round-manifests.md)
+- [Pkl scoring interface](./reference/pkl-scoring-interface.md)
+- [Optimizer policy validation](./reference/optimizer-policy-validation.md)
+- [LangSmith integration](./reference/langsmith-integration.md)
+- [Visualization plan](./reference/visualization.md)
+- [Agentic development flow](./reference/agentic-development-flow.md)
+- [Pure center](./reference/pure-center.md)
+- [Issue style guide](./reference/issue-style-guide.md)
+- [Model testing](./reference/model-testing.md)
+
+## Roadmap
+
+- [Todo](./roadmap/todo.md)
+- [Fake e2e runs](./roadmap/fake-e2e-runs.md)
+
+## Guides
+
+- [Replit](./guides/replit.md)
+
+## Archive / research
+
+- [Archive index](./archive/README.md)
+- [Blog diff candidates](./archive/blog-diff-candidates/)
+- [Issue wave manifest](./archive/issue-wave-manifest.md)
+
+Legacy paths under `docs/architecture/` and `docs/engineering/ic-*.md` redirect to the spine above.

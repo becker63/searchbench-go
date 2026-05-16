@@ -1,0 +1,156 @@
+commit 291daa5caeb65c046a95614d09e8fb7d8220078c
+Author: becker63 <johnsontaylor6320@gmail.com>
+Date:   Fri May 15 00:12:43 2026 -0400
+
+    buck2 start
+
+diff --git a/README.md b/README.md
+index 26f9a0b..61ffc78 100644
+--- a/README.md
++++ b/README.md
+@@ -6,7 +6,7 @@
+ Game → Round → Match → Evidence → Decision → NextChallenger
+ ```
+
+-The Go implementation keeps deterministic model code and artifact semantics explicit, separates round orchestration from agent-specific prompts and runners, and uses Pkl manifests as the human-facing round surface. This repository pairs a small CLI (`searchbench`) with a layered `internal/` tree described in [`docs/architecture/integration-shape.md`](docs/architecture/integration-shape.md).
++The Go implementation keeps deterministic model code and artifact semantics explicit, separates round orchestration from agent-specific prompts and runners, and uses Pkl manifests as the human-facing round surface. This repository pairs a small CLI (`searchbench`) with a layered Go tree under [`src/searchbench-go/internal/`](src/searchbench-go/internal/) described in [`docs/architecture/integration-shape.md`](docs/architecture/integration-shape.md).
+
+ ---
+
+@@ -14,10 +14,10 @@ The Go implementation keeps deterministic model code and artifact semantics expl
+
+ | Area | What you get |
+ | --- | --- |
+-| **Orchestration** | A single lifecycle in [`internal/app/round`](internal/app/round): resolve manifest, run comparisons, score objectives, persist bundles |
+-| **Agents** | Evaluator and optimizer live in [`internal/agents`](internal/agents) (prompts, Eino execution, optimizer bundle + policy helpers) |
+-| **Model** | Stable vocabulary under [`internal/pure`](internal/pure); import boundaries enforced by [`internal/architecture/imports_test.go`](internal/architecture/imports_test.go) |
+-| **Config & scoring** | Pkl manifests and objective modules via [`internal/adapters/config/pkl`](internal/adapters/config/pkl) and [`internal/adapters/scoring/pkl`](internal/adapters/scoring/pkl) |
++| **Orchestration** | A single lifecycle in [`src/searchbench-go/internal/app/round`](src/searchbench-go/internal/app/round): resolve manifest, run comparisons, score objectives, persist bundles |
++| **Agents** | Evaluator and optimizer live in [`src/searchbench-go/internal/agents`](src/searchbench-go/internal/agents) (prompts, Eino execution, optimizer bundle + policy helpers) |
++| **Model** | Stable vocabulary under [`src/searchbench-go/internal/pure`](src/searchbench-go/internal/pure); import boundaries enforced by [`src/searchbench-go/internal/architecture/imports_test.go`](src/searchbench-go/internal/architecture/imports_test.go) |
++| **Config & scoring** | Pkl manifests and objective modules via [`src/searchbench-go/internal/adapters/config/pkl`](src/searchbench-go/internal/adapters/config/pkl) and [`src/searchbench-go/internal/adapters/scoring/pkl`](src/searchbench-go/internal/adapters/scoring/pkl) |
+ | **Local path** | Deterministic fake match sources and evaluator-side stubs for end-to-end runs without live backends |
+
+ ---
+@@ -26,27 +26,24 @@ The Go implementation keeps deterministic model code and artifact semantics expl
+
+ | Tool | Notes |
+ | --- | --- |
+-| [Go 1.26.2](https://go.dev/dl/) | Matches [`go.mod`](go.mod). |
++| [Go 1.26.2](https://go.dev/dl/) | Matches [`go.mod`](src/searchbench-go/go.mod). |
+ | [Pkl](https://pkl-lang.org/) CLI | Needed on `PATH` to evaluate example `*.pkl` manifests (`pkl`). |
+ | *(optional)* | Real model providers/backends once you graduate past the bundled fake-local path. |
+-| [Nix](https://nixos.org/) with flakes *(optional)* | `nix develop` for the full toolchain, pre-commit, and `searchbench-*` commands; `nix flake check` for sandboxed CI-like checks. |
++| [Nix](https://nixos.org/) with flakes *(optional)* | `nix develop` puts Go, Pkl, **buck2**, hooks, and `repomix` on `PATH`; `nix flake check` runs sandboxed formatting/Nix hygiene only. |
+
+ ---
+
+ ## Nix workflow (optional)
+
+ ```bash
+-nix develop              # shell with Go, Pkl, hooks, searchbench-* tools
++nix develop                              # shell with Go, Pkl, buck2, hooks, repomix
+ nix develop -c pre-commit run --all-files
+-nix develop -c searchbench-staticcheck
+-nix develop -c searchbench-golangci
+ nix flake check
+-nix run .#e2e             # root package integration tests
+-nix run .#update-repomix  # refresh committed repomix-output.xml
+-nix run .#publish-issue-wave -- --dry-run tooling/issue-wave.example.json  # GitHub issue wave (no writes)
++nix develop -c buck2 test //:check        # Go tests + CLI build + IC smoke
++nix develop -c buck2 test //:check_full   # above + Repomix snapshot gate
+ ```
+
+-See [`AGENTS.md`](AGENTS.md) for the Git hook lifecycle (pre-commit vs pre-push), Repomix, and `searchbench-*` debug commands.
++See [`AGENTS.md`](AGENTS.md) for the Git hook lifecycle (pre-commit vs pre-push) and Repomix.
+
+ ---
+
+@@ -57,7 +54,8 @@ Clone and build:
+ ```bash
+ git clone https://github.com/becker63/searchbench-go.git
+ cd searchbench-go
+-go build -o searchbench ./cmd/searchbench
++cd src/searchbench-go
++go build -o ../../searchbench ./cmd/searchbench
+ ```
+
+ Run a local evaluation manifest (writes bundle artifacts under a temp bundles root):
+@@ -76,7 +74,7 @@ Shorthand (`run` at the root of the CLI tree mirrors the hidden `searchbench run
+   --bundle-root="$(pwd)/.tmp-artifacts"
+ ```
+
+-Useful flags (see [`internal/surface/cli/run.go`](internal/surface/cli/run.go)):
++Useful flags (see [`src/searchbench-go/internal/surface/cli/run.go`](src/searchbench-go/internal/surface/cli/run.go)):
+
+ | Flag | Role |
+ | --- | --- |
+@@ -91,7 +89,7 @@ Successful runs summarize `bundle`, `report_id`, `objective`, and final score me
+
+ ## Real MCP / providers (opt-in)
+
+-The bundled manifest [`configs/rounds/local-ic-vs-jcodemunch/round.pkl`](configs/rounds/local-ic-vs-jcodemunch/round.pkl) and [`e2e_test.go`](e2e_test.go) exercise an **offline fake-local** path (no network).
++The bundled manifest [`configs/rounds/local-ic-vs-jcodemunch/round.pkl`](configs/rounds/local-ic-vs-jcodemunch/round.pkl) and [`src/searchbench-go/e2e_test.go`](src/searchbench-go/e2e_test.go) exercise an **offline fake-local** path (no network).
+
+ To run the same CLI surface against **live MCP tool servers** and **real chat models**:
+
+@@ -99,14 +97,14 @@ To run the same CLI surface against **live MCP tool servers** and **real chat mo
+ | --- | --- |
+ | `SEARCHBENCH_JCODEMUNCH_COMMAND` | Shell command starting the jCodeMunch MCP server (stdio JSON-RPC). Required when the manifest uses that backend. |
+ | `SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND` | Shell command starting the Iterative Context MCP server. Required for IC-backed policies. |
+-| Provider secrets / URLs | Resolved by [`internal/adapters/providers/evaluatormodel`](internal/adapters/providers/evaluatormodel) (OpenAI-compatible providers). |
++| Provider secrets / URLs | Resolved by [`src/searchbench-go/internal/adapters/providers/evaluatormodel`](src/searchbench-go/internal/adapters/providers/evaluatormodel) (OpenAI-compatible providers). |
+ | `LANGSMITH_API_KEY` | Optional LangSmith export; traces are **not** authoritative for scoring or decisions. |
+
+-Round compare prefers **tree-sitter indexing** for hop-distance scoring when `MatchSpec.Repo.Path` points at a materialized checkout **and** CGO is enabled (`internal/app/round/treesitter_graph_provider.go`, `localization_graph_scorer.go`). Without a usable index it falls back to the deterministic fake graph from `internal/agents/evaluator/fake`; hop metrics then follow that fake graph unless predictions and gold files yield call-graph paths in whatever graph was loaded.
++Round compare prefers **tree-sitter indexing** for hop-distance scoring when `MatchSpec.Repo.Path` points at a materialized checkout **and** CGO is enabled (`src/searchbench-go/internal/app/round/treesitter_graph_provider.go`, `localization_graph_scorer.go`). Without a usable index it falls back to the deterministic fake graph from `src/searchbench-go/internal/agents/evaluator/fake`; hop metrics then follow that fake graph unless predictions and gold files yield call-graph paths in whatever graph was loaded.
+
+ Token/cost/composite scalars still originate from the same fallback scorer family (`LocalizationGraphScorer` merges graph-derived hops into the baseline metric set).
+
+-**GitHub issue batches:** see [`docs/engineering/issue-wave-manifest.md`](docs/engineering/issue-wave-manifest.md) (`nix run .#publish-issue-wave`).
++**GitHub issue batches:** see [`docs/engineering/issue-wave-manifest.md`](docs/engineering/issue-wave-manifest.md) (manifest format + manual `gh`/`jq` flow).
+
+ ---
+
+@@ -114,16 +112,17 @@ Token/cost/composite scalars still originate from the same fallback scorer famil
+
+ | Path | Responsibility |
+ | --- | --- |
+-| [`cmd/searchbench`](cmd/searchbench) | CLI entrypoint delegating into [`internal/surface/cli`](internal/surface/cli) |
+-| [`internal/app/round`](internal/app/round) | Round lifecycle: resolve, evaluate, evidence, objective, decide, bundle, proposed next challenger |
+-| [`internal/agents`](internal/agents) | Evaluator / optimizer vertical slices (prompt + Eino + local fakes) |
+-| [`internal/pure`](internal/pure) | Deterministic SearchBench types (reports, scoring, execution records, optimizer records, …) |
+-| [`internal/adapters`](internal/adapters) | Shared runtime edges: filesystem bundles, Pkl config, pipelines, scoring execution |
+-| [`internal/games`](internal/games) | Concrete games (today: code localization game wiring) |
++| [`src/searchbench-go/cmd/searchbench`](src/searchbench-go/cmd/searchbench) | CLI entrypoint delegating into [`src/searchbench-go/internal/surface/cli`](src/searchbench-go/internal/surface/cli) |
++| [`src/searchbench-go/internal/app/round`](src/searchbench-go/internal/app/round) | Round lifecycle: resolve, evaluate, evidence, objective, decide, bundle, proposed next challenger |
++| [`src/searchbench-go/internal/agents`](src/searchbench-go/internal/agents) | Evaluator / optimizer vertical slices (prompt + Eino + local fakes) |
++| [`src/searchbench-go/internal/pure`](src/searchbench-go/internal/pure) | Deterministic SearchBench types (reports, scoring, execution records, optimizer records, …) |
++| [`src/searchbench-go/internal/adapters`](src/searchbench-go/internal/adapters) | Shared runtime edges: filesystem bundles, Pkl config, pipelines, scoring execution |
++| [`src/searchbench-go/internal/games`](src/searchbench-go/internal/games) | Concrete games (today: code localization game wiring) |
++| [`src/iterative-context`](src/iterative-context) | Iterative Context submodule (Python MCP + validators) |
+ | [`configs/schema`](configs/schema) | Authoritative [`SearchBenchRound.pkl`](configs/schema/SearchBenchRound.pkl) schema |
+ | [`configs/rounds`](configs/rounds) | Example manifests and support files |
+
+-Root [`doc.go`](doc.go) and [`e2e_test.go`](e2e_test.go) host canonical integration checks that compile the CLI and exercise a fake-local round via temp directories only.
++[`src/searchbench-go/doc.go`](src/searchbench-go/doc.go) and [`src/searchbench-go/e2e_test.go`](src/searchbench-go/e2e_test.go) host canonical integration checks that compile the CLI and exercise a fake-local round via temp directories only.
+
+ ---
+
+@@ -146,13 +145,15 @@ Additional topics: visualization plan, roadmap, onboarding ([`docs/guides/replit
+ With **`nix develop`**, **`git commit`** and **`git push`** run the routine checks (see **`AGENTS.md`**). To run the full suite directly:
+
+ ```bash
++cd src/searchbench-go
+ go test ./...
+ ```
+
+ Regenerate Go bindings whenever you edit [`configs/schema/SearchBenchRound.pkl`](configs/schema/SearchBenchRound.pkl):
+
+ ```bash
+-pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl --output-path=. configs/schema/SearchBenchRound.pkl
++cd src/searchbench-go
++pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl --output-path=. ../../configs/schema/SearchBenchRound.pkl
+ ```
+
+ ---

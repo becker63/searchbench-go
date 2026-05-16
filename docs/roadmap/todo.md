@@ -1,6 +1,6 @@
 # SearchBench-Go Implementation Roadmap
 
-**Docs hub:** [Documentation index](../README.md) · [Architecture](../architecture/architecture.md)
+**Docs hub:** [Documentation index](../README.md) · [Architecture](../architecture.md)
 
 This roadmap is intentionally high-level. The current source of truth for package boundaries is [package boundaries](../architecture/package-boundaries.md); this file tracks future implementation pressure.
 
