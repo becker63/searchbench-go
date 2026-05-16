@@ -1,10 +1,6 @@
 # Start here
 
-SearchBench compares agent and tool **candidates** on the same match slice and produces **release evidence** — durable artifacts a human or process can use to promote, review, or reject a change.
-
-```text
-Game → Round → Match → Evidence → Decision → NextChallenger
-```
+SearchBench compares agent and tool **candidates** on the same match slice and produces **release evidence**. Vocabulary: [concepts.md](./concepts.md).
 
 ## How the pieces fit
 
@@ -27,17 +23,7 @@ Bundles record what happened.
 
 ## Run one local round
 
-From the repo root:
-
-```bash
-cd src/searchbench-go
-go build -o ../../searchbench ./cmd/searchbench
-../../searchbench run \
-  --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
-  --bundle-root="$(pwd)/.tmp-artifacts"
-```
-
-This uses the **offline fake-local** path (no live MCP or model APIs). See [development.md](./development.md) for Nix/Buck validation and [README.md](../README.md) for optional live backends.
+Copy-paste from the repo root (after build): see [README.md § Run one local round](../README.md#run-one-local-round). Uses the **offline fake-local** path. Validation: [development.md](./development.md).
 
 ## Read next
 

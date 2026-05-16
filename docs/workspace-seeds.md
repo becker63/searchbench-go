@@ -126,4 +126,4 @@ Backend descriptors must **not** include `repo_checks`. Repo checks stay on:
 ## Related
 
 - Optimizer validation pipeline: [reference/optimizer-policy-validation.md](./reference/optimizer-policy-validation.md)
-- Package entry: `internal/adapters/workspace/`, `internal/agents/optimizer/policy/candidate_pipeline.go`
+- Code: `src/searchbench-go/internal/adapters/workspace/`, `src/searchbench-go/internal/agents/optimizer/policy/candidate_pipeline.go`

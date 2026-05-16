@@ -42,6 +42,22 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+.tmp-artifacts-test/
+  games/
+    code-localization/
+      rounds/
+        round-001/
+          policies/
+            challenger_policy.py
+          COMPLETE
+          continuation.json
+          continuation.pkl
+          decision.json
+          evidence.pkl
+          metadata.json
+          objective.json
+          resolved-round.json
+          round-report.json
 configs/
   rounds/
     fake-local-e2e/
@@ -606,6 +622,1053 @@ repomix.config.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/policies/challenger_policy.py">
+def score_fn(node, graph, depth)
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/COMPLETE">
+complete
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/continuation.json">
+{
+  "schema_version": "searchbench.continuation.v1",
+  "bundle_id": "round-001",
+  "game": {
+    "id": "code-localization",
+    "kind": "code_localization"
+  },
+  "round": {
+    "id": "round-001"
+  },
+  "candidate_interface": {
+    "id": "iterative_context.selection_policy.v1"
+  },
+  "surviving_candidate": {
+    "role": "challenger",
+    "system": {
+      "id": "iterative-context",
+      "name": "Iterative Context",
+      "backend": "iterative-context",
+      "model": {
+        "provider": "fake",
+        "name": "fake-evaluator"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "policy": {
+        "id": "challenger-policy-round-001",
+        "language": "python",
+        "sha256": "c6c3d96f48adbfed28e213e12f8d06ce742b5691740aa82bbe0fc0f808276f4b",
+        "entrypoint": "score_fn",
+        "source": "def score_fn(node, graph, depth):\n    return 0.0\n"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      }
+    },
+    "artifact_path": "policies/challenger_policy.py"
+  },
+  "default_continuation": {
+    "incumbent_from": "surviving_candidate",
+    "matches_from": "continuation",
+    "objective_from": "continuation",
+    "evaluator_from": "continuation"
+  },
+  "dataset": {
+    "kind": "lca",
+    "name": "JetBrains-Research/lca-bug-localization",
+    "config": "py",
+    "split": "dev",
+    "max_items": 5
+  },
+  "matches": [
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "1111111111111111111111111111111111111111",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug one",
+        "body": "First repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/one.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "2222222222222222222222222222222222222222",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug two",
+        "body": "Second repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/two.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "3333333333333333333333333333333333333333",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug three",
+        "body": "Third repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/three.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "4444444444444444444444444444444444444444",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug four",
+        "body": "Fourth repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/four.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "5555555555555555555555555555555555555555",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug five",
+        "body": "Fifth repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/five.go"
+        ]
+      }
+    }
+  ],
+  "evaluator": {
+    "model": {
+      "provider": "fake",
+      "name": "fake-evaluator",
+      "max_output_tokens": 2000
+    },
+    "bounds": {
+      "max_model_turns": 8,
+      "max_tool_calls": 24,
+      "timeout_seconds": 300
+    },
+    "retry": {
+      "max_attempts": 2,
+      "retry_on_model_error": true,
+      "retry_on_finalization_failure": true,
+      "retry_on_invalid_prediction": true
+    },
+    "allowed_tools": [
+      "expand",
+      "resolve",
+      "resolve_and_expand"
+    ],
+    "denied_tools": [
+      "go_test",
+      "network",
+      "shell",
+      "write_file"
+    ],
+    "system_prompt": "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools.",
+    "policy_sha256": "e5e49e7158ee499ed19d75239557e52ff6f40dc1216aa688c7da9ac20453de7e"
+  },
+  "scoring": {
+    "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",
+    "report_formats": [
+      "json",
+      "text"
+    ]
+  },
+  "evidence": {
+    "round_evidence_path": "evidence.pkl",
+    "objective_path": "objective.json",
+    "report_path": "round-report.json",
+    "decision_path": "decision.json"
+  }
+}
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/continuation.pkl">
+amends "../../../../../configs/schema/games/code-localization.pkl"
+import "../../../../../configs/schema/games/code-localization-helpers.pkl" as game
+
+name = "round-001-continuation"
+
+round = (game.continueFrom(".")) {
+  id = "round-001"
+  incumbent = (game.iterativeContextPolicy("/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds/round-001/policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-001"
+    }
+  }
+  challenger {
+    system {
+      id = "iterative-context"
+      name = "Iterative Context"
+      backend = "iterative_context"
+    }
+  }
+  matches = game.lca("py", "dev", 5)
+  scoring = game.objective("/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl")
+  evaluator = game.fakeEvaluator()
+}
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/decision.json">
+{
+  "decision": "REVIEW",
+  "reason": "challenger did not improve the composite score in local fake comparison"
+}
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/evidence.pkl">
+schemaVersion = "searchbench.round_evidence.v1"
+gameId = "code-localization"
+roundId = "round-001"
+reportId = "report-round-001"
+
+policies {
+  incumbent {
+    id = "jcodemunch"
+    name = "jCodeMunch"
+    backend = "jcodemunch"
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+    }
+    promptBundle {
+      name = "default"
+      version = "dev"
+    }
+    policy = null
+    runtime {
+      maxSteps = 8
+      maxToolCalls = 24
+      maxInputTokens = 0
+      maxOutputTokens = 2000
+      maxContextTokens = 0
+      toolResultMaxBytes = 0
+    }
+    fingerprint = "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
+  }
+  challenger {
+    id = "iterative-context"
+    name = "Iterative Context"
+    backend = "iterative-context"
+    model {
+      provider = "fake"
+      name = "fake-evaluator"
+    }
+    promptBundle {
+      name = "default"
+      version = "dev"
+    }
+    policy {
+      id = "challenger-policy-round-001"
+      language = "python"
+      sha256 = "c6c3d96f48adbfed28e213e12f8d06ce742b5691740aa82bbe0fc0f808276f4b"
+      entrypoint = "score_fn"
+    }
+    runtime {
+      maxSteps = 8
+      maxToolCalls = 24
+      maxInputTokens = 0
+      maxOutputTokens = 2000
+      maxContextTokens = 0
+      toolResultMaxBytes = 0
+    }
+    fingerprint = "0736e3fde701a32e2f9af6144b17c08a57648cb83e391aab00f7b47872201391"
+  }
+}
+
+matchCounts {
+  total = 5
+}
+
+executionCounts {
+  incumbent = 0
+  challenger = 0
+}
+
+failureCounts {
+  incumbent = 5
+  challenger = 5
+}
+
+localizationDistance {
+  goldHop {
+    metric = "gold_hop"
+    direction = "lower_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+  issueHop {
+    metric = "issue_hop"
+    direction = "lower_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+}
+
+challengerUsage {
+  available = false
+  measuredRuns = 0
+  inputTokens = 0
+  outputTokens = 0
+  totalTokens = 0
+  costUsd = 0
+}
+
+incumbentUsage {
+  available = false
+  measuredRuns = 0
+  inputTokens = 0
+  outputTokens = 0
+  totalTokens = 0
+  costUsd = 0
+}
+
+regressions {
+  count = 0
+  minorCount = 0
+  severeCount = 0
+}
+
+regressionDetails = new {
+}
+
+invalidPredictions {
+  known = true
+  count = 0
+}
+
+metrics = new {
+  new {
+    metric = "gold_hop"
+    direction = "lower_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+  new {
+    metric = "issue_hop"
+    direction = "lower_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+  new {
+    metric = "token_efficiency"
+    direction = "higher_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+  new {
+    metric = "cost"
+    direction = "lower_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+  new {
+    metric = "composite"
+    direction = "higher_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+}
+
+decision {
+  decision = "REVIEW"
+  reason = "challenger did not improve the composite score in local fake comparison"
+}
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/metadata.json">
+{
+  "schema_version": "searchbench.bundle.v1",
+  "bundle_id": "round-001",
+  "created_at": "2026-05-16T17:32:53.894934382Z",
+  "files": [
+    {
+      "kind": "resolved_round",
+      "path": "resolved-round.json",
+      "media_type": "application/json",
+      "sha256": "6f8efd4566ce72a7338bad3d6398296e67e6d495771a11f413df72df9ec33483"
+    },
+    {
+      "kind": "round_report",
+      "path": "round-report.json",
+      "media_type": "application/json",
+      "sha256": "b52af79feced5ffd0db1a0f451433c6a1975f29ba2affa4bebe8fdd1948e5dd1"
+    },
+    {
+      "kind": "round_evidence",
+      "path": "evidence.pkl",
+      "media_type": "text/plain",
+      "sha256": "03acde17e28724eccc0038d7f1d2d621bb10a4a9e55632883dbf9efca3d2a4c0"
+    },
+    {
+      "kind": "decision",
+      "path": "decision.json",
+      "media_type": "application/json",
+      "sha256": "69bbf179f75f1d7e52f89bc6d98db89d4e1be3ad39c1ca339157e0d24d6742ad"
+    },
+    {
+      "kind": "objective",
+      "path": "objective.json",
+      "media_type": "application/json",
+      "sha256": "c19e8faa2f2eb254a2209ff618a8055ef9eb659c49e2fbb3d6c95c829a26ca77"
+    },
+    {
+      "kind": "policy",
+      "path": "policies/challenger_policy.py",
+      "media_type": "text/x-python",
+      "sha256": "c6c3d96f48adbfed28e213e12f8d06ce742b5691740aa82bbe0fc0f808276f4b"
+    },
+    {
+      "kind": "continuation",
+      "path": "continuation.json",
+      "media_type": "application/json",
+      "sha256": "62ed184b12466cf17caccaf82dcb1c5d0ec61672cd730f4ba26f32266c0e7e7c"
+    },
+    {
+      "kind": "continuation_pkl",
+      "path": "continuation.pkl",
+      "media_type": "text/plain",
+      "sha256": "af3ebc8d863e15c1d3df1c7c978acb96f41c7806cf0a283641cd6fdfe758c1e4"
+    },
+    {
+      "kind": "metadata",
+      "path": "metadata.json",
+      "media_type": "application/json"
+    },
+    {
+      "kind": "complete",
+      "path": "COMPLETE",
+      "media_type": "text/plain",
+      "sha256": "37a40f08d8548dba289b9b0bb35bcf63b359f6d37ee86044ebc6b6da080b9ec1"
+    }
+  ]
+}
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/objective.json">
+{
+  "schema_version": "searchbench.objective_result.v1",
+  "objective_id": "localization-v1",
+  "evidence_refs": [
+    {
+      "name": "current",
+      "bundle_path": "/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds/round-001",
+      "evidence_path": "/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds/round-001/round-report.json"
+    }
+  ],
+  "values": [
+    {
+      "name": "challengerQuality",
+      "value": 1,
+      "kind": "intermediate"
+    },
+    {
+      "name": "parentChallengerQuality",
+      "value": 1,
+      "kind": "intermediate"
+    },
+    {
+      "name": "improvementVsParent",
+      "value": 0,
+      "kind": "intermediate"
+    },
+    {
+      "name": "tokenEfficiency",
+      "value": 1,
+      "kind": "intermediate"
+    },
+    {
+      "name": "base",
+      "value": 1,
+      "kind": "intermediate"
+    },
+    {
+      "name": "regressionPenalty",
+      "value": 1,
+      "kind": "penalty"
+    },
+    {
+      "name": "invalidPredictionPenalty",
+      "value": 1,
+      "kind": "penalty"
+    },
+    {
+      "name": "final",
+      "value": 1,
+      "kind": "final"
+    }
+  ],
+  "final": "final",
+  "bounds": {
+    "min": 0,
+    "max": 1
+  }
+}
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/resolved-round.json">
+{
+  "manifest_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/round.pkl",
+  "round_name": "example-local-ic-vs-jcodemunch-round-001",
+  "mode": "round",
+  "game": {
+    "id": "code-localization",
+    "kind": "code_localization"
+  },
+  "round": {
+    "id": "round-001"
+  },
+  "dataset": {
+    "kind": "lca",
+    "name": "JetBrains-Research/lca-bug-localization",
+    "config": "py",
+    "split": "dev",
+    "max_items": 5
+  },
+  "policies": {
+    "incumbent": {
+      "id": "jcodemunch",
+      "name": "jCodeMunch",
+      "backend": "jcodemunch",
+      "model": {
+        "provider": "fake",
+        "name": "fake-evaluator"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      },
+      "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
+    },
+    "challenger": {
+      "id": "iterative-context",
+      "name": "Iterative Context",
+      "backend": "iterative-context",
+      "model": {
+        "provider": "fake",
+        "name": "fake-evaluator"
+      },
+      "prompt_bundle": {
+        "name": "default",
+        "version": "dev"
+      },
+      "policy": {
+        "id": "challenger-policy-round-001",
+        "language": "python",
+        "sha256": "c6c3d96f48adbfed28e213e12f8d06ce742b5691740aa82bbe0fc0f808276f4b",
+        "entrypoint": "score_fn"
+      },
+      "runtime": {
+        "max_steps": 8,
+        "max_tool_calls": 24,
+        "max_output_tokens": 2000
+      },
+      "fingerprint": "0736e3fde701a32e2f9af6144b17c08a57648cb83e391aab00f7b47872201391"
+    }
+  },
+  "matches": [
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "1111111111111111111111111111111111111111",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug one",
+        "body": "First repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/one.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "2222222222222222222222222222222222222222",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug two",
+        "body": "Second repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/two.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "3333333333333333333333333333333333333333",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug three",
+        "body": "Third repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/three.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "4444444444444444444444444444444444444444",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug four",
+        "body": "Fourth repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/four.go"
+        ]
+      }
+    },
+    {
+      "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05",
+      "benchmark": "jetbrains-lca",
+      "repo": {
+        "name": "demo/alpha",
+        "sha": "5555555555555555555555555555555555555555",
+        "path": ""
+      },
+      "input": {
+        "title": "Bug five",
+        "body": "Fifth repro"
+      },
+      "oracle": {
+        "gold_files": [
+          "src/five.go"
+        ]
+      }
+    }
+  ],
+  "parallelism": {
+    "mode": "sequential",
+    "max_workers": 1,
+    "fail_fast": false
+  },
+  "candidate_interface_id": "iterative_context.selection_policy.v1",
+  "evaluator": {
+    "model": {
+      "provider": "fake",
+      "name": "fake-evaluator",
+      "max_output_tokens": 2000
+    },
+    "bounds": {
+      "max_model_turns": 8,
+      "max_tool_calls": 24,
+      "timeout_seconds": 300
+    },
+    "retry": {
+      "max_attempts": 2,
+      "retry_on_model_error": true,
+      "retry_on_finalization_failure": true,
+      "retry_on_invalid_prediction": true
+    },
+    "tool_policy": {
+      "effective_allowed_tools": [
+        "expand",
+        "resolve",
+        "resolve_and_expand"
+      ],
+      "denied_tools": [
+        "go_test",
+        "network",
+        "shell",
+        "write_file"
+      ],
+      "system_prompt": "Use structural code evidence before guessing.\nPrefer the smallest plausible file set.\nDo not invent files that were not returned by tools.",
+      "policy_sha256": "e5e49e7158ee499ed19d75239557e52ff6f40dc1216aa688c7da9ac20453de7e"
+    }
+  },
+  "scoring": {
+    "objective_path": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl",
+    "current_evidence": {
+      "name": "current",
+      "bundle_path": "/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds/round-001",
+      "evidence_path": "/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds/round-001/evidence.pkl",
+      "report_path": "/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds/round-001/round-report.json"
+    }
+  },
+  "output": {
+    "bundle_root": "/home/becker/projects/searchbench-go/.tmp-artifacts-test/games/code-localization/rounds",
+    "bundle_writer_root": "/home/becker/projects/searchbench-go/.tmp-artifacts-test",
+    "report_formats": [
+      "json",
+      "text"
+    ],
+    "render_human_report": true,
+    "resolved_policy_path": {
+      "challenger": "/home/becker/projects/searchbench-go/configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py"
+    }
+  },
+  "report_options": {
+    "formats": [
+      "json",
+      "text"
+    ]
+  },
+  "bundle": {
+    "id": "round-001"
+  },
+  "lineage": {},
+  "challenger_materialization": {
+    "mode": "checked_in"
+  },
+  "report_id": "report-round-001",
+  "created_at": "2026-05-16T17:32:53Z"
+}
+</file>
+
+<file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/round-report.json">
+{
+  "id": "report-round-001",
+  "created_at": "2026-05-16T17:32:53.894934382Z",
+  "spec": {
+    "policies": {
+      "incumbent": {
+        "id": "jcodemunch",
+        "name": "jCodeMunch",
+        "backend": "jcodemunch",
+        "model": {
+          "provider": "fake",
+          "name": "fake-evaluator"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "5d0fe88c46c3cacf19e015d409da7987a4ce97bbd1f4d7a5e9bebb160f10df0a"
+      },
+      "challenger": {
+        "id": "iterative-context",
+        "name": "Iterative Context",
+        "backend": "iterative-context",
+        "model": {
+          "provider": "fake",
+          "name": "fake-evaluator"
+        },
+        "prompt_bundle": {
+          "name": "default",
+          "version": "dev"
+        },
+        "policy": {
+          "id": "challenger-policy-round-001",
+          "language": "python",
+          "sha256": "c6c3d96f48adbfed28e213e12f8d06ce742b5691740aa82bbe0fc0f808276f4b",
+          "entrypoint": "score_fn"
+        },
+        "runtime": {
+          "max_steps": 8,
+          "max_tool_calls": 24,
+          "max_output_tokens": 2000
+        },
+        "fingerprint": "0736e3fde701a32e2f9af6144b17c08a57648cb83e391aab00f7b47872201391"
+      }
+    },
+    "matches": [
+      {
+        "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "demo/alpha",
+          "sha": "1111111111111111111111111111111111111111",
+          "path": ""
+        },
+        "input": {
+          "title": "Bug one",
+          "body": "First repro"
+        },
+        "oracle": {
+          "gold_files": [
+            "src/one.go"
+          ]
+        }
+      },
+      {
+        "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "demo/alpha",
+          "sha": "2222222222222222222222222222222222222222",
+          "path": ""
+        },
+        "input": {
+          "title": "Bug two",
+          "body": "Second repro"
+        },
+        "oracle": {
+          "gold_files": [
+            "src/two.go"
+          ]
+        }
+      },
+      {
+        "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "demo/alpha",
+          "sha": "3333333333333333333333333333333333333333",
+          "path": ""
+        },
+        "input": {
+          "title": "Bug three",
+          "body": "Third repro"
+        },
+        "oracle": {
+          "gold_files": [
+            "src/three.go"
+          ]
+        }
+      },
+      {
+        "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "demo/alpha",
+          "sha": "4444444444444444444444444444444444444444",
+          "path": ""
+        },
+        "input": {
+          "title": "Bug four",
+          "body": "Fourth repro"
+        },
+        "oracle": {
+          "gold_files": [
+            "src/four.go"
+          ]
+        }
+      },
+      {
+        "id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05",
+        "benchmark": "jetbrains-lca",
+        "repo": {
+          "name": "demo/alpha",
+          "sha": "5555555555555555555555555555555555555555",
+          "path": ""
+        },
+        "input": {
+          "title": "Bug five",
+          "body": "Fifth repro"
+        },
+        "oracle": {
+          "gold_files": [
+            "src/five.go"
+          ]
+        }
+      }
+    ]
+  },
+  "runs": {
+    "incumbent": [],
+    "challenger": []
+  },
+  "failures": {
+    "incumbent": [
+      {
+        "run_id": "incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01-jcodemunch",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01",
+        "system": "jcodemunch",
+        "stage": "execute",
+        "message": "stage=execute run_id=incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01-jcodemunch match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01 system_id=jcodemunch: local evaluator tools: SEARCHBENCH_JCODEMUNCH_COMMAND must be set to launch the jCodeMunch MCP server for backend \"jcodemunch\""
+      },
+      {
+        "run_id": "incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02-jcodemunch",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02",
+        "system": "jcodemunch",
+        "stage": "execute",
+        "message": "stage=execute run_id=incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02-jcodemunch match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02 system_id=jcodemunch: local evaluator tools: SEARCHBENCH_JCODEMUNCH_COMMAND must be set to launch the jCodeMunch MCP server for backend \"jcodemunch\""
+      },
+      {
+        "run_id": "incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03-jcodemunch",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03",
+        "system": "jcodemunch",
+        "stage": "execute",
+        "message": "stage=execute run_id=incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03-jcodemunch match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03 system_id=jcodemunch: local evaluator tools: SEARCHBENCH_JCODEMUNCH_COMMAND must be set to launch the jCodeMunch MCP server for backend \"jcodemunch\""
+      },
+      {
+        "run_id": "incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04-jcodemunch",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04",
+        "system": "jcodemunch",
+        "stage": "execute",
+        "message": "stage=execute run_id=incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04-jcodemunch match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04 system_id=jcodemunch: local evaluator tools: SEARCHBENCH_JCODEMUNCH_COMMAND must be set to launch the jCodeMunch MCP server for backend \"jcodemunch\""
+      },
+      {
+        "run_id": "incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05-jcodemunch",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05",
+        "system": "jcodemunch",
+        "stage": "execute",
+        "message": "stage=execute run_id=incumbent-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05-jcodemunch match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05 system_id=jcodemunch: local evaluator tools: SEARCHBENCH_JCODEMUNCH_COMMAND must be set to launch the jCodeMunch MCP server for backend \"jcodemunch\""
+      }
+    ],
+    "challenger": [
+      {
+        "run_id": "challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01-iterative-context",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01",
+        "system": "iterative-context",
+        "stage": "execute",
+        "message": "stage=execute run_id=challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01-iterative-context match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@1111111111111111111111111111111111111111:https://example.test/issues/01 system_id=iterative-context: local evaluator tools: SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND must be set to launch the Iterative Context MCP server for backend \"iterative-context\""
+      },
+      {
+        "run_id": "challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02-iterative-context",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02",
+        "system": "iterative-context",
+        "stage": "execute",
+        "message": "stage=execute run_id=challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02-iterative-context match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@2222222222222222222222222222222222222222:https://example.test/issues/02 system_id=iterative-context: local evaluator tools: SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND must be set to launch the Iterative Context MCP server for backend \"iterative-context\""
+      },
+      {
+        "run_id": "challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03-iterative-context",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03",
+        "system": "iterative-context",
+        "stage": "execute",
+        "message": "stage=execute run_id=challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03-iterative-context match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@3333333333333333333333333333333333333333:https://example.test/issues/03 system_id=iterative-context: local evaluator tools: SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND must be set to launch the Iterative Context MCP server for backend \"iterative-context\""
+      },
+      {
+        "run_id": "challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04-iterative-context",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04",
+        "system": "iterative-context",
+        "stage": "execute",
+        "message": "stage=execute run_id=challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04-iterative-context match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@4444444444444444444444444444444444444444:https://example.test/issues/04 system_id=iterative-context: local evaluator tools: SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND must be set to launch the Iterative Context MCP server for backend \"iterative-context\""
+      },
+      {
+        "run_id": "challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05-iterative-context",
+        "match_id": "JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05",
+        "system": "iterative-context",
+        "stage": "execute",
+        "message": "stage=execute run_id=challenger-JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05-iterative-context match_id=JetBrains-Research/lca-bug-localization:py:dev:demo/alpha@5555555555555555555555555555555555555555:https://example.test/issues/05 system_id=iterative-context: local evaluator tools: SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND must be set to launch the Iterative Context MCP server for backend \"iterative-context\""
+      }
+    ]
+  },
+  "comparisons": [
+    {
+      "metric": "gold_hop",
+      "incumbent": 0,
+      "challenger": 0,
+      "delta": 0
+    },
+    {
+      "metric": "issue_hop",
+      "incumbent": 0,
+      "challenger": 0,
+      "delta": 0
+    },
+    {
+      "metric": "token_efficiency",
+      "incumbent": 0,
+      "challenger": 0,
+      "delta": 0
+    },
+    {
+      "metric": "cost",
+      "incumbent": 0,
+      "challenger": 0,
+      "delta": 0
+    },
+    {
+      "metric": "composite",
+      "incumbent": 0,
+      "challenger": 0,
+      "delta": 0
+    }
+  ],
+  "regressions": null,
+  "decision": {
+    "decision": "REVIEW",
+    "reason": "challenger did not improve the composite score in local fake comparison"
+  }
+}
+</file>
 
 <file path="configs/rounds/fake-local-e2e/round.pkl">
 amends "../../schema/games/code-localization.pkl"
@@ -10259,16 +11322,7 @@ Buck2 is the **repo operation graph** for contributors: `//:check`, `//:check_fu
 
 ## Boundaries (enforced)
 
-Import rules are tested in `src/searchbench-go/internal/architecture/imports_test.go`. Summary:
-
-| Package | Owns |
-| --- | --- |
-| `internal/pure` | Game/Round/Match vocabulary, reports, scores, optimizer records |
-| `internal/ports` | Shared contracts (e.g. pipeline steps) |
-| `internal/app` | Round workflow composition |
-| `internal/agents` | Evaluator/optimizer prompts, Eino runners, policy validation |
-| `internal/adapters` | Pkl config, FS bundles, subprocess pipelines |
-| `internal/surface` | CLI |
+Import rules: `src/searchbench-go/internal/architecture/imports_test.go`. Package ownership and dependency rules: [reference/package-boundaries.md](./reference/package-boundaries.md).
 
 Do not add live MCP, LangSmith, provider execution, or visualization UI unless the task explicitly requires it.
 
@@ -10468,11 +11522,7 @@ Legacy paths under `docs/architecture/` and `docs/engineering/ic-*.md` redirect 
 <file path="docs/start-here.md">
 # Start here
 
-SearchBench compares agent and tool **candidates** on the same match slice and produces **release evidence** — durable artifacts a human or process can use to promote, review, or reject a change.
-
-```text
-Game → Round → Match → Evidence → Decision → NextChallenger
-```
+SearchBench compares agent and tool **candidates** on the same match slice and produces **release evidence**. Vocabulary: [concepts.md](./concepts.md).
 
 ## How the pieces fit
 
@@ -10495,17 +11545,7 @@ Bundles record what happened.
 
 ## Run one local round
 
-From the repo root:
-
-```bash
-cd src/searchbench-go
-go build -o ../../searchbench ./cmd/searchbench
-../../searchbench run \
-  --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
-  --bundle-root="$(pwd)/.tmp-artifacts"
-```
-
-This uses the **offline fake-local** path (no live MCP or model APIs). See [development.md](./development.md) for Nix/Buck validation and [README.md](../README.md) for optional live backends.
+Copy-paste from the repo root (after build): see [README.md § Run one local round](../README.md#run-one-local-round). Uses the **offline fake-local** path. Validation: [development.md](./development.md).
 
 ## Read next
 
@@ -10649,7 +11689,7 @@ Backend descriptors must **not** include `repo_checks`. Repo checks stay on:
 ## Related
 
 - Optimizer validation pipeline: [reference/optimizer-policy-validation.md](./reference/optimizer-policy-validation.md)
-- Package entry: `internal/adapters/workspace/`, `internal/agents/optimizer/policy/candidate_pipeline.go`
+- Code: `src/searchbench-go/internal/adapters/workspace/`, `src/searchbench-go/internal/agents/optimizer/policy/candidate_pipeline.go`
 </file>
 
 <file path="src/iterative-context/notes/llm-tldr/todo_phases.md">
@@ -32107,7 +33147,7 @@ pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
 
 - Round lifecycle: `src/searchbench-go/internal/app/round`
 - Schema: `configs/schema/SearchBenchRound.pkl`
-- IC validation: `internal/agents/optimizer/policy/`, [docs/workspace-seeds.md](docs/workspace-seeds.md)
+- IC validation: `src/searchbench-go/internal/agents/optimizer/policy/`, [docs/workspace-seeds.md](docs/workspace-seeds.md)
 - Buck gates: root `BUCK` — `//:check`, `//:check_full`
 
 External meta-harness owns worktrees and merge orchestration outside this repo.
@@ -32480,9 +33520,11 @@ Details: [docs/concepts.md](docs/concepts.md).
 
 ```bash
 git clone https://github.com/becker63/searchbench-go.git
-cd searchbench-go/src/searchbench-go
+cd searchbench-go
+cd src/searchbench-go
 go build -o ../../searchbench ./cmd/searchbench
-../../searchbench run \
+cd ../..
+./searchbench run \
   --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
   --bundle-root="$(pwd)/.tmp-artifacts"
 ```

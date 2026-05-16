@@ -52,16 +52,7 @@ Buck2 is the **repo operation graph** for contributors: `//:check`, `//:check_fu
 
 ## Boundaries (enforced)
 
-Import rules are tested in `src/searchbench-go/internal/architecture/imports_test.go`. Summary:
-
-| Package | Owns |
-| --- | --- |
-| `internal/pure` | Game/Round/Match vocabulary, reports, scores, optimizer records |
-| `internal/ports` | Shared contracts (e.g. pipeline steps) |
-| `internal/app` | Round workflow composition |
-| `internal/agents` | Evaluator/optimizer prompts, Eino runners, policy validation |
-| `internal/adapters` | Pkl config, FS bundles, subprocess pipelines |
-| `internal/surface` | CLI |
+Import rules: `src/searchbench-go/internal/architecture/imports_test.go`. Package ownership and dependency rules: [reference/package-boundaries.md](./reference/package-boundaries.md).
 
 Do not add live MCP, LangSmith, provider execution, or visualization UI unless the task explicitly requires it.
 

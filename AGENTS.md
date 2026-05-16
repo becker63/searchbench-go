@@ -59,7 +59,7 @@ pkl run package://pkg.pkl-lang.org/pkl-go/pkl.golang@0.13.2#/gen.pkl \
 
 - Round lifecycle: `src/searchbench-go/internal/app/round`
 - Schema: `configs/schema/SearchBenchRound.pkl`
-- IC validation: `internal/agents/optimizer/policy/`, [docs/workspace-seeds.md](docs/workspace-seeds.md)
+- IC validation: `src/searchbench-go/internal/agents/optimizer/policy/`, [docs/workspace-seeds.md](docs/workspace-seeds.md)
 - Buck gates: root `BUCK` — `//:check`, `//:check_full`
 
 External meta-harness owns worktrees and merge orchestration outside this repo.

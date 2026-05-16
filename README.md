@@ -29,9 +29,11 @@ Details: [docs/concepts.md](docs/concepts.md).
 
 ```bash
 git clone https://github.com/becker63/searchbench-go.git
-cd searchbench-go/src/searchbench-go
+cd searchbench-go
+cd src/searchbench-go
 go build -o ../../searchbench ./cmd/searchbench
-../../searchbench run \
+cd ../..
+./searchbench run \
   --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
   --bundle-root="$(pwd)/.tmp-artifacts"
 ```
