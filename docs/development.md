@@ -69,6 +69,19 @@ Issue-first development loop (ChatGPT → GitHub issue → agent prompt → revi
 
 Batch issue publishing (dev tooling): [archive/issue-wave-manifest.md](./archive/issue-wave-manifest.md).
 
+## Docs site (VitePress)
+
+| Command | Purpose |
+| --- | --- |
+| `npm run docs:dev` | Local preview (from repo root after `npm ci`) |
+| `npm run docs:build` | Static build → `docs/.vitepress/dist` |
+| `buck2 test //docs:check` | CI/hook gate: install deps + build |
+| `buck2 test //docs:site` | Same build (named site target) |
+
+Published at [https://becker63.github.io/searchbench-go/](https://becker63.github.io/searchbench-go/) when `main` updates docs paths (GitHub Actions). Markdown remains readable on GitHub without VitePress.
+
+Requires **Node/npm** on PATH (`nix develop` provides `nodejs_22`).
+
 ## Related
 
 - Root [AGENTS.md](../AGENTS.md) — short contributor contract

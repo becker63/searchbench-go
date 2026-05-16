@@ -58,6 +58,8 @@ Uses the **offline fake-local** path (no live MCP or model APIs). Optional live 
 
 Development workflow (tests, hooks, Repomix): [docs/development.md](docs/development.md).
 
+**Docs site** (VitePress): [https://becker63.github.io/searchbench-go/](https://becker63.github.io/searchbench-go/) — `npm run docs:dev` (preview), `npm run docs:build`, `buck2 test //docs:check`; deploys from `main` via GitHub Actions.
+
 ## Module
 
 `github.com/becker63/searchbench-go`

@@ -39,7 +39,9 @@ cd src/searchbench-go && go test ./...
 nix develop -c buck2 test //:check_full
 ```
 
-Or rely on **`git commit`** (`//:check`) and **`git push`** (`//:check_full`) after `nix develop`.
+Or rely on **`git commit`** (`//:check`) and **`git push`** (`//:check_full`, includes `//docs:check`) after `nix develop`.
+
+Docs site: `npm run docs:dev` / `npm run docs:build`; `buck2 test //docs:check`. GitHub Pages deploys from `main` (not from local hooks).
 
 Pkl schema change — regenerate bindings:
 

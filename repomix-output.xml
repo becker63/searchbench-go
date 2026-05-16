@@ -42,6 +42,9 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+.github/
+  workflows/
+    docs.yml
 .tmp-artifacts-test/
   games/
     code-localization/
@@ -88,6 +91,8 @@ configs/
     SearchBenchObjectiveHelpers.pkl
     SearchBenchRound.pkl
 docs/
+  .vitepress/
+    config.mts
   architecture/
     architecture.md
     integration-shape.md
@@ -143,8 +148,12 @@ docs/
     fake-e2e-runs.md
     todo.md
   architecture.md
+  BUCK
   concepts.md
   development.md
+  docs_build.sh
+  docs_check.sh
+  index.md
   README.md
   start-here.md
   workspace-seeds.md
@@ -614,6 +623,7 @@ AGENTS.md
 BUCK
 flake.lock
 flake.nix
+package.json
 README.md
 replit.md
 repomix_fresh_check.sh
@@ -622,6 +632,56 @@ repomix.config.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path=".github/workflows/docs.yml">
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "package.json"
+      - "package-lock.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/configure-pages@v5
+      - run: npm ci
+      - run: npm run docs:build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+</file>
 
 <file path=".tmp-artifacts-test/games/code-localization/rounds/round-001/policies/challenger_policy.py">
 def score_fn(node, graph, depth)
@@ -2470,6 +2530,12 @@ class Report {
     "text"
   }
 }
+</file>
+
+<file path="docs/.vitepress/config.mts">
+import { defineConfig } from "vitepress";
+⋮----
+// Plain Markdown links to repo-root files (AGENTS.md, ../README) stay valid on GitHub.
 </file>
 
 <file path="docs/architecture/architecture.md">
@@ -7982,7 +8048,7 @@ SearchBench uses a **small monorepo layout**: the Go module lives under `src/sea
 
 - **Cell layout** follows the default Meta prelude + Tweag `nix` cell: see root **`.buckconfig`** and **`toolchains/`** (`toolchains/flake.nix` exposes packages; **`toolchains/BUCK`** wires `flake.package` targets for Starlark plus prelude toolchains). Repomix freshness lives as **`//:repomix_fresh_check`** next to root **`BUCK`**.
 - **`buck2 test //:check`** runs **`//src/searchbench-go:check`** (Go tests + CLI build) and **`//src/iterative-context:check`** (locked `uv sync`, import smoke, **`pytest`** excluding tests that require **`TEST_REPO_SMALL` / `TEST_REPO_MEDIUM`**). Git **pre-commit** (after Repomix staging) delegates here.
-- **`buck2 test //:check_full`** runs **`//src/searchbench-go:check`**, **`//src/iterative-context:check_full`** (adds **`basedpyright`** on `src` + `tests`), and **`//:repomix_fresh_check`** (regenerates Repomix and fails if `repomix-output.xml` is not already committed at `HEAD`). Git **pre-push** delegates here.
+- **`buck2 test //:check_full`** runs **`//src/searchbench-go:check`**, **`//src/iterative-context:check_full`** (adds **`basedpyright`** on `src` + `tests`), **`//docs:check`** (VitePress build), and **`//:repomix_fresh_check`** (regenerates Repomix and fails if `repomix-output.xml` is not already committed at `HEAD`). Git **pre-push** delegates here.
 - **`//src/searchbench-go:pkl_go_types`** remains a separate opt-in target: it regenerates Pkl Go bindings in-tree and must not run in parallel with **`//src/searchbench-go:go_tests`** (file races on generated sources). Regenerate manually with the Pkl command in **`AGENTS.md`**.
 
 ## Go commands
@@ -11340,6 +11406,20 @@ Do not add live MCP, LangSmith, provider execution, or visualization UI unless t
 | LangSmith | [reference/langsmith-integration.md](./reference/langsmith-integration.md) |
 </file>
 
+<file path="docs/BUCK">
+load("@prelude//:rules.bzl", "sh_test")
+
+sh_test(
+    name = "check",
+    test = "docs_check.sh",
+)
+
+sh_test(
+    name = "site",
+    test = "docs_build.sh",
+)
+</file>
+
 <file path="docs/concepts.md">
 # Concepts
 
@@ -11465,11 +11545,72 @@ Issue-first development loop (ChatGPT → GitHub issue → agent prompt → revi
 
 Batch issue publishing (dev tooling): [archive/issue-wave-manifest.md](./archive/issue-wave-manifest.md).
 
+## Docs site (VitePress)
+
+| Command | Purpose |
+| --- | --- |
+| `npm run docs:dev` | Local preview (from repo root after `npm ci`) |
+| `npm run docs:build` | Static build → `docs/.vitepress/dist` |
+| `buck2 test //docs:check` | CI/hook gate: install deps + build |
+| `buck2 test //docs:site` | Same build (named site target) |
+
+Published at [https://becker63.github.io/searchbench-go/](https://becker63.github.io/searchbench-go/) when `main` updates docs paths (GitHub Actions). Markdown remains readable on GitHub without VitePress.
+
+Requires **Node/npm** on PATH (`nix develop` provides `nodejs_22`).
+
 ## Related
 
 - Root [AGENTS.md](../AGENTS.md) — short contributor contract
 - [architecture.md](./architecture.md) — package boundaries summary
 - [reference/build-system.md](./reference/build-system.md) — Nix cell and Buck target notes
+</file>
+
+<file path="docs/docs_build.sh">
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root"
+if ! command -v npm >/dev/null 2>&1; then
+	echo "docs_build: npm not found on PATH (use nix develop)" >&2
+	exit 1
+fi
+npm ci
+npm run docs:build
+</file>
+
+<file path="docs/docs_check.sh">
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$root"
+if ! command -v npm >/dev/null 2>&1; then
+	echo "docs_check: npm not found on PATH (use nix develop)" >&2
+	exit 1
+fi
+npm ci
+npm run docs:build
+</file>
+
+<file path="docs/index.md">
+# SearchBench documentation
+
+SearchBench compares agent and tool candidates on the same match slice and produces **release evidence**.
+
+```text
+Game → Round → Match → Evidence → Decision → NextChallenger
+```
+
+## Start here
+
+- [Start here](./start-here.md) — orientation and one local round
+- [Concepts](./concepts.md) — product vocabulary
+- [Architecture](./architecture.md) — layers and lifecycle
+- [Development](./development.md) — Nix, Buck2, Go, validation
+- [Workspace seeds](./workspace-seeds.md) — `local_path` vs `buck_descriptor`
+
+Full index: [Docs README](./README.md).
+
+Contributors and agents: see root [AGENTS.md](https://github.com/becker63/searchbench-go/blob/main/AGENTS.md) on GitHub.
 </file>
 
 <file path="docs/README.md">
@@ -32426,6 +32567,9 @@ flake.package(
 /*.test
 # Local optional `go mod vendor`; not committed
 /vendor/
+/node_modules/
+/docs/.vitepress/dist/
+/docs/.vitepress/cache/
 </file>
 
 <file path=".gitmodules">
@@ -33127,7 +33271,9 @@ cd src/searchbench-go && go test ./...
 nix develop -c buck2 test //:check_full
 ```
 
-Or rely on **`git commit`** (`//:check`) and **`git push`** (`//:check_full`) after `nix develop`.
+Or rely on **`git commit`** (`//:check`) and **`git push`** (`//:check_full`, includes `//docs:check`) after `nix develop`.
+
+Docs site: `npm run docs:dev` / `npm run docs:build`; `buck2 test //docs:check`. GitHub Pages deploys from `main` (not from local hooks).
 
 Pkl schema change — regenerate bindings:
 
@@ -33176,6 +33322,7 @@ test_suite(
     tests = [
         "//src/searchbench-go:check",
         "//src/iterative-context:check_full",
+        "//docs:check",
         ":repomix_fresh_check",
     ],
 )
@@ -33390,7 +33537,10 @@ test_suite(
           gofmt.enable = true;
           nixfmt-rfc-style.enable = true;
           deadnix.enable = true;
-          statix.enable = true;
+          statix = {
+            enable = true;
+            entry = "statix check -i 'designing-for-two/**'";
+          };
           shellcheck.enable = true;
           shfmt.enable = true;
           trim-trailing-whitespace = {
@@ -33435,13 +33585,19 @@ test_suite(
           };
         };
 
+        hookExcludes = [
+          "designing-for-two"
+        ];
+
         preCommitCheck = git-hooks.lib.${system}.run {
           src = ./.;
+          excludes = hookExcludes;
           hooks = flakeCheckHooks;
         };
 
         preCommitDev = git-hooks.lib.${system}.run {
           src = ./.;
+          excludes = hookExcludes;
           hooks = devHooks;
         };
       in
@@ -33466,6 +33622,7 @@ test_suite(
               nixfmt
               templ
               repomix
+              nodejs_22
             ])
             ++ preCommitDev.enabledPackages;
 
@@ -33485,6 +33642,22 @@ test_suite(
         };
       }
     );
+}
+</file>
+
+<file path="package.json">
+{
+  "name": "searchbench-go",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  }
 }
 </file>
 
@@ -33548,6 +33721,8 @@ Uses the **offline fake-local** path (no live MCP or model APIs). Optional live 
 | [Nix](https://nixos.org/) *(optional)* | `nix develop` for buck2, hooks, repomix |
 
 Development workflow (tests, hooks, Repomix): [docs/development.md](docs/development.md).
+
+**Docs site** (VitePress): [https://becker63.github.io/searchbench-go/](https://becker63.github.io/searchbench-go/) — `npm run docs:dev` (preview), `npm run docs:build`, `buck2 test //docs:check`; deploys from `main` via GitHub Actions.
 
 ## Module
 

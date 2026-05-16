@@ -11,7 +11,7 @@ SearchBench uses a **small monorepo layout**: the Go module lives under `src/sea
 
 - **Cell layout** follows the default Meta prelude + Tweag `nix` cell: see root **`.buckconfig`** and **`toolchains/`** (`toolchains/flake.nix` exposes packages; **`toolchains/BUCK`** wires `flake.package` targets for Starlark plus prelude toolchains). Repomix freshness lives as **`//:repomix_fresh_check`** next to root **`BUCK`**.
 - **`buck2 test //:check`** runs **`//src/searchbench-go:check`** (Go tests + CLI build) and **`//src/iterative-context:check`** (locked `uv sync`, import smoke, **`pytest`** excluding tests that require **`TEST_REPO_SMALL` / `TEST_REPO_MEDIUM`**). Git **pre-commit** (after Repomix staging) delegates here.
-- **`buck2 test //:check_full`** runs **`//src/searchbench-go:check`**, **`//src/iterative-context:check_full`** (adds **`basedpyright`** on `src` + `tests`), and **`//:repomix_fresh_check`** (regenerates Repomix and fails if `repomix-output.xml` is not already committed at `HEAD`). Git **pre-push** delegates here.
+- **`buck2 test //:check_full`** runs **`//src/searchbench-go:check`**, **`//src/iterative-context:check_full`** (adds **`basedpyright`** on `src` + `tests`), **`//docs:check`** (VitePress build), and **`//:repomix_fresh_check`** (regenerates Repomix and fails if `repomix-output.xml` is not already committed at `HEAD`). Git **pre-push** delegates here.
 - **`//src/searchbench-go:pkl_go_types`** remains a separate opt-in target: it regenerates Pkl Go bindings in-tree and must not run in parallel with **`//src/searchbench-go:go_tests`** (file races on generated sources). Regenerate manually with the Pkl command in **`AGENTS.md`**.
 
 ## Go commands

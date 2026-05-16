@@ -1,0 +1,11 @@
+load("@prelude//:rules.bzl", "sh_test")
+
+sh_test(
+    name = "check",
+    test = "docs_check.sh",
+)
+
+sh_test(
+    name = "site",
+    test = "docs_build.sh",
+)

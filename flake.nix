@@ -65,7 +65,10 @@
           gofmt.enable = true;
           nixfmt-rfc-style.enable = true;
           deadnix.enable = true;
-          statix.enable = true;
+          statix = {
+            enable = true;
+            entry = "statix check -i 'designing-for-two/**'";
+          };
           shellcheck.enable = true;
           shfmt.enable = true;
           trim-trailing-whitespace = {
@@ -110,13 +113,19 @@
           };
         };
 
+        hookExcludes = [
+          "designing-for-two"
+        ];
+
         preCommitCheck = git-hooks.lib.${system}.run {
           src = ./.;
+          excludes = hookExcludes;
           hooks = flakeCheckHooks;
         };
 
         preCommitDev = git-hooks.lib.${system}.run {
           src = ./.;
+          excludes = hookExcludes;
           hooks = devHooks;
         };
       in
@@ -141,6 +150,7 @@
               nixfmt
               templ
               repomix
+              nodejs_22
             ])
             ++ preCommitDev.enabledPackages;
 

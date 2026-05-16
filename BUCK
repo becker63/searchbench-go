@@ -20,6 +20,7 @@ test_suite(
     tests = [
         "//src/searchbench-go:check",
         "//src/iterative-context:check_full",
+        "//docs:check",
         ":repomix_fresh_check",
     ],
 )
