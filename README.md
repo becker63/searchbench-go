@@ -5,6 +5,10 @@
 </p>
 
 <p align="center">
+  <strong>Pkl manifests</strong> → <strong>SearchBench CLI</strong> → <strong>evidence bundles</strong> → <strong>release decisions</strong>
+</p>
+
+<p align="center">
   <a href="https://becker63.github.io/searchbench-go/">📚 Docs</a>
   ·
   <a href="docs/start-here.md">🚀 Start here</a>
@@ -20,136 +24,102 @@
 
 ---
 
-SearchBench is a **work-in-progress harness** for evaluating **agent-facing interfaces** over benchmark tasks.
-
-The current user-facing API is simple:
-
-```text
-Pkl round manifest
-  → searchbench run
-  → evidence bundle
-  → decision/report
-```
+SearchBench is a **work-in-progress harness** for evaluating **agent-facing interfaces** over benchmark tasks. It is not a stable public API yet, but its current user-facing surface is already taking shape: write a **Pkl round manifest**, run it with the SearchBench CLI, and inspect the resulting **evidence bundle**.
 
 SearchBench wraps task families as **games**, then asks:
 
 > Which interface makes the same agent perform better?
 
-The first stress-test game is **code localization**. SearchBench uses bug-localization dataset slices to test whether symbol/code-search tools with **lookahead** help an agent find the files that need to change.
-
-Long term, the same `Game` model is intended to wrap other task families — for example SWE-bench-style issue resolution, proof-target selection, and docs/context selection — without claiming those are fully supported today.
+The first stress-test game is **code localization**. SearchBench uses bug-localization dataset slices to test whether symbol/code-search tools with **lookahead** help an agent find the files that need to change. The longer-term goal is for the same `Game` model to wrap other task families, such as SWE-bench-style issue resolution, proof-target selection, and docs/context selection.
 
 ```text
-Game → Round → Match → Evidence → Decision → NextChallenger
+Game → Round → Match → Evidence → Objective → Decision → NextChallenger
 ```
 
-## Current API: Pkl games and rounds
+## The current API
 
-SearchBench is configured through **Pkl manifests**.
-
-A round manifest declares:
-
-- the game being played
-- the dataset slice
-- the incumbent interface
-- the challenger interface
-- evaluator/tool policy
-- scoring objective
-- output bundle location
-
-The CLI executes that manifest and writes a static evidence bundle.
-
-```bash
-./searchbench run \
-  --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
-  --bundle-root="$(pwd)/.tmp-artifacts"
-```
-
-Conceptually:
+Today, the cleanest API is not a Go package. It is the round manifest.
 
 ```text
 configs/rounds/*/round.pkl
-  declares the round
-
-configs/schema/
-  defines the Pkl contract
+  declares what is being tested
 
 searchbench run
   executes the round
 
-.tmp-artifacts/
-  receives bundles, reports, decisions, and continuation files
+artifacts/games/<game-id>/rounds/<round-id>/
+  records what happened
 ```
 
-The Go library internals are still evolving. For now, the stable surface to look at is the **Pkl round/config interface** plus the CLI.
+Pkl owns the typed, readable manifest surface: game defaults, round shape, local constraints, and composition through `amends`. Go owns execution: match identity, backend semantics, validation, scoring models, reports, decisions, and bundle writing.
 
-## Why SearchBench exists
+A from-scratch round currently looks like this:
 
-Most benchmarks ask:
+```pkl
+amends "../../schema/games/code-localization.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
 
-> Which model is better?
+name = "example-local-ic-vs-jcodemunch-round-001"
 
-SearchBench also asks:
+round = (game.defineFromScratch("round-001")) {
+  incumbent = game.jcodemunch()
 
-> Which interface made the same model behave like a better engineer?
+  challenger = (game.iterativeContext("policies/challenger_policy.py")) {
+    selectionPolicy {
+      id = "challenger-policy-round-001"
+    }
+  }
 
-Interfaces can include:
-
-- code-search backends
-- MCP servers
-- symbol/reference graphs
-- bounded lookahead policies
-- validation/proof targets
-- Pkl configs
-- Buck work graphs
-- docs/context packs
-- visualization surfaces
-
-SearchBench compares those interfaces under controlled rounds and records durable evidence about what happened.
-
-## What it does
-
-```text
-Benchmark task family
-  → SearchBench Game
-  → Dataset slice
-  → Incumbent interface vs Challenger interface
-  → Tool-based agent execution
-  → Evidence bundle
-  → Report / visualization
-  → Promote, review, or reject
+  matches = game.lca("py", "dev", 5)
+  evaluator = game.fakeEvaluator()
+  scoring = game.objective("scoring/localization-objective.pkl")
+}
 ```
 
-A **round** compares an incumbent interface or policy against a challenger on the same matches, records evidence, and yields a decision:
+That is the core shape of SearchBench: a game, a dataset slice, an incumbent interface, a challenger interface, an evaluator, and an objective.
 
-```text
-PROMOTE | REVIEW | REJECT
+The objective is also visible Pkl. The round manifest points to it; it does not bury scoring math inside the runner.
+
+```pkl
+amends "../../../schema/SearchBenchObjective.pkl"
+import "../../../schema/SearchBenchObjectiveHelpers.pkl" as helpers
+
+local maxHop = 12.0
+local tokenBudget = 20000.0
+
+objectiveId = "localization-v1"
+
+local challengerQuality =
+  1.0 - (if (current.localizationDistance.goldHop.challenger < maxHop) current.localizationDistance.goldHop.challenger else maxHop) / maxHop
+
+local tokenEfficiency =
+  1.0 - (if (current.challengerUsage.totalTokens < tokenBudget) current.challengerUsage.totalTokens else tokenBudget) / tokenBudget
+
+local base = (challengerQuality * 0.8) + (tokenEfficiency * 0.2)
+
+local regressionPenalty =
+  if (current.regressions.severeCount > 0) 0.0 else 1.0
+
+local invalidPredictionPenalty =
+  if (current.invalidPredictions.known && current.invalidPredictions.count > 0) 0.0 else 1.0
+
+local finalScore = base * regressionPenalty * invalidPredictionPenalty
+
+values = new {
+  helpers.intermediate("challengerQuality", challengerQuality)
+  helpers.intermediate("tokenEfficiency", tokenEfficiency)
+  helpers.intermediate("base", base)
+  helpers.penalty("regressionPenalty", regressionPenalty)
+  helpers.penalty("invalidPredictionPenalty", invalidPredictionPenalty)
+  helpers.finalValue("final", finalScore)
+}
+
+final = "final"
 ```
 
-## Status
+This is the release-engineering shape of the project. The Pkl says what is being evaluated. The CLI runs it. The bundle records what happened. The Git lifecycle proves the repo state around it.
 
-SearchBench is early.
-
-**Today:**
-
-- research workbench
-- infra-native evaluation harness
-- Pkl round/config API
-- code-localization stress test
-- bundle-producing round runner
-- local fake/offline evaluation path
-- Buck/Nix development workflow
-
-**Not yet:**
-
-- stable Go library API
-- finished autonomous meta-harness
-- replacement for SWE-bench
-- polished SaaS product
-
-## Quickstart
-
-Run one local fake/offline round:
+## Run a local round
 
 ```bash
 git clone https://github.com/becker63/searchbench-go.git
@@ -164,29 +134,177 @@ cd ../..
   --bundle-root="$(pwd)/.tmp-artifacts"
 ```
 
-This uses the **offline fake-local** path. It does not require live MCP servers or model APIs.
+The checked-in local examples use the fake/offline path. They are meant to prove manifest resolution, round execution, bundle writing, evidence generation, objective evaluation, and decisions without requiring live MCP servers or model API keys.
 
-See [docs/start-here.md](docs/start-here.md) for the guided walkthrough.
+## What a bundle contains
 
-## Core vocabulary
+A completed round writes a durable bundle under the bundle root.
 
-| Term | Meaning |
-| --- | --- |
-| **Game** | Wrapper around a benchmark task family. First game: code localization. |
-| **Interface** | Tools, graphs, configs, MCP servers, and validation surfaces exposed to the agent. |
-| **Round** | Incumbent vs challenger comparison on the same dataset slice. |
-| **Match** | One benchmark instance in the slice. |
-| **Evidence** | Durable facts from execution, scoring, validation, and reporting. |
-| **Decision** | `PROMOTE`, `REVIEW`, or `REJECT`. |
-| **Bundle** | Static artifact directory recording what happened. |
+```text
+artifacts/games/code-localization/rounds/round-001/
+  COMPLETE
+  resolved-round.json
+  round-report.json
+  round-report.txt
+  evidence.pkl
+  objective.json
+  decision.json
+  metadata.json
+  continuation.json
+  continuation.pkl
+  policies/challenger_policy.py
+```
 
-More: [docs/concepts.md](docs/concepts.md)
+The bundle is the source of truth for review. `resolved-round.json` captures the executable round after Pkl resolution. `evidence.pkl` is the scoring-facing evidence document. `objective.json` records the named objective values and final score. `decision.json` records whether the challenger should be promoted, reviewed, or rejected. `metadata.json` inventories files and content hashes.
+
+A real bundle evidence file looks like this in shape:
+
+```pkl
+schemaVersion = "searchbench.round_evidence.v1"
+gameId = "code-localization"
+roundId = "round-001"
+reportId = "report-round-001"
+
+policies {
+  incumbent {
+    id = "jcodemunch"
+    name = "jCodeMunch"
+    backend = "jcodemunch"
+  }
+
+  challenger {
+    id = "iterative-context"
+    name = "Iterative Context"
+    backend = "iterative-context"
+    policy {
+      id = "challenger-policy-round-001"
+      language = "python"
+      entrypoint = "score_fn"
+    }
+  }
+}
+
+matchCounts {
+  total = 5
+}
+
+localizationDistance {
+  goldHop {
+    metric = "gold_hop"
+    direction = "lower_is_better"
+    incumbent = 0
+    challenger = 0
+    delta = 0
+    improved = false
+    regressed = false
+  }
+}
+
+challengerUsage {
+  available = false
+  measuredRuns = 0
+  totalTokens = 0
+}
+
+decision {
+  decision = "REVIEW"
+  reason = "challenger did not improve the composite score in local fake comparison"
+}
+```
+
+That evidence is intentionally inspectable. SearchBench should not be a black box that only emits a leaderboard number.
+
+## Continuation and releases
+
+Every completed round can write continuation artifacts. `continuation.json` is the machine-readable authority. `continuation.pkl` is the human-editable lineage surface.
+
+A later round can amend the previous bundle’s `continuation.pkl` and only patch what changed:
+
+```pkl
+amends "../local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/continuation.pkl"
+import "../../schema/games/code-localization-helpers.pkl" as game
+
+name = "example-optimize-ic-round-002"
+
+round {
+  id = "round-002"
+
+  challenger {
+    generate {
+      optimizer = game.fakeOptimizer()
+      artifactName = "next_challenger_policy.round-002.py"
+    }
+  }
+}
+```
+
+That is the core release loop SearchBench is growing toward:
+
+```text
+previous bundle
+  → continuation.pkl
+  → next round manifest
+  → generated or supplied challenger
+  → new evidence bundle
+  → decision
+```
+
+The meta-harness can eventually propose changes, but SearchBench owns the round, evidence, and judgment.
+
+## Git lifecycle
+
+SearchBench uses the repository lifecycle as part of the product surface.
+
+Nix supplies the toolchain and installs Git hooks. Buck names repo operations. Git hooks call Buck gates.
+
+```text
+nix develop
+  → installs the dev shell and Git hooks
+
+git commit
+  → buck2 build //tooling:repomix
+  → buck2 test //:check
+
+git push
+  → buck2 test //:check_full
+```
+
+The fast gate proves the basic repo state. The full gate includes the Go harness, Iterative Context checks, generated Pkl binding freshness, docs build, and Repomix freshness.
+
+```bash
+nix develop -c buck2 test //:check
+nix develop -c buck2 test //:check_full
+```
+
+The important split is:
+
+```text
+Pkl declares the round.
+Go executes the lifecycle.
+Buck proves repo operations.
+Git records the change.
+Bundles record the evidence.
+```
+
+## Why SearchBench exists
+
+Most benchmarks ask:
+
+> Which model is better?
+
+SearchBench also asks:
+
+> Which interface made the same model behave like a better engineer?
+
+For the current code-localization game, an interface might be a code-search backend, MCP server, symbol graph, bounded lookahead policy, validation surface, workspace provider, or configuration shape. The novel experiment is to move more code search into deterministic computation so the agent can consume a better interface instead of manually performing every search step through tool calls.
+
+SearchBench is early, but the direction is concrete: wrap benchmark tasks as games, vary the interface, run controlled rounds, and keep the evidence.
 
 ## Repository map
 
 | Path | Purpose |
 | --- | --- |
-| `configs/` | Pkl schemas, round manifests, objectives, dataset slices |
+| `configs/` | Pkl schemas, round manifests, objectives, and dataset slices |
 | `src/searchbench-go/` | Go harness: games, rounds, scoring, bundles, CLI |
 | `src/iterative-context/` | Python MCP/code-search backend used as a challenger interface |
 | `docs/` | Public docs, reference docs, and research notes |
@@ -195,52 +313,11 @@ More: [docs/concepts.md](docs/concepts.md)
 
 More: [docs/components.md](docs/components.md)
 
-## Development
+## Read next
 
-SearchBench’s development workflow is intentionally graph-shaped:
+Start with [docs/index.md](docs/index.md) or the hosted docs at [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/).
 
-```text
-Nix gives you the environment.
-Buck gives you the work graph.
-Git hooks call Buck gates.
-```
-
-Common commands:
-
-```bash
-nix develop
-buck2 test //:check
-buck2 test //:check_full
-buck2 test //docs:check
-```
-
-Docs preview:
-
-```bash
-npm run docs:dev
-```
-
-More: [docs/development.md](docs/development.md)
-
-## Research thesis
-
-SearchBench is exploring a broader claim:
-
-> The model is not the whole system.  
-> The interface changes what the agent is capable of.
-
-Read the research note:
-
-- [Agent interface research](docs/research/agent-interface-research.md)
-
-## Links
-
-- 📚 Docs: [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/)
-- 🚀 Start here: [docs/start-here.md](docs/start-here.md)
-- 🧭 Concepts: [docs/concepts.md](docs/concepts.md)
-- 🧩 Components: [docs/components.md](docs/components.md)
-- 🛠️ Development: [docs/development.md](docs/development.md)
-- 🤖 Agent contract: [AGENTS.md](AGENTS.md)
+The concepts doc explains `Game`, `Round`, `Match`, `Interface`, `Evidence`, and `Bundle`. The development doc explains the Nix/Buck/Git workflow. The research note explains the broader claim: the model is not the whole system; the interface changes what the agent is capable of.
 
 ## Module
 
