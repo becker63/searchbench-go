@@ -9482,24 +9482,35 @@ Generated IC policies must expose **`score_fn(node, graph, depth) -> float`**. T
 
 ## Default pipeline steps (IC)
 
-For IC-targeted proposals, `internal/agents/optimizer/policy` stages a workspace and runs, in order:
+For IC-targeted proposals, `internal/agents/optimizer/policy`:
 
-1. **`stage_policy`** — writes `policy.json` metadata (ids, interface, symbol, sha256) under the staged workspace (Go-only step result).
-2. **`policy_static_precheck`** — `python -m py_compile` on the staged module (fast syntax gate only).
-3. **`ic_validate_policy`** — `uv run python -m iterative_context.validate_policy --policy-path … --policy-id … --symbol score_fn --json` from the **`iterative-context`** submodule root.
+1. Materializes a **candidate workspace** copy of Iterative Context (see [ic-workspace-seed-providers.md](./ic-workspace-seed-providers.md); default seed provider is `local_path`).
+2. Stages the proposal and runs the pipeline with **cwd = candidate workspace root** (not the original source tree).
+
+Steps, in order:
+
+1. **`stage_policy`** — writes `policy.json` metadata (ids, interface, symbol, sha256, seed identity) under the candidate workspace.
+2. **`py_compile`** — `python -m py_compile` on the staged module (fast syntax gate).
+3. **`validate_policy`** — `uv run python -m iterative_context.validate_policy --policy-path … --policy-id … --symbol score_fn --json`
 4. **`basedpyright`** — `uv run basedpyright`
 5. **`ruff_check`** — `uv run ruff check`
 6. **`pytest`** — `uv run pytest`
 
 Commands are executed without `sh -c`, without raw `pytest`/`pyright` binaries on PATH, and without `PYTHONPATH` hacks. Dynamic argv is constrained by `execpipeline.ICOptimizerAllowlist`.
 
-## Discovering the submodule root
+Provider-neutral entry point: `ValidateProposalInWorkspace(ctx, candidate, proposal)`.
 
-By default the validator searches upward from the process working directory for `iterative-context/pyproject.toml` or `src/iterative-context/pyproject.toml`.
+## Discovering the IC source / candidate root
 
-Override explicitly with:
+`ValidateProposalWithLocalPathSeed` resolves the submodule via upward search for `iterative-context/pyproject.toml` or `src/iterative-context/pyproject.toml`, materializes a candidate workspace, then validates inside that copy.
+
+Override the source path with:
 
 `SEARCHBENCH_ITERATIVE_CONTEXT_ROOT=/absolute/path/to/iterative-context`
+
+## Testcontainers
+
+Container-backed validation runners are **deferred**. The default path uses local `uv` subprocess steps only.
 
 ## Tests vs production
 
@@ -9510,8 +9521,9 @@ To exercise the full pipeline locally, run an optimizer-backed manifest from the
 ## Related modules
 
 - IC CLI: `iterative-context` → `iterative_context.validate_policy`
-- Go routing: `internal/agents/optimizer/policy/validate.go`
+- Go routing: `internal/agents/optimizer/policy/validate.go` → `candidate_pipeline.go`
 - Allowlist: `internal/adapters/pipeline/exec/ic_allowlist.go`
+- Workspace seeds: [ic-workspace-seed-providers.md](./ic-workspace-seed-providers.md)
 </file>
 
 <file path="docs/engineering/pure-center.md">
