@@ -1,37 +1,56 @@
 # Architecture
 
-Monorepo component map: [components.md](./components.md). This page is **internal Go layering** inside `src/searchbench-go/`.
-
-Generic harness shape: **Game** → dataset slice → incumbent vs challenger → **bundle**. First game implemented: **code localization**. Code layout:
+Monorepo map: [components.md](./components.md). This page ties the **round lifecycle** to Go paths.
 
 ```text
 pure      model (Game, Round, Match, evidence, scores)
-ports     shared contracts (e.g. pipeline steps)
-app       round orchestration (internal/app/round)
+ports     shared contracts
+app       round orchestration
 agents    evaluator + optimizer (must not import app)
-adapters  Pkl config, FS bundles, subprocess pipelines
+adapters  Pkl, bundles, pipelines, workspaces
 surface   CLI
-games     game wiring (e.g. code localization)
+games     code-localization wiring
 ```
 
 ```text
 surface / app / adapters / agents  →  ports  →  pure
 ```
 
-## Round lifecycle
+## Round lifecycle → code
 
-`src/searchbench-go/internal/app/round`:
+| Stage | Path |
+| --- | --- |
+| Load Pkl manifest | `internal/adapters/config/pkl/` |
+| Run round | `internal/app/round/` |
+| Match execution / reports | `internal/app/round/` (evaluator wiring) |
+| Build evidence | `internal/pure/report`, `internal/pure/score` |
+| Run objective | `internal/adapters/scoring/pkl/` |
+| Write bundle | `internal/adapters/bundle/fs/` |
+| Candidate workspace | `internal/adapters/workspace/` |
+| Optimizer policy validation | `internal/agents/optimizer/policy/` |
 
 ```text
-resolve Pkl manifest → run matches → evidence + objective → decision → bundle
-  → optional NextChallenger (optimizer)
+round.pkl → config/pkl → app/round → matches → evidence.pkl
+  → scoring/pkl → objective.json → decision → bundle/fs
+  → optional optimizer → candidate workspace → MCP
 ```
 
-IC optimizer path: [candidate-workspaces.md](./candidate-workspaces.md) → `ValidateProposalInWorkspace` → MCP launch from the validated workspace.
+**Example manifest:** `configs/rounds/local-ic-vs-jcodemunch/round.pkl`
+**Example bundle:** `configs/rounds/local-ic-vs-jcodemunch/artifacts/.../round-001/`
 
-## Buck2
+## IC optimizer path
 
-Contributor operation graph: `//:check`, `//:check_full`, `//docs:check`, IC `//src/iterative-context:check*`. Not required for public `local_path` round runs.
+[candidate-workspaces.md](./candidate-workspaces.md) — `ValidateProposalInWorkspace` then MCP from the validated workspace only.
+
+## Buck2 (contributors)
+
+| Gate | Target |
+| --- | --- |
+| Fast (commit) | `buck2 test //:check` |
+| Full (push) | `buck2 test //:check_full` |
+| Docs | `buck2 test //docs:check` |
+
+Not required for public `local_path` round runs.
 
 ## Reference
 
@@ -39,8 +58,7 @@ Contributor operation graph: `//:check`, `//:check_full`, `//docs:check`, IC `//
 | --- | --- |
 | Import rules | [reference/package-boundaries.md](./reference/package-boundaries.md) |
 | Pkl rounds | [reference/pkl-rounds.md](./reference/pkl-rounds.md) |
-| Pkl objectives | [reference/pkl-objectives.md](./reference/pkl-objectives.md) |
+| Objectives | [reference/pkl-objectives.md](./reference/pkl-objectives.md) |
 | Bundles | [reference/bundles.md](./reference/bundles.md) |
-| IC optimizer pipeline | [reference/optimizer-policy-validation.md](./reference/optimizer-policy-validation.md) |
 
-Enforced by `src/searchbench-go/internal/architecture/imports_test.go`.
+Enforced by `internal/architecture/imports_test.go`.

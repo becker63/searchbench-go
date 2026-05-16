@@ -1,35 +1,73 @@
 # Bundles
 
-A **bundle** is the durable artifact tree for one completed (or in-progress) round.
+A **bundle** is the durable artifact tree for one completed round. It is the product output reviewers and tools inspect.
 
-## Layout (typical)
+**Write path:** `src/searchbench-go/internal/adapters/bundle/fs`
+**Models:** `src/searchbench-go/internal/pure/report`, `src/searchbench-go/internal/pure/score`
 
-Under `--bundle-root`, paths are organized by game and round id, for example:
+## Example tree
+
+**Path:** `configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/`
+
+After `./searchbench run`, the same shape appears under `{bundle-root}/games/code-localization/rounds/round-001/`.
 
 ```text
-{bundle-root}/games/{game}/rounds/{round-id}/
-  manifest / resolved inputs
-  evidence.pkl
-  objective.json
-  reports and match artifacts
-  decision record
+COMPLETE
+resolved-round.json
+round-report.json
+round-report.txt
+evidence.pkl
+objective.json
+decision.json
+metadata.json
+continuation.json
+continuation.pkl
+policies/challenger_policy.py
 ```
 
-Exact filenames depend on the game and round version; see a local run under `.tmp-artifacts` or `configs/rounds/*/artifacts/` examples.
+| File | Role |
+| --- | --- |
+| `COMPLETE` | Marker that the round finished |
+| `resolved-round.json` | Fully resolved manifest + config snapshot |
+| `round-report.json` / `.txt` | Human- and machine-readable comparison report |
+| `evidence.pkl` | Evidence document for Pkl scoring |
+| `objective.json` | Result of `localization-objective.pkl` |
+| `decision.json` | `PROMOTE_CHALLENGER` / `REVIEW` / `REJECT` |
+| `metadata.json` | Bundle ids, hashes, provenance |
+| `continuation.json` / `.pkl` | Survivor state for the next round manifest |
+| `policies/` | Staged challenger (and related) policy files |
 
-## Contents
+## Short excerpts
 
-Bundles record what is needed to **review** a round without replaying live services:
+**decision.json:**
 
-- resolved manifest inputs
-- per-match outputs and usage
-- round evidence and objective result
-- **Decision** (`PROMOTE` | `REVIEW` | `REJECT`)
-- workspace seed / candidate identity when applicable
+```json
+{
+  "decision": "PROMOTE_CHALLENGER",
+  "reason": "challenger improves the composite score in local fake comparison"
+}
+```
 
-## Code
+**continuation.json** (start):
 
-- Write path: `internal/adapters/bundle/fs`
-- Models: `internal/pure/report`, `internal/pure/score`
+```json
+{
+  "schema_version": "searchbench.continuation.v1",
+  "bundle_id": "round-001",
+  "game": { "id": "code-localization", "kind": "code_localization" }
+}
+```
 
-Immutable after completion — new rounds get new bundle directories.
+**Next round input:** `configs/rounds/optimize-ic/round.pkl` amends `continuation.pkl` from this bundle.
+
+## Round 002 bundle
+
+Optimizer continuation example:
+
+`configs/rounds/optimize-ic/artifacts/games/code-localization/rounds/round-002/`
+
+Adds e.g. `policies/next_challenger_policy.round-002.py` from `game.fakeOptimizer()`.
+
+## Immutability
+
+Bundles are not rewritten after completion. New rounds get new directories and ids.

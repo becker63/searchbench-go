@@ -1,25 +1,17 @@
 # Components
 
-SearchBench is a small monorepo. Top-level source trees are **separate components** because they play different roles in the evaluation loop.
-
-The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends** expose agent-facing interfaces. **Visualization** (planned) will project bundles into an inspection UI — not own scoring or bundle semantics.
+SearchBench is a small monorepo. Each top-level tree is a **component** with concrete files and Buck proof targets.
 
 ## Overview
 
-| Component | Path | Role | Language | Main proof |
-| --- | --- | --- | --- | --- |
-| SearchBench-Go | `src/searchbench-go/` | Harness, round execution, bundles, config adapters | Go | `buck2 test //src/searchbench-go:check` |
-| Iterative Context | `src/iterative-context/` | MCP / code-search backend and IC policy surface | Python | `buck2 test //src/iterative-context:check_full` |
-| Visualization | *not in repo yet* | Bundle/trace replay and evidence inspection | TBD | TBD |
-| Configs | `configs/` | Pkl schema and round/objective manifests | Pkl | `buck2 test //:check_full` |
-| Docs | `docs/` | Product, contributor, reference, research docs | Markdown | `buck2 test //docs:check` |
+| Component | Path | Example files | Proof |
+| --- | --- | --- | --- |
+| SearchBench-Go | `src/searchbench-go/` | `internal/app/round`, `internal/adapters/config/pkl`, `internal/adapters/bundle/fs` | `buck2 test //src/searchbench-go:check` |
+| Iterative Context | `src/iterative-context/` | `src/iterative_context/server.py`, `optimizable_backend.json` | `buck2 test //src/iterative-context:check_full` |
+| Configs | `configs/` | `rounds/local-ic-vs-jcodemunch/round.pkl`, `schema/SearchBenchRound.pkl` | `buck2 test //:check_full` |
+| Docs | `docs/` | `index.md`, `start-here.md`, `BUCK` | `buck2 test //docs:check` |
 
-## Components vs package boundaries
-
-| Level | Question | Doc |
-| --- | --- | --- |
-| **Component** | What are the major projects in this repo? | This page |
-| **Package** | How is the Go harness layered internally? | [reference/package-boundaries.md](./reference/package-boundaries.md) |
+**Component vs package:** this page = repo projects; [reference/package-boundaries.md](./reference/package-boundaries.md) = Go import layers inside the harness.
 
 ---
 
@@ -27,43 +19,50 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Path:** `src/searchbench-go/`
 
-**Owns:** Game/Round/Match/Evidence/Decision model; round execution; evaluator and optimizer orchestration; workspace seed provider wiring; bundle writing; Pkl config loading; CLI (`searchbench`).
+**Owns:** Game/Round/Match model; round execution; bundle writing; Pkl loading; CLI (`searchbench`).
 
-**Must not own:** External meta-harness worktree orchestration; Iterative Context Python internals; visualization UI; live provider calls in deterministic CI gates.
+**Does not own:** IC Python internals; visualization UI; live provider calls in CI gates.
 
-**Key docs:** [architecture.md](./architecture.md), [reference/package-boundaries.md](./reference/package-boundaries.md), [candidate-workspaces.md](./candidate-workspaces.md), [development.md](./development.md).
+| Area | Example path |
+| --- | --- |
+| Round orchestration | `internal/app/round/` |
+| Pkl config | `internal/adapters/config/pkl/` |
+| Bundles | `internal/adapters/bundle/fs/` |
+| Objectives | `internal/adapters/scoring/pkl/` |
+| Workspaces | `internal/adapters/workspace/` |
+| Optimizer validation | `internal/agents/optimizer/policy/` |
+| CLI | `cmd/searchbench/` |
 
-**Validation:** `buck2 test //src/searchbench-go:check` · Pkl regen: `buck2 build //src/searchbench-go:pkl_go_types`
+**Proves with:** `buck2 test //src/searchbench-go:check` · Pkl regen: `buck2 build //src/searchbench-go:pkl_go_types`
 
 ---
 
 ## Iterative Context
 
-**Path:** `src/iterative-context/` (git submodule)
+**Path:** `src/iterative-context/` (submodule)
 
-**Owns:** MCP server; code-search and graph-lookahead behavior; policy validation (`validate_policy`); `install_score` / admin contract; `optimizable_backend.json` and Buck descriptor target.
+**Owns:** MCP server; code-search / lookahead; `validate_policy`; `optimizable_backend.json`.
 
-**Role in SearchBench:** Primary **challenger interface** for the code-localization game. The harness materializes a copy into an isolated **candidate workspace**, validates proposals there, then launches MCP from that same tree.
+**Does not own:** SearchBench scoring, bundle layout, public round schema.
 
-**Must not own:** SearchBench scoring or decisions; bundle layout; public round manifest schema.
+| Area | Example path |
+| --- | --- |
+| MCP server | `src/iterative_context/server.py` |
+| Policy validation | `src/iterative_context/validate_policy.py` |
+| Backend descriptor | `optimizable_backend.json` |
+| Example policy | `configs/rounds/local-ic-vs-jcodemunch/policies/challenger_policy.py` |
 
-**Key docs:** [candidate-workspaces.md](./candidate-workspaces.md), [development.md](./development.md).
+**Role:** Primary **challenger** for code-localization; materialized into a [candidate workspace](./candidate-workspaces.md) before validate + launch.
 
-**Validation:** `buck2 test //src/iterative-context:check` · `buck2 test //src/iterative-context:check_full`
+**Proves with:** `buck2 test //src/iterative-context:check` · `buck2 test //src/iterative-context:check_full`
 
 ---
 
 ## Visualization
 
-**Status:** planned — **not checked in** to this repository yet.
+**Status:** planned — not in this repo.
 
-**Expected role:** Static bundle replay; trace/event views; incumbent vs challenger comparison; evidence inspection; optional release-decision UI.
-
-**Expected path:** TBD (e.g. `src/searchbench-visualization/`).
-
-**Must not own:** Source-of-truth scoring; bundle semantics; runtime mutation; provider validation pipelines.
-
-**Integration:** Consumes **static bundles** and projected JSON from the harness. A projection layer, not the system of record.
+**Expected role:** Static bundle replay; incumbent vs challenger inspection. Consumes bundles only; does not own scoring.
 
 ---
 
@@ -71,11 +70,18 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Path:** `configs/`
 
-**Owns:** `configs/schema/SearchBenchRound.pkl`; example round manifests under `configs/rounds/`; objective modules referenced by manifests.
+**Owns:** Schema and round manifests; objectives; checked-in example bundles.
 
-**Role:** Declares game/round **intent**. Execution stays in SearchBench-Go.
+| Area | Example path |
+| --- | --- |
+| Round schema | `schema/SearchBenchRound.pkl` |
+| Game | `schema/games/code-localization.pkl` |
+| From-scratch round | `rounds/local-ic-vs-jcodemunch/round.pkl` |
+| Continuation round | `rounds/optimize-ic/round.pkl` |
+| Objective | `rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl` |
+| Example bundle | `rounds/local-ic-vs-jcodemunch/artifacts/.../round-001/` |
 
-**Validation:** `buck2 test //:check_full`; regenerate Go bindings after schema edits ([development.md](./development.md)).
+**Proves with:** `buck2 test //:check_full` (includes harness + schema binding checks).
 
 ---
 
@@ -83,24 +89,22 @@ The **harness** owns games, rounds, evidence, scoring, and bundles. **Backends**
 
 **Path:** `docs/`
 
-**Owns:** Public product spine, contributor workflow, narrow reference docs, research notes.
+**Owns:** Product spine, reference, research. Hosted: [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/).
 
-**Role:** Onboarding for humans and agents. Hosted at [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/).
+| Area | Example path |
+| --- | --- |
+| Entry | `index.md`, `start-here.md` |
+| Reference | `reference/pkl-rounds.md`, `reference/bundles.md` |
+| Buck target | `docs/BUCK` → `//docs:check` |
 
-**Validation:** `buck2 test //docs:check` · artifact: `buck2 build //docs:site`
+**Proves with:** `buck2 test //docs:check` · `buck2 build //docs:site`
 
 ---
 
-## Root tooling (Nix / Buck)
+## Root gates (Nix / Buck)
 
-**Paths:** `flake.nix`, `BUCK`, `toolchains/`, `package.json` (VitePress)
+**Paths:** `flake.nix`, `BUCK`, `toolchains/`
 
-**Owns:** `nix develop` dev shell; **git-hooks.nix** hook installation; Buck gates (`//:check`, `//:check_full`, `//docs:check`).
-
-**Split:**
-
-- **Nix** — toolchain and Git hook lifecycle (`nix develop` only; no separate hook installer).
-- **Buck** — repo operation graph contributors run via hooks or manually.
-- **SearchBench-Go** — evaluation lifecycle and product semantics.
+**Owns:** `nix develop`; git-hooks → `buck2 test //:check` (commit), `buck2 test //:check_full` (push).
 
 See [development.md](./development.md).

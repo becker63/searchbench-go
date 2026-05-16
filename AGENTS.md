@@ -52,6 +52,17 @@ Prefer **Buck targets** over raw commands; see [docs/development.md](docs/develo
 - Buck as a requirement for public `local_path` round runs
 - Rewriting long research docs when a spine doc update suffices
 
+## Current examples
+
+| What | Path |
+| --- | --- |
+| Round manifest | `configs/rounds/local-ic-vs-jcodemunch/round.pkl` |
+| Continuation round | `configs/rounds/optimize-ic/round.pkl` |
+| Objective | `configs/rounds/local-ic-vs-jcodemunch/scoring/localization-objective.pkl` |
+| Example bundle | `configs/rounds/local-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/round-001/` |
+| Schema | `configs/schema/SearchBenchRound.pkl` |
+| Bundle docs | [docs/reference/bundles.md](docs/reference/bundles.md) |
+
 ## Key code paths (when implementing)
 
 - Round lifecycle: `src/searchbench-go/internal/app/round`

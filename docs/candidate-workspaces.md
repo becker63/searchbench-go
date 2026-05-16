@@ -6,63 +6,27 @@ How SearchBench isolates, validates, launches, and records optimizable backend c
 
 **The workspace that passes validation is the workspace whose MCP server launches.**
 
-SearchBench does not validate one tree and launch another. It does not mutate the original backend source in place. It **materializes an isolated candidate workspace**, validates proposals there, and launches MCP from **that same copy**.
+SearchBench does not validate one tree and launch another. It **materializes an isolated candidate workspace**, validates proposals there, and launches MCP from **that same copy**.
 
 ## Lifecycle
 
 ```text
-WorkspaceSeedProvider
-  → WorkspaceSeed
-  → ICCandidateWorkspace (materializer)
-  → ValidateProposalInWorkspace
-  → AcceptedICCandidate
-  → MCP launch
-  → bundle / evidence
+WorkspaceSeedProvider → WorkspaceSeed → ICCandidateWorkspace
+  → ValidateProposalInWorkspace → AcceptedICCandidate → MCP launch → bundle / evidence
 ```
 
-| Step | Meaning |
+| Step | Code |
 | --- | --- |
-| **WorkspaceSeedProvider** | Resolves a backend source into a stable **seed** (`local_path` or `buck_descriptor`, …). |
-| **WorkspaceSeed** | Stable source identity + root path to copy from. |
-| **ICCandidateWorkspace** | Mutable isolated copy used for one candidate attempt. |
-| **ValidateProposalInWorkspace** | Pipeline runs with cwd = candidate workspace root. |
-| **AcceptedICCandidate** | Validated policy + launch spec bound to that workspace. |
-| **Bundle / evidence** | Records seed identity, candidate workspace identity, policy identity, validation steps. |
+| Seed resolution | `src/searchbench-go/internal/adapters/workspace/localpath/`, `.../buckdescriptor/` |
+| Materialize copy | `src/searchbench-go/internal/adapters/workspace/materialize/` |
+| Validate proposal | `src/searchbench-go/internal/agents/optimizer/policy/candidate_pipeline.go` |
+| Backend contract | `src/iterative-context/optimizable_backend.json` |
+| MCP server | `src/iterative-context/src/iterative_context/server.py` |
+| Policy checks | `src/iterative-context/src/iterative_context/validate_policy.py` |
 
-Today this path is used heavily for **Iterative Context** selection-policy optimization; the same sandboxing model applies wherever a backend is materialized before validation and launch.
+## Provider: `local_path` (public / default)
 
-## Why this exists
-
-- The optimizer needs a **safe place to stage** candidate policies.
-- Validation must run against the **staged candidate**, not the pristine source tree.
-- Runtime must launch the **exact tree** that passed validation.
-- Evidence must distinguish **same seed, different candidate attempt**.
-
-## Identity model
-
-| Identity | Role |
-| --- | --- |
-| **WorkspaceSeedIdentity** | Stable across materializations: provider, source label/path, tree digest. |
-| **ICCandidateWorkspace.ID** | One concrete mutable instance per materialization (e.g. seed id + temp dir basename). |
-| **Policy identity** | Staged policy path, id, hash, symbol (`score_fn`, …). |
-| **Runtime identity** | Workspace + seed + policy + active score verification for MCP. |
-
-Evidence can answer: “same backend seed, new candidate attempt.”
-
-## Provider variants
-
-Two ways to produce the **seed** for the same lifecycle (not the main concept — sandboxing is):
-
-| Provider | Use when | What it buys |
-| --- | --- | --- |
-| **`local_path`** | Public/default, local dev, tests without Buck | Simplest path: directory path is enough |
-| **`buck_descriptor`** | Internal/meta-harness, graph-addressed backend | Stable Buck label + JSON descriptor (launcher, validator, admin) |
-
-`git` and `archive` are reserved in Pkl and **not** implemented.
-
-### `local_path` (public / default)
-
-Use when a directory path is enough.
+**Pkl excerpt** (in a round that sets `runtime.workspaceSeed`):
 
 ```pkl
 runtime {
@@ -73,13 +37,11 @@ runtime {
 }
 ```
 
-The provider resolves that path into a `WorkspaceSeed`. The materializer copies it into an isolated `ICCandidateWorkspace`. Validation and MCP launch use **the copy**, not the original checkout path as the mutable surface.
+**Meaning:** Resolve directory → copy to temp `ICCandidateWorkspace` → validate and launch from the copy.
 
-`validateIterativeContextProposal` uses this provider by default.
+**Buck not required** for this path.
 
-### `buck_descriptor` (internal)
-
-Use when the backend should be addressed as a **repo graph** capability.
+## Provider: `buck_descriptor` (internal)
 
 ```pkl
 runtime {
@@ -90,55 +52,42 @@ runtime {
 }
 ```
 
-**Level 2 semantics (current):**
+**Descriptor file:** `src/iterative-context/optimizable_backend.json`
 
-```text
-buck2 build //src/iterative-context:optimizable_backend
-  → descriptor target exists in the Buck graph
-
-BuckBackendDescriptorProvider
-  → loads optimizable_backend.json from the repo checkout
-  → descriptor source.kind = local_path
-  → same materializer copies that path into ICCandidateWorkspace
+```json
+{
+  "source": { "kind": "local_path", "path": "src/iterative-context" },
+  "launcher": { "kind": "mcp_stdio", "cwd_mode": "candidate_workspace", ... },
+  "candidate_validator": { "kind": "ic_policy_pipeline", "steps": [...] }
+}
 ```
 
-Buck buys **graph identity and descriptor structure**, not archive snapshots (deferred).
+**Meaning:** Buck labels the descriptor; provider loads JSON from checkout; same materializer copies `local_path` into a candidate workspace. Archive snapshots deferred.
 
-## Responsibility split
+## Identity (evidence)
 
-| Layer | Owns |
+| Identity | Distinguishes |
 | --- | --- |
-| **Pkl** | Provider intent in the round manifest |
-| **Provider** | Seed resolution |
-| **Materializer** | Isolated candidate workspace on disk |
-| **Validation pipeline** | Candidate acceptance |
-| **Runtime** | MCP launch from accepted candidate |
-| **Bundle / evidence** | What happened |
-| **Buck** | Repo operations and graph-addressable descriptors |
+| **WorkspaceSeedIdentity** | Same backend source across attempts |
+| **ICCandidateWorkspace.ID** | One materialization (per attempt) |
+| **Policy identity** | Staged policy path, hash, `score_fn` symbol |
 
-**Buck is not required** for public users who only use `local_path`.
+Evidence can answer: “same seed, different candidate attempt.”
 
 ## Backend descriptor vs repo checks
 
-| Layer | Role |
+| Layer | Example |
 | --- | --- |
-| **Backend descriptor** | Candidate-facing runtime / optimization contract |
-| **Repo Buck targets** | Contributor, CI, meta-harness validation |
+| Backend descriptor | `optimizable_backend.json` — runtime / validation contract |
+| Repo Buck targets | `//src/iterative-context:check_full`, `//:check_full` |
 
-Backend descriptors must **not** include `repo_checks`. Repo checks stay on:
-
-```text
-//:check
-//:check_full
-//src/iterative-context:check
-//src/iterative-context:check_full
-```
+Descriptors must **not** embed `repo_checks`.
 
 ## Decision record
 
-- **`local_path`** is sufficient and is the **public/default** path.
-- **`buck_descriptor`** is kept for internal infra / meta-harness workflows.
-- **Archive snapshots**, git providers, and source manifests remain **deferred**.
+- **`local_path`** — public/default.
+- **`buck_descriptor`** — internal / meta-harness graph identity.
+- **git / archive** providers — reserved, not implemented.
 
 ## Reference
 
@@ -146,8 +95,6 @@ Backend descriptors must **not** include `repo_checks`. Repo checks stay on:
 | --- | --- |
 | Pkl schema | `configs/schema/SearchBenchRound.pkl` |
 | Config validation | `src/searchbench-go/internal/adapters/config/pkl/workspace_seed.go` |
-| Materialization | `src/searchbench-go/internal/adapters/workspace/` |
-| Candidate validation | `src/searchbench-go/internal/agents/optimizer/policy/candidate_pipeline.go` |
-| Optimizer pipeline steps | [reference/optimizer-policy-validation.md](./reference/optimizer-policy-validation.md) |
+| Optimizer steps | [optimizer-policy-validation.md](./reference/optimizer-policy-validation.md) |
 
-Legacy doc name: [workspace-seeds.md](./workspace-seeds.md) redirects here.
+Legacy: [workspace-seeds.md](./workspace-seeds.md) redirects here.
