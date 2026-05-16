@@ -27,8 +27,9 @@ Optional optimizer proposes a **NextChallenger** for a later round.
 ## Read next
 
 1. [concepts.md](./concepts.md) — Game, Interface, Round, bundle, …
-2. [architecture.md](./architecture.md) — `pure` / `app` / `agents` / `adapters`
-3. [development.md](./development.md) — `nix develop`, `buck2 test //:check_full`
-4. [workspace-seeds.md](./workspace-seeds.md) — IC candidate workspaces
+2. [components.md](./components.md) — `src/searchbench-go`, `src/iterative-context`, …
+3. [architecture.md](./architecture.md) — `pure` / `app` / `agents` / `adapters`
+4. [development.md](./development.md) — `nix develop`, `buck2 test //:check_full`
+5. [workspace-seeds.md](./workspace-seeds.md) — IC candidate workspaces
 
 Docs home: [index.md](./index.md). Contributors: [AGENTS.md](../AGENTS.md).

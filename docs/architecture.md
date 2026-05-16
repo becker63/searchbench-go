@@ -1,5 +1,7 @@
 # Architecture
 
+Monorepo component map: [components.md](./components.md). This page is **internal Go layering** inside `src/searchbench-go/`.
+
 Generic harness shape: **Game** → dataset slice → incumbent vs challenger → **bundle**. First game implemented: **code localization**. Code layout:
 
 ```text

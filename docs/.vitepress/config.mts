@@ -24,6 +24,7 @@ export default defineConfig({
         items: [
           { text: "Start here", link: "/start-here" },
           { text: "Concepts", link: "/concepts" },
+          { text: "Components", link: "/components" },
           { text: "Architecture", link: "/architecture" },
           { text: "Development", link: "/development" },
           { text: "Workspace seeds", link: "/workspace-seeds" },

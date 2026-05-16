@@ -12,8 +12,9 @@ Read in order:
 
 1. [docs/index.md](docs/index.md) — docs index
 2. [docs/start-here.md](docs/start-here.md) — one-page orientation
-3. [docs/architecture.md](docs/architecture.md) — layers and boundaries
-4. [docs/development.md](docs/development.md) — validation commands
+3. [docs/components.md](docs/components.md) — monorepo source component map
+4. [docs/architecture.md](docs/architecture.md) — Go layers and boundaries
+5. [docs/development.md](docs/development.md) — validation commands
 
 Deeper material lives under [docs/reference/](docs/reference/), not in this file.
 

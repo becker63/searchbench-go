@@ -16,7 +16,8 @@ Game → Round → Match → Evidence → Decision → NextChallenger
 | --- | --- |
 | [Start here](./start-here.md) | Fast orientation and one local round |
 | [Concepts](./concepts.md) | Vocabulary |
-| [Architecture](./architecture.md) | Package layers and round lifecycle |
+| [Components](./components.md) | Monorepo source trees — what each path owns |
+| [Architecture](./architecture.md) | Go package layers and round lifecycle |
 | [Development](./development.md) | Nix, Buck2, Go, hooks, docs build |
 | [Workspace seeds](./workspace-seeds.md) | `local_path` vs `buck_descriptor` |
 
