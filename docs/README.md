@@ -1,11 +1,13 @@
 # SearchBench docs
 
-Canonical documentation map. Start at [start-here.md](./start-here.md) or root [AGENTS.md](../AGENTS.md).
+Work-in-progress harness for evaluating **agent-facing interfaces** over benchmark tasks. Start at [start-here.md](./start-here.md) or the [docs site landing](./index.md). Contributors: [AGENTS.md](../AGENTS.md).
+
+**Research thesis:** [AGENT_INTERFACE_RESEARCH.md](https://github.com/becker63/searchbench-go/blob/main/AGENT_INTERFACE_RESEARCH.md)
 
 ## Start here
 
-- [Start here](./start-here.md) — one-page intro for humans and agents
-- [Concepts](./concepts.md) — Game, Round, Match, Evidence, Decision, NextChallenger
+- [Start here](./start-here.md) — orientation and one local round
+- [Concepts](./concepts.md) — Game, Interface, dataset slice, Round, bundle, decision
 - [Architecture](./architecture.md) — system spine and package boundaries
 - [Development](./development.md) — Nix, Buck2, Go, Repomix, validation commands
 - [Workspace seed providers](./workspace-seeds.md) — `local_path` vs `buck_descriptor`, Pkl config, decision record

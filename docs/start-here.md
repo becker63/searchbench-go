@@ -1,6 +1,16 @@
 # Start here
 
-SearchBench compares agent and tool **candidates** on the same match slice and produces **release evidence**. Vocabulary: [concepts.md](./concepts.md).
+SearchBench tests **agent environments**: which tools, search interfaces, and configuration surfaces help the same agent perform better on a fixed benchmark slice.
+
+Vocabulary and definitions: [concepts.md](./concepts.md). Product hook on the repo: [README.md](../README.md).
+
+## What this repo is (today)
+
+- A **research / product workbench** for controlled rounds and durable **bundles**
+- **Infra-native** validation (Nix, Buck2, Pkl) for contributors
+- **First game:** code localization — bug-localization slices to compare symbol/code-search interfaces with lookahead
+
+Not the default story yet: autonomous week-long interface optimization loops. Long term, agents may propose interface changes and SearchBench may evaluate them; today the focus is **comparable candidates** and **trustworthy evidence**.
 
 ## How the pieces fit
 
@@ -17,22 +27,22 @@ Bundles record what happened.
 | --- | --- |
 | **Pkl manifests** | Round intent: policies, backends, scoring, workspace seeds |
 | **Workspace seeds** | Where Iterative Context (or other backends) copy from before validation |
-| **Round app** | Orchestrate compare → evidence → objective → decision → bundle |
-| **Agents** | Evaluator and optimizer (prompts + Eino); propose `NextChallenger` |
-| **Bundles** | Durable round output under a bundle root |
+| **Round app** | Compare incumbent vs challenger → evidence → decision → bundle |
+| **Agents** | Evaluator and optimizer; optional `NextChallenger` proposal |
+| **Bundles** | Durable round output; input for reports and visualization |
 
 ## Run one local round
 
-Copy-paste from the repo root (after build): see [README.md § Run one local round](../README.md#run-one-local-round). Uses the **offline fake-local** path. Validation: [development.md](./development.md).
+Copy-paste from the repo root (after build): [README § Run one local round](../README.md#run-one-local-round). Offline fake-local path. Validation: [development.md](./development.md).
 
 ## Read next
 
 | Doc | When |
 | --- | --- |
-| [concepts.md](./concepts.md) | Product vocabulary |
-| [architecture.md](./architecture.md) | Package layers and boundaries |
-| [development.md](./development.md) | Nix, Buck2, Go, hooks, Repomix |
-| [workspace-seeds.md](./workspace-seeds.md) | `local_path` vs `buck_descriptor` for IC |
-| [README.md](./README.md) | Full docs index |
+| [concepts.md](./concepts.md) | Game, Interface, dataset slice, Round, bundle |
+| [architecture.md](./architecture.md) | Package layers |
+| [development.md](./development.md) | Nix, Buck2, hooks |
+| [workspace-seeds.md](./workspace-seeds.md) | IC workspace providers |
+| [README.md](./README.md) | Docs index |
 
-Contributors and agents: read root [AGENTS.md](../AGENTS.md) for the operational contract (boundaries, validation commands, non-goals).
+Contributors: [AGENTS.md](../AGENTS.md).

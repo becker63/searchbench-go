@@ -11336,6 +11336,8 @@ Translate legacy implementation concerns into the Game/Round/Match model instead
 <file path="docs/architecture.md">
 # Architecture
 
+SearchBench is a **generic evaluation harness**: games wrap benchmark task families; rounds compare interfaces on a dataset slice; bundles capture evidence. The first implemented game is **code localization** (symbol/code-search with lookahead). Package layout below is how the harness is built today — not the product pitch; see [concepts.md](./concepts.md) and [README.md](../README.md).
+
 SearchBench keeps deterministic model code pure, orchestrates rounds in `app`, colocates agent behavior under `agents`, and pushes filesystem/MCP/Pkl edges into `adapters` and `surface`.
 
 ```text
@@ -11423,38 +11425,65 @@ sh_test(
 <file path="docs/concepts.md">
 # Concepts
 
-SearchBench uses one product vocabulary everywhere: code, CLI output, Pkl manifests, bundles, and docs.
+SearchBench uses one vocabulary in code, CLI output, Pkl manifests, bundles, and docs.
 
 ```text
 Game → Round → Match → Evidence → Decision → NextChallenger
 ```
 
+## Interface
+
+An **interface** is anything that changes what the agent can see, query, validate, or act on during a game.
+
+Examples: code-search tools, MCP servers, graph traversal and bounded lookahead, symbol/reference lookup, Pkl round configs, workspace seed providers, Buck-backed validation targets, docs/context packs, visualization projections.
+
+Rounds compare **incumbent** and **challenger** interfaces (or policies that bundle them) on the same slice.
+
 ## Game
 
-A **Game** is the domain contract: what is being evaluated, what counts as success, and how humans review failures.
+A **Game** wraps a **benchmark or task family**. It defines:
 
-A game owns match schema, evidence shape, scoring inputs, review panes, and win/loss semantics. It is not a single execution — it is the ruleset.
+- dataset / match input shape
+- tool and interface contract
+- allowed outputs
+- evidence to collect
+- scoring and objective rules
 
-The first implemented game is **Code Localization** (repository as board, bug/issue as match input, localization as goal).
+SearchBench is a **generic harness** for turning task families into games. It is **not** only a code-localization benchmark.
+
+**First stress-test game: code localization** — bug reports and repository context over a slice of instances. This game isolates: *can the agent find the right place to look?* It is used to evaluate **symbol/code-search interfaces with lookahead** (grep, symbol search, graph hops, MCP-backed search, configuration-driven tool policies).
+
+**Possible future games** (not all implemented): SWE-bench-style issue resolution, proof-target selection, docs/context selection, MCP tool comparison, repository-operation tasks, config validation, release-candidate promotion.
+
+## Dataset slice
+
+A **dataset slice** is the bounded set of **matches** used for one round. It keeps comparison fair:
+
+```text
+same model (when held constant)
+same match slice
+same scoring objective
+different interface or policy
+```
 
 ## Round
 
-A **Round** is one contest under a game: one **IncumbentPolicy** vs one **ChallengerPolicy** over a fixed match slice.
+A **Round** is one contest under a game: one **IncumbentPolicy** vs one **ChallengerPolicy** over a fixed dataset slice.
 
-A round produces match executions, evidence, an objective result, a **Decision**, a durable bundle, and optionally a **NextChallenger** proposal. Completed rounds are immutable.
+A round produces match executions, evidence, an objective result, a **Decision**, a durable **bundle**, and optionally a **NextChallenger** proposal. Completed rounds are immutable.
 
 ## Match
 
-A **Match** is one dataset item inside a round (older docs may say “task”). Each match runs both policies on the same input and collects per-side outputs, usage, failures, and match-level evidence.
+A **Match** is one benchmark instance in the slice (older docs may say “task”). Each match runs incumbent and challenger on the same input and records per-side outputs, usage, failures, and match-level evidence.
 
 ## IncumbentPolicy and ChallengerPolicy
 
-- **IncumbentPolicy** — the policy being defended (production baseline, previous winner, or reference system).
-- **ChallengerPolicy** — the policy under test (prompt, code, retrieval, tools, bounds, provider settings).
+- **IncumbentPolicy** — the interface or policy being defended (baseline, previous winner, reference tool).
+- **ChallengerPolicy** — the candidate under test (prompt, code, retrieval, tools, bounds, provider settings).
 
 ## Evidence
 
-**Evidence** is the durable facts from a round: scores, regressions, usage, failures, artifact hashes, and domain-specific summaries. Evidence supports a decision; a trace alone is debugging material, not release proof.
+**Evidence** is durable facts from a round: scores, regressions, usage, failures, artifact hashes, and domain summaries. Evidence supports a **decision**; a trace alone is debugging material, not release proof.
 
 ## Decision
 
@@ -11466,11 +11495,21 @@ PROMOTE | REVIEW | REJECT
 
 ## NextChallenger
 
-The optimizer proposes a **NextChallenger** — a file-backed candidate for a future round. It does not mutate production directly; a later round may adopt it as the challenger.
+The optimizer may propose a **NextChallenger** — a file-backed candidate for a future round. It does not change production by itself.
+
+## Bundle
+
+A **bundle** records what happened in a round: inputs, predictions, scores, validation evidence, decision, and candidate identity — the basis for reports and **visualization** (inspecting what the agent looked at, whether lookahead helped, why the challenger won or lost).
+
+## Meta-harness (long term)
+
+Autonomous loops (agents propose interface changes → SearchBench evaluates → bundles drive promotion) are an **advanced / internal** direction. The current system emphasizes comparable rounds and durable evidence before that loop is productized.
 
 ## Deeper reference
 
-Extended naming, bundle layout, and migration notes: [reference/architecture-full.md](./reference/architecture-full.md).
+Extended naming and bundle layout: [reference/architecture-full.md](./reference/architecture-full.md).
+
+Research thesis: [AGENT_INTERFACE_RESEARCH.md](https://github.com/becker63/searchbench-go/blob/main/AGENT_INTERFACE_RESEARCH.md).
 </file>
 
 <file path="docs/development.md">
@@ -11594,34 +11633,58 @@ npm run docs:build
 <file path="docs/index.md">
 # SearchBench documentation
 
-SearchBench compares agent and tool candidates on the same match slice and produces **release evidence**.
+**Test the interfaces your coding agents use.**
+
+SearchBench is a work-in-progress harness for evaluating agent-facing interfaces over benchmark tasks. It is **not** a mature public API yet.
+
+## What SearchBench is for
+
+Most benchmarks ask which **model** is better.
+
+SearchBench asks which **interface** makes the **same model** behave better — tools, code-search backends, MCP servers, graph lookahead, configs, and validation surfaces.
+
+The **first game** is **code localization**: bug-localization dataset slices stress **symbol/code-search interfaces with lookahead**. The same `Game` model is intended to wrap other benchmark families later (for example SWE-bench-style issue resolution); those are directions, not shipped products today.
 
 ```text
 Game → Round → Match → Evidence → Decision → NextChallenger
 ```
 
+```text
+Bug-localization dataset slice
+  → Code-localization game
+  → Symbol/search interface candidate
+  → Agent run
+  → Predicted files
+  → Evidence bundle
+  → Decision
+```
+
+Research thesis (long form): [AGENT_INTERFACE_RESEARCH.md](https://github.com/becker63/searchbench-go/blob/main/AGENT_INTERFACE_RESEARCH.md) on GitHub.
+
 ## Start here
 
 - [Start here](./start-here.md) — orientation and one local round
-- [Concepts](./concepts.md) — product vocabulary
+- [Concepts](./concepts.md) — Game, Interface, Round, Evidence, …
 - [Architecture](./architecture.md) — layers and lifecycle
 - [Development](./development.md) — Nix, Buck2, Go, validation
 - [Workspace seeds](./workspace-seeds.md) — `local_path` vs `buck_descriptor`
 
 Full index: [Docs README](./README.md).
 
-Contributors and agents: see root [AGENTS.md](https://github.com/becker63/searchbench-go/blob/main/AGENTS.md) on GitHub.
+Contributors: [AGENTS.md](https://github.com/becker63/searchbench-go/blob/main/AGENTS.md).
 </file>
 
 <file path="docs/README.md">
 # SearchBench docs
 
-Canonical documentation map. Start at [start-here.md](./start-here.md) or root [AGENTS.md](../AGENTS.md).
+Work-in-progress harness for evaluating **agent-facing interfaces** over benchmark tasks. Start at [start-here.md](./start-here.md) or the [docs site landing](./index.md). Contributors: [AGENTS.md](../AGENTS.md).
+
+**Research thesis:** [AGENT_INTERFACE_RESEARCH.md](https://github.com/becker63/searchbench-go/blob/main/AGENT_INTERFACE_RESEARCH.md)
 
 ## Start here
 
-- [Start here](./start-here.md) — one-page intro for humans and agents
-- [Concepts](./concepts.md) — Game, Round, Match, Evidence, Decision, NextChallenger
+- [Start here](./start-here.md) — orientation and one local round
+- [Concepts](./concepts.md) — Game, Interface, dataset slice, Round, bundle, decision
 - [Architecture](./architecture.md) — system spine and package boundaries
 - [Development](./development.md) — Nix, Buck2, Go, Repomix, validation commands
 - [Workspace seed providers](./workspace-seeds.md) — `local_path` vs `buck_descriptor`, Pkl config, decision record
@@ -11663,7 +11726,17 @@ Legacy paths under `docs/architecture/` and `docs/engineering/ic-*.md` redirect 
 <file path="docs/start-here.md">
 # Start here
 
-SearchBench compares agent and tool **candidates** on the same match slice and produces **release evidence**. Vocabulary: [concepts.md](./concepts.md).
+SearchBench tests **agent environments**: which tools, search interfaces, and configuration surfaces help the same agent perform better on a fixed benchmark slice.
+
+Vocabulary and definitions: [concepts.md](./concepts.md). Product hook on the repo: [README.md](../README.md).
+
+## What this repo is (today)
+
+- A **research / product workbench** for controlled rounds and durable **bundles**
+- **Infra-native** validation (Nix, Buck2, Pkl) for contributors
+- **First game:** code localization — bug-localization slices to compare symbol/code-search interfaces with lookahead
+
+Not the default story yet: autonomous week-long interface optimization loops. Long term, agents may propose interface changes and SearchBench may evaluate them; today the focus is **comparable candidates** and **trustworthy evidence**.
 
 ## How the pieces fit
 
@@ -11680,25 +11753,25 @@ Bundles record what happened.
 | --- | --- |
 | **Pkl manifests** | Round intent: policies, backends, scoring, workspace seeds |
 | **Workspace seeds** | Where Iterative Context (or other backends) copy from before validation |
-| **Round app** | Orchestrate compare → evidence → objective → decision → bundle |
-| **Agents** | Evaluator and optimizer (prompts + Eino); propose `NextChallenger` |
-| **Bundles** | Durable round output under a bundle root |
+| **Round app** | Compare incumbent vs challenger → evidence → decision → bundle |
+| **Agents** | Evaluator and optimizer; optional `NextChallenger` proposal |
+| **Bundles** | Durable round output; input for reports and visualization |
 
 ## Run one local round
 
-Copy-paste from the repo root (after build): see [README.md § Run one local round](../README.md#run-one-local-round). Uses the **offline fake-local** path. Validation: [development.md](./development.md).
+Copy-paste from the repo root (after build): [README § Run one local round](../README.md#run-one-local-round). Offline fake-local path. Validation: [development.md](./development.md).
 
 ## Read next
 
 | Doc | When |
 | --- | --- |
-| [concepts.md](./concepts.md) | Product vocabulary |
-| [architecture.md](./architecture.md) | Package layers and boundaries |
-| [development.md](./development.md) | Nix, Buck2, Go, hooks, Repomix |
-| [workspace-seeds.md](./workspace-seeds.md) | `local_path` vs `buck_descriptor` for IC |
-| [README.md](./README.md) | Full docs index |
+| [concepts.md](./concepts.md) | Game, Interface, dataset slice, Round, bundle |
+| [architecture.md](./architecture.md) | Package layers |
+| [development.md](./development.md) | Nix, Buck2, hooks |
+| [workspace-seeds.md](./workspace-seeds.md) | IC workspace providers |
+| [README.md](./README.md) | Docs index |
 
-Contributors and agents: read root [AGENTS.md](../AGENTS.md) for the operational contract (boundaries, validation commands, non-goals).
+Contributors: [AGENTS.md](../AGENTS.md).
 </file>
 
 <file path="docs/workspace-seeds.md">
@@ -33664,28 +33737,49 @@ test_suite(
 <file path="README.md">
 # SearchBench-Go
 
-**SearchBench compares agent and tool candidates on the same match slice and produces release evidence** — durable artifacts that support promote, review, or reject decisions.
+**Test the interfaces your coding agents use.**
+
+SearchBench is a **work-in-progress** harness for evaluating **agent-facing interfaces** over benchmark tasks — not a polished public API or general benchmark platform yet. It wraps task families as **games**, then asks which **interface** (tools, search backends, MCP servers, configs, validation surfaces) makes the **same agent** perform better on the same dataset slice.
+
+The **first stress-test game** is **code localization**: bug-localization dataset slices test whether symbol/code-search tools with **lookahead** help an agent find the files that need to change. Long term, the same `Game` model is intended to wrap other task families (for example SWE-bench-style issue resolution, proof-target selection, docs/context selection) — without claiming those are fully supported today.
 
 ```text
 Game → Round → Match → Evidence → Decision → NextChallenger
 ```
 
-A **Round** pits an **IncumbentPolicy** against a **ChallengerPolicy** on shared **Matches**, gathers **Evidence**, records a **Decision**, and may propose a **NextChallenger** for another iteration.
+A **round** compares an **incumbent** interface or policy against a **challenger** on the same **matches**, records **evidence**, and yields a **decision**: promote, review, or reject.
 
-## What problem it solves
+## What SearchBench does
 
-AI policy changes are hard to ship safely. SearchBench structures the review: same dataset slice, comparable runs, explicit objective, and a bundle that records what happened — not ad-hoc scripts or trace dumps alone.
+```text
+Benchmark task family
+  → SearchBench Game
+  → Dataset slice
+  → Incumbent interface vs Challenger interface
+  → Tool-based agent execution
+  → Evidence bundle
+  → Report / visualization
+  → Promote, review, or reject
+```
+
+Most benchmarks ask which **model** is better. SearchBench also asks which **interface** made the same model behave like a better engineer.
+
+**Today:** research workbench, infra-native evaluation harness, durable evidence bundles from controlled rounds.
+
+**Not yet:** stable public API, finished autonomous meta-harness, replacement for SWE-bench, polished SaaS.
+
+Broader thesis: [AGENT_INTERFACE_RESEARCH.md](AGENT_INTERFACE_RESEARCH.md) (research notes; not required to use the harness).
 
 ## Core vocabulary
 
 | Term | Meaning |
 | --- | --- |
-| **Game** | Domain rules (first game: code localization) |
-| **Round** | One incumbent vs challenger contest |
-| **Match** | One dataset item in the round |
+| **Game** | Wrapper around a benchmark task family (first game: code localization) |
+| **Interface** | Tools, MCP, graphs, configs, and surfaces the agent uses during a game |
+| **Round** | Incumbent vs challenger on the same dataset slice |
+| **Match** | One benchmark instance in the slice |
 | **Evidence** | Durable facts from executions |
 | **Decision** | `PROMOTE`, `REVIEW`, or `REJECT` |
-| **NextChallenger** | Optimizer proposal for a future round |
 
 Details: [docs/concepts.md](docs/concepts.md).
 
@@ -33702,7 +33796,7 @@ cd ../..
   --bundle-root="$(pwd)/.tmp-artifacts"
 ```
 
-Uses the **offline fake-local** path (no live MCP or model APIs). Optional live backends and env vars are documented in [docs/start-here.md](docs/start-here.md).
+Uses the **offline fake-local** path (no live MCP or model APIs). See [docs/start-here.md](docs/start-here.md).
 
 ## Where to read next
 
@@ -33711,18 +33805,17 @@ Uses the **offline fake-local** path (no live MCP or model APIs). Optional live 
 | Everyone | [docs/start-here.md](docs/start-here.md) |
 | Contributors / agents | [AGENTS.md](AGENTS.md) |
 | Full index | [docs/README.md](docs/README.md) |
+| Docs site | [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/) |
 
 ## Requirements (summary)
 
 | Tool | Notes |
 | --- | --- |
 | [Go 1.26.2](https://go.dev/dl/) | Module under `src/searchbench-go/` |
-| [Pkl](https://pkl-lang.org/) | Evaluate round manifests |
+| [Pkl](https://pkl-lang.org/) | Round manifests |
 | [Nix](https://nixos.org/) *(optional)* | `nix develop` for buck2, hooks, repomix |
 
-Development workflow (tests, hooks, Repomix): [docs/development.md](docs/development.md).
-
-**Docs site** (VitePress): [https://becker63.github.io/searchbench-go/](https://becker63.github.io/searchbench-go/) — `npm run docs:dev` (preview), `npm run docs:build`, `buck2 test //docs:check`; deploys from `main` via GitHub Actions.
+Development: [docs/development.md](docs/development.md). Docs build: `npm run docs:build`, `buck2 test //docs:check`.
 
 ## Module
 

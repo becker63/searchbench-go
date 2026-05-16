@@ -1,5 +1,7 @@
 # Architecture
 
+SearchBench is a **generic evaluation harness**: games wrap benchmark task families; rounds compare interfaces on a dataset slice; bundles capture evidence. The first implemented game is **code localization** (symbol/code-search with lookahead). Package layout below is how the harness is built today — not the product pitch; see [concepts.md](./concepts.md) and [README.md](../README.md).
+
 SearchBench keeps deterministic model code pure, orchestrates rounds in `app`, colocates agent behavior under `agents`, and pushes filesystem/MCP/Pkl edges into `adapters` and `surface`.
 
 ```text
