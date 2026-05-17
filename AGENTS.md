@@ -50,7 +50,6 @@ Prefer **Buck targets** over raw commands; see [docs/development.md](docs/develo
 
 ## Non-goals (unless the task explicitly asks)
 
-- Live MCP, LangSmith, provider execution, dataset materialization, visualization UI (unless explicitly running opt-in Buck live targets)
 - Buck as a requirement for public `local_path` round runs (external users may still use `local_path`; repo-owned rounds use `buck_descriptor`)
 - Rewriting long research docs when a spine doc update suffices
 
