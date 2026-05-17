@@ -11,6 +11,7 @@ import (
 	pureoptimizer "github.com/becker63/searchbench-go/internal/pure/optimizer"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	pureround "github.com/becker63/searchbench-go/internal/pure/round"
+	"github.com/becker63/searchbench-go/internal/pure/usage"
 )
 
 // OptimizerModelFactory constructs the optimizer model for one round.
@@ -37,6 +38,8 @@ type Input struct {
 	// manifest resolution when non-empty.
 	DatasetMaterializeCacheDir  string
 	DatasetMaterializeRemoteURL string
+
+	HashRegistry *usage.HashRegistry
 }
 
 // Resolved is the normalized round contract before match execution.
@@ -54,6 +57,7 @@ type MatchRecords struct {
 	RoundReport         report.RoundReport
 	EvaluatorExecutions []EvaluatorExecution
 	MatchExecutions     []report.MatchExecutionRecord
+	HashRegistry        *usage.HashRegistry
 }
 
 // Record is the completed round workflow outcome.

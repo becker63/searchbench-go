@@ -12,6 +12,7 @@ import (
 	scoring "github.com/becker63/searchbench-go/internal/adapters/scoring/pkl"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
+	"github.com/becker63/searchbench-go/internal/pure/usage"
 )
 
 // runEvaluation executes the full manifest-driven evaluation pipeline. It is
@@ -54,7 +55,7 @@ func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationReq
 	runCtx, cancel := withEvaluatorTimeout(ctx, plan)
 	defer cancel()
 
-	roundReport, executions, matchExec, err := runComparison(runCtx, plan, request)
+	roundReport, executions, matchExec, hashRegistry, err := runComparison(runCtx, plan, request)
 	if err != nil {
 		return Result{}, &Error{Phase: PhaseComparisonFailed, Err: err}
 	}
@@ -69,7 +70,7 @@ func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationReq
 		return Result{}, err
 	}
 
-	bundleRef, err := writeRoundBundle(ctx, plan, request, roundReport, evidence, objective)
+	bundleRef, err := writeRoundBundle(ctx, plan, request, roundReport, evidence, objective, executions, hashRegistry)
 	if err != nil {
 		return Result{}, err
 	}
@@ -83,6 +84,7 @@ func runEvaluationResolved(ctx context.Context, plan Plan, request evaluationReq
 		ObjectiveResult:     objective,
 		EvaluatorExecutions: executions,
 		MatchExecutions:     matchExec,
+		HashRegistry:        hashRegistry,
 	}, nil
 }
 
@@ -144,12 +146,28 @@ func writeRoundBundle(
 	roundReport report.RoundReport,
 	evidence score.RoundEvidenceDocument,
 	objective *score.ObjectiveResult,
+	executions []EvaluatorExecution,
+	hashRegistry *usage.HashRegistry,
 ) (bundlefs.BundleRef, error) {
 	rendered, err := renderReport(plan, request, roundReport)
 	if err != nil {
 		return bundlefs.BundleRef{}, &Error{Phase: PhaseRenderReportFailed, Err: err}
 	}
 	additionalFiles, policyPaths := roundBundleArtifacts(plan)
+	canonicalFiles, err := bundlefs.CanonicalArtifacts(
+		report.ModeRoundRun,
+		report.FreshnessFresh,
+		len(roundReport.Failures.Incumbent) == 0 && len(roundReport.Failures.Challenger) == 0,
+		plan.Bundle.ID,
+		string(plan.Output.BundleWriterRoot),
+		roundReport,
+		objective,
+		buildCanonicalTelemetry(plan, executions, hashRegistry),
+	)
+	if err != nil {
+		return bundlefs.BundleRef{}, &Error{Phase: PhaseBundleWriteFailed, Err: err}
+	}
+	additionalFiles = append(additionalFiles, canonicalFiles...)
 	continuation := buildContinuation(plan, roundReport, objective, policyPaths)
 	continuationPKL, err := buildContinuationPKLInput(plan)
 	if err != nil {

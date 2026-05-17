@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Pkl round manifests</strong> → <strong>SearchBench CLI</strong> → <strong>evidence bundles</strong> → <strong>release decisions</strong>
+  <strong>Pkl round manifests</strong> → <strong>Buck targets</strong> → <strong>evidence bundles</strong> → <strong>release decisions</strong>
 </p>
 
 <p align="center">
@@ -36,7 +36,7 @@ Game → Round → Match → Evidence → Objective → Decision → NextChallen
 
 ## Current API
 
-The current user-facing API is a **Pkl round manifest** plus the `searchbench run` CLI.
+The user-facing API for repo-owned work is a **Pkl round manifest** plus **Buck targets** that publish canonical bundles. The Go harness binary exists for Buck to invoke; it is not the normal public run interface.
 
 A round declares the game, dataset slice, incumbent, challenger, evaluator, and scoring objective:
 
@@ -61,15 +61,14 @@ round = (game.defineFromScratch("round-001")) {
 }
 ```
 
-That manifest runs through the CLI:
+Repo-owned runs use Buck (example local round):
 
 ```bash
-./searchbench run \
-  --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
-  --bundle-root="$(pwd)/.tmp-artifacts"
+buck2 test //:check_full
+# Live round: see configs/rounds/live-ic-vs-jcodemunch/README.md
 ```
 
-The Go library internals are still evolving. The clearest current API is the **Pkl config surface**, the **CLI**, and the **bundle format**.
+The clearest current API is the **Pkl config surface**, **Buck entrypoints**, and the **bundle format** (`report.json` first).
 
 ## Evidence bundles
 
@@ -78,6 +77,8 @@ A completed round writes a static bundle that can be reviewed by humans, tools, 
 ```text
 artifacts/games/code-localization/rounds/round-001/
   COMPLETE
+  report.json
+  report.txt
   resolved-round.json
   round-report.json
   round-report.txt
@@ -90,7 +91,7 @@ artifacts/games/code-localization/rounds/round-001/
   policies/challenger_policy.py
 ```
 
-The bundle is the durable source of truth. It records the resolved round, scoring-facing evidence, objective values, decision, metadata, and continuation surface for the next round.
+The bundle is the durable source of truth. Inspect **`report.json`** first, then detailed reports and evidence. It records the resolved round, scoring-facing evidence, objective values, decision, metadata, and continuation surface for the next round.
 
 A later round can amend the previous continuation file:
 
@@ -158,7 +159,7 @@ The bet is simple: better interfaces can make agents more reliable, more inspect
 | Path | Purpose |
 | --- | --- |
 | `configs/` | Pkl schemas, round manifests, objectives, and dataset slices |
-| `src/searchbench-go/` | Go harness: games, rounds, scoring, bundles, CLI |
+| `src/searchbench-go/` | Go harness: games, rounds, scoring, bundles (Buck-invoked) |
 | `src/iterative-context/` | Python MCP/code-search backend used as a challenger interface |
 | `docs/` | Product docs, reference docs, and research notes |
 | `BUCK` | Root Buck gates: `//:check`, `//:check_full` |

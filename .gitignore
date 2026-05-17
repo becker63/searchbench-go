@@ -27,7 +27,7 @@
 /docs/.vitepress/dist/
 /docs/.vitepress/cache/
 
-# Live LCA slice exported from Hugging Face (see tooling/lca_hf_export.py)
+# Live LCA slice exported from Hugging Face (see configs/rounds/live-ic-vs-jcodemunch:materialize_dataset)
 /configs/rounds/live-ic-vs-jcodemunch/datasets/**/*.jsonl
 
 # Live e2e staging only; published bundles live under configs/rounds/live-ic-vs-jcodemunch/artifacts/

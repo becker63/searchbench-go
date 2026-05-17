@@ -12,7 +12,9 @@ import (
 
 // CLI is the root Searchbench command tree.
 type CLI struct {
-	Round RoundCmd `cmd:"round" help:"Run and inspect SearchBench rounds."`
+	Buck    BuckCmd    `cmd:"buck" aliases:"__buck" hidden:"" help:"Private Buck implementation surface (Buck targets only)."`
+	Round   RoundCmd   `cmd:"round" hidden:"" help:"Run and inspect SearchBench rounds."`
+	Dataset DatasetCmd `cmd:"dataset" hidden:"" help:"Materialize benchmark datasets."`
 
 	Run RunCmd `cmd:"run" hidden:"" help:"Run one round manifest."`
 

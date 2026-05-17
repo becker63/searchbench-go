@@ -5,9 +5,7 @@ Live rounds read `JetBrains-Research/lca-bug-localization` from JSONL under this
 **Do not commit `*.jsonl` here.** Materialize before a live run:
 
 ```bash
-./tooling/lca_hf_export.sh \
-  --config py --split dev --max-items 1 \
-  --output-dir configs/rounds/live-ic-vs-jcodemunch
+buck2 run //configs/rounds/live-ic-vs-jcodemunch:materialize_dataset
 ```
 
-The live e2e test (`//src/searchbench-go:live_e2e`) calls the same exporter automatically unless `SEARCHBENCH_SKIP_HF_EXPORT=1`.
+Optional: set `HF_TOKEN` in repo-root `.env` for Hugging Face access.

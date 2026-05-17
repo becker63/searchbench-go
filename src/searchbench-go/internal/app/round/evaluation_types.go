@@ -10,6 +10,7 @@ import (
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
 	"github.com/becker63/searchbench-go/internal/pure/score"
+	"github.com/becker63/searchbench-go/internal/pure/usage"
 )
 
 // EvaluatorModelFactory constructs one evaluator model for one run spec.
@@ -27,6 +28,8 @@ type evaluationRequest struct {
 
 	EvaluatorModelFactory EvaluatorModelFactory
 	EvaluatorToolFactory  EvaluatorToolFactory
+
+	HashRegistry *usage.HashRegistry
 }
 
 // EvaluatorExecution is one recorded evaluator-backed run inside the local
@@ -48,4 +51,5 @@ type Result struct {
 	ObjectiveResult     *score.ObjectiveResult
 	EvaluatorExecutions []EvaluatorExecution
 	MatchExecutions     []report.MatchExecutionRecord
+	HashRegistry        *usage.HashRegistry
 }

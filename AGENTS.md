@@ -46,10 +46,12 @@ Pkl schema change: `buck2 build //src/searchbench-go:pkl_go_types` then `buck2 t
 
 Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `npm`, and `pkl` are debugging fallbacks only.
 
+**Repo-owned runs:** Buck is the **only** supported public interface. The Go binary is private Buck plumbing — do not document or use direct `searchbench` CLI commands as normal workflows. Live round targets: `configs/rounds/live-ic-vs-jcodemunch/BUCK` ([README](configs/rounds/live-ic-vs-jcodemunch/README.md)). After a run, inspect bundle **`report.json`** first. Secrets: repo-root `.env` (`CEREBRAS_API_KEY`, optional `HF_TOKEN`) only. See [docs/reference/run-entrypoints.md](docs/reference/run-entrypoints.md).
+
 ## Non-goals (unless the task explicitly asks)
 
-- Live MCP, LangSmith, provider execution, dataset materialization, visualization UI
-- Buck as a requirement for public `local_path` round runs
+- Live MCP, LangSmith, provider execution, dataset materialization, visualization UI (unless explicitly running opt-in Buck live targets)
+- Buck as a requirement for public `local_path` round runs (external users may still use `local_path`; repo-owned rounds use `buck_descriptor`)
 - Rewriting long research docs when a spine doc update suffices
 
 ## Current examples

@@ -115,7 +115,7 @@ func EvaluateMatches(ctx context.Context, resolved Resolved, input Input) (Match
 	runCtx, cancel := withEvaluatorTimeout(ctx, plan)
 	defer cancel()
 
-	roundReport, executions, matchExec, err := runComparison(runCtx, plan, evaluationRequestFromInput(input))
+	roundReport, executions, matchExec, hashRegistry, err := runComparison(runCtx, plan, evaluationRequestFromInput(input))
 	if err != nil {
 		return MatchRecords{}, &Error{Phase: PhaseComparisonFailed, Err: err}
 	}
@@ -124,6 +124,7 @@ func EvaluateMatches(ctx context.Context, resolved Resolved, input Input) (Match
 		RoundReport:         roundReport,
 		EvaluatorExecutions: executions,
 		MatchExecutions:     matchExec,
+		HashRegistry:        hashRegistry,
 	}, nil
 }
 
@@ -171,6 +172,8 @@ func WriteBundle(
 		matches.RoundReport,
 		evidence,
 		objective,
+		matches.EvaluatorExecutions,
+		matches.HashRegistry,
 	)
 }
 
@@ -189,6 +192,7 @@ func buildResult(
 		ObjectiveResult:     objective,
 		EvaluatorExecutions: matches.EvaluatorExecutions,
 		MatchExecutions:     matches.MatchExecutions,
+		HashRegistry:        matches.HashRegistry,
 	}
 }
 
@@ -205,5 +209,6 @@ func evaluationRequestFromInput(input Input) evaluationRequest {
 		DisableRenderReport:   input.DisableRenderReport,
 		EvaluatorModelFactory: input.EvaluatorModelFactory,
 		EvaluatorToolFactory:  input.EvaluatorToolFactory,
+		HashRegistry:          input.HashRegistry,
 	}
 }

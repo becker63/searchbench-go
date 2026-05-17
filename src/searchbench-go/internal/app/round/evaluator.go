@@ -18,9 +18,12 @@ import (
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
 	"github.com/becker63/searchbench-go/internal/pure/report"
+	"github.com/becker63/searchbench-go/internal/pure/usage"
 )
 
-func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, []report.MatchExecutionRecord, error) {
+func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (report.RoundReport, []EvaluatorExecution, []report.MatchExecutionRecord, *usage.HashRegistry, error) {
+	applyRuntimeDefaultsForPlan(plan)
+
 	allowedTools := make(map[string]struct{}, len(plan.Evaluator.ToolPolicy.EffectiveAllowed))
 	for _, name := range plan.Evaluator.ToolPolicy.EffectiveAllowed {
 		allowedTools[name] = struct{}{}
@@ -35,9 +38,15 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 		})
 	}
 
+	hashRegistry := request.HashRegistry
+	if hashRegistry == nil {
+		hashRegistry = &usage.HashRegistry{}
+	}
+
 	executor := &evaluatorExecutor{
 		modelFactory: modelFactory,
 		toolFactory:  resolvePreparedToolFactory(request),
+		hashRegistry: hashRegistry,
 		allowedTools: allowedTools,
 		evaluatorAppendix: run.EvaluatorRunAppendix{
 			SystemPrompt: plan.Evaluator.ToolPolicy.SystemPrompt,
@@ -71,19 +80,20 @@ func runComparison(ctx context.Context, plan Plan, request evaluationRequest) (r
 	}
 	out, taskWork, err := runner.RunWithTaskWork(ctx, plan.ComparePlan())
 	if err != nil {
-		return report.RoundReport{}, nil, nil, err
+		return report.RoundReport{}, nil, nil, nil, err
 	}
 	matchExec, err := matchExecutionRecordsFromTaskWork(plan.Matches, taskWork)
 	if err != nil {
-		return report.RoundReport{}, nil, nil, err
+		return report.RoundReport{}, nil, nil, nil, err
 	}
 	out.CreatedAt = plan.CreatedAt
-	return out, executor.executions(), matchExec, nil
+	return out, executor.executions(), matchExec, hashRegistry, nil
 }
 
 type evaluatorExecutor struct {
 	modelFactory EvaluatorModelFactory
 	toolFactory  preparedToolFactory
+	hashRegistry *usage.HashRegistry
 	allowedTools map[string]struct{}
 	// evaluatorAppendix holds manifest-only evaluator text (e.g. systemPrompt).
 	evaluatorAppendix run.EvaluatorRunAppendix
@@ -130,6 +140,9 @@ func (e *evaluatorExecutor) Execute(ctx context.Context, spec run.Spec) (run.Exe
 	}
 	if langsmithFactory != nil {
 		callbackFactories = append(callbackFactories, evaluatorcallbacks.Factory(langsmithFactory))
+	}
+	if e.hashRegistry != nil {
+		callbackFactories = append(callbackFactories, evaluatorcallbacks.NewHashRegistryCallbackFactory(e.hashRegistry))
 	}
 
 	evaluator, err := evaluatoreino.New(evaluatoreino.Config{

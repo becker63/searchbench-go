@@ -9,7 +9,9 @@ import (
 
 // RoundCmd groups public round commands.
 type RoundCmd struct {
-	Run RunCmd `cmd:"run" help:"Run one Pkl round manifest."`
+	Run            RunCmd              `cmd:"run" help:"Run one Pkl round manifest."`
+	Validate       ValidateManifestCmd `cmd:"validate" help:"Validate a Pkl round manifest."`
+	ValidateBundle ValidateBundleCmd   `cmd:"validate-bundle" help:"Validate a completed round bundle."`
 }
 
 // RunCmd executes one manifest-driven round.

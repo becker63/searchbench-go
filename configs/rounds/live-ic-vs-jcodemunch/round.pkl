@@ -15,6 +15,10 @@ round = (game.defineFromScratch("live-ic-vs-jcodemunch-001")) {
     system {
       runtime {
         maxSteps = 8
+        workspaceSeed {
+          provider = "buck_descriptor"
+          buckDescriptorTarget = "//src/iterative-context:optimizable_backend"
+        }
       }
     }
     selectionPolicy {

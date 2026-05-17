@@ -1,6 +1,6 @@
 # Development
 
-**Nix** supplies the toolchain and Git hooks. **Buck** is the canonical proof interface. Raw commands are debugging fallbacks only.
+**Nix** supplies the toolchain and Git hooks. **Buck** is the canonical proof and repo-owned run interface. Raw commands are debugging fallbacks only.
 
 ## Environment
 
@@ -41,7 +41,12 @@ buck2 test //:check_full     # full — same as pre-push
 - `//src/iterative-context:check_full`
 - `//docs:check`
 
-Opt-in live MCP proof (not in `//:check`): `buck2 test //src/searchbench-go:live_e2e` — see [reference/live-e2e.md](./reference/live-e2e.md).
+Repo-owned live MCP evaluation (not in `//:check`): see [reference/live-e2e.md](./reference/live-e2e.md) and [reference/run-entrypoints.md](./reference/run-entrypoints.md).
+
+```bash
+buck2 test //configs/rounds/live-ic-vs-jcodemunch:validate_bundle   # deterministic
+buck2 test //configs/rounds/live-ic-vs-jcodemunch:live_smoke        # fresh live (secrets)
+```
 
 After editing `configs/schema/SearchBenchRound.pkl`:
 
@@ -52,15 +57,9 @@ buck2 test //src/searchbench-go:pkl_go_types_check
 
 ## Example round (local)
 
-From repo root:
+Repo-owned rounds use Buck targets under `configs/rounds/<name>/`. For the live round, see [reference/run-entrypoints.md](./reference/run-entrypoints.md) and [configs/rounds/live-ic-vs-jcodemunch/README.md](../configs/rounds/live-ic-vs-jcodemunch/README.md).
 
-```bash
-./searchbench run \
-  --manifest=configs/rounds/local-ic-vs-jcodemunch/round.pkl \
-  --bundle-root="$(pwd)/.tmp-artifacts"
-```
-
-Inspect: `.tmp-artifacts/games/code-localization/rounds/round-001/` (same layout as [reference/bundles.md](./reference/bundles.md)).
+Do not use `./searchbench round run` or direct CLI invocation as the normal workflow; Buck invokes the Go binary as private plumbing.
 
 ## Docs site
 

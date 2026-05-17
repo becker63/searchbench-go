@@ -14,29 +14,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/becker63/searchbench-go/internal/adapters/dataset/lca"
 	"github.com/becker63/searchbench-go/internal/app/round"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
+	"github.com/becker63/searchbench-go/internal/pure/liveconfig"
 	"github.com/becker63/searchbench-go/internal/testing/reporoot"
 )
 
 const (
-	envRunLiveE2E            = "SEARCHBENCH_RUN_LIVE_E2E"
-	envCerebrasAPIKey        = "CEREBRAS_API_KEY"
-	envMaterializeCacheDir   = "SEARCHBENCH_MATERIALIZE_CACHE_DIR"
-	envLiveE2ETimeout        = "SEARCHBENCH_LIVE_E2E_TIMEOUT"
-	envSkipHFExport          = "SEARCHBENCH_SKIP_HF_EXPORT"
-	envLCAHFConfig           = "SEARCHBENCH_LCA_HF_CONFIG"
-	envLCAHFSplit            = "SEARCHBENCH_LCA_HF_SPLIT"
-	envLCAHFMaxItems         = "SEARCHBENCH_LCA_HF_MAX_ITEMS"
-	envLCAHFSkip             = "SEARCHBENCH_LCA_HF_SKIP"
-	envLiveUseHFRow          = "SEARCHBENCH_LIVE_USE_HF_ROW"
-	envLiveVerifyArchiveOnly = "SEARCHBENCH_LIVE_E2E_VERIFY_ARCHIVE_ONLY"
-	liveRoundID              = "live-ic-vs-jcodemunch-001"
-	liveE2EStagingCacheRel   = ".cache/searchbench/live-e2e-bundle-staging"
-	defaultLiveE2ETimeout    = 20 * time.Minute
-	defaultLCAHFConfig       = "py"
-	defaultLCAHFSplit        = "dev"
-	defaultLCAHFMaxItems     = 1
+	envRunLiveE2E          = "SEARCHBENCH_RUN_LIVE_E2E"
+	envCerebrasAPIKey      = "CEREBRAS_API_KEY"
+	envMaterializeCacheDir = "SEARCHBENCH_MATERIALIZE_CACHE_DIR"
+	envLiveE2ETimeout      = "SEARCHBENCH_LIVE_E2E_TIMEOUT"
+	envSkipHFExport        = "SEARCHBENCH_SKIP_HF_EXPORT"
+	envLCAHFConfig         = "SEARCHBENCH_LCA_HF_CONFIG"
+	envLCAHFSplit          = "SEARCHBENCH_LCA_HF_SPLIT"
+	envLCAHFMaxItems       = "SEARCHBENCH_LCA_HF_MAX_ITEMS"
+	envLCAHFSkip           = "SEARCHBENCH_LCA_HF_SKIP"
+	envLiveUseHFRow        = "SEARCHBENCH_LIVE_USE_HF_ROW"
+	liveRoundID            = liveconfig.RoundID
+	liveE2EStagingCacheRel = ".cache/searchbench/live-e2e-bundle-staging"
+	defaultLiveE2ETimeout  = 20 * time.Minute
+	defaultLCAHFConfig     = "py"
+	defaultLCAHFSplit      = "dev"
+	defaultLCAHFMaxItems   = 1
 )
 
 func TestExportLCADatasetFromHuggingFace(t *testing.T) {
@@ -51,42 +52,28 @@ func TestExportLCADatasetFromHuggingFace(t *testing.T) {
 }
 
 func TestSearchBenchLiveICVsJCodeMunchE2E(t *testing.T) {
-	if os.Getenv(envRunLiveE2E) != "1" {
-		t.Skipf("set %s=1 to run live MCP e2e", envRunLiveE2E)
+	if os.Getenv(liveconfig.RunLiveE2EEnvKey()) != "1" {
+		t.Skipf("set %s=1 to run live MCP e2e", liveconfig.RunLiveE2EEnvKey())
 	}
-	for _, kv := range []struct {
-		env, label string
-	}{
-		{envCerebrasAPIKey, "CEREBRAS_API_KEY"},
-		{envSearchBenchJCodeMunchCommand, "SEARCHBENCH_JCODEMUNCH_COMMAND"},
-		{envSearchBenchIterativeContextCommand, "SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND"},
-		{envMaterializeCacheDir, "SEARCHBENCH_MATERIALIZE_CACHE_DIR"},
-	} {
-		if strings.TrimSpace(os.Getenv(kv.env)) == "" {
-			t.Skipf("live e2e requires %s", kv.label)
-		}
+	mode := liveconfig.LiveModeFromEnv()
+	if mode == "" {
+		mode = liveconfig.ModeLiveSmoke
 	}
-
+	if mode != liveconfig.ModeLiveSmoke {
+		t.Skipf("mode %q is not handled by this test", mode)
+	}
+	requireLiveSecrets(t)
 	requirePkl(t)
-	loadSearchbenchDotEnv(t)
 
 	root := reporoot.MonorepoRoot(t)
-	if os.Getenv(envLiveVerifyArchiveOnly) == "1" {
-		manifestDir := filepath.Join(root, "configs", "rounds", "live-ic-vs-jcodemunch")
-		published, err := publishedLiveBundleDir(manifestDir)
-		if err != nil {
-			t.Fatalf("published bundle: %v", err)
-		}
-		verifyPublishedLiveBundle(t, published)
-		return
-	}
-	modRoot := reporoot.GoModuleRoot(t)
-	manifestDir := filepath.Join(root, "configs", "rounds", "live-ic-vs-jcodemunch")
-	manifestPath := filepath.Join(manifestDir, "round.pkl")
-	ensureLCADatasetForLiveRound(t, manifestDir)
-	bundleRootParent := t.TempDir()
-	binary := filepath.Join(t.TempDir(), "searchbench")
+	cfg := liveconfig.Default(root)
+	liveconfig.LoadSecretsOnly(root)
+	liveconfig.LoadDevOverrides(root)
+	liveconfig.ApplyLiveRuntimeDefaults(cfg)
 
+	modRoot := reporoot.GoModuleRoot(t)
+	ensureLCADatasetForLiveRound(t, cfg.ManifestDir)
+	binary := filepath.Join(t.TempDir(), "searchbench")
 	build := exec.Command("go", "build", "-trimpath", "-o", binary, "./cmd/searchbench")
 	build.Dir = modRoot
 	if out, err := build.CombinedOutput(); err != nil {
@@ -100,47 +87,63 @@ func TestSearchBenchLiveICVsJCodeMunchE2E(t *testing.T) {
 		}
 	}
 
-	var bundlePrefix string
-	var roundErr error
-	maxAttempts := 2
-	if os.Getenv("SEARCHBENCH_LIVE_E2E_SINGLE_ATTEMPT") == "1" {
-		maxAttempts = 1
-	}
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		bundleRoot := filepath.Join(bundleRootParent, fmt.Sprintf("live-artifacts-%d", attempt))
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		bundlePrefix, roundErr = runLiveRoundCLI(t, ctx, binary, modRoot, manifestPath, bundleRoot)
-		cancel()
-		if roundErr == nil {
-			break
-		}
-		if attempt == 1 {
-			t.Logf("live round attempt %d failed: %v (retrying once)", attempt, roundErr)
-		}
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	bundlePrefix, roundErr := runLiveRoundCLI(t, ctx, binary, modRoot, cfg.ManifestPath, cfg.ArtifactRoot)
 	if roundErr != nil {
-		if published, err := publishedLiveBundleDir(manifestDir); err == nil {
-			t.Logf("live round failed (%v); validating last published bundle at %s", roundErr, published)
-			verifyPublishedLiveBundle(t, published)
-			return
-		}
 		t.Fatal(roundErr)
 	}
 
 	assertBundleArtifacts(t, bundlePrefix)
-
 	var resolved round.Plan
 	decodeJSON(t, filepath.Join(bundlePrefix, "resolved-round.json"), &resolved)
 	if got, want := resolved.Evaluator.Model.Provider, "cerebras"; got != want {
 		t.Fatalf("resolved evaluator provider = %q, want %q", got, want)
 	}
-
-	reportPath := filepath.Join(bundlePrefix, "round-report.json")
-	assertLiveRoundReport(t, reportPath)
-
-	staging := stageLiveBundleInCache(t, root, bundlePrefix)
-	published := publishLiveBundleFromCache(t, manifestDir, staging)
+	assertLiveRoundReport(t, filepath.Join(bundlePrefix, "round-report.json"))
+	if _, err := os.Stat(filepath.Join(bundlePrefix, "report.json")); err != nil {
+		t.Fatalf("missing canonical report.json: %v", err)
+	}
+	published := publishLiveBundleFromCache(t, cfg.ManifestDir, bundlePrefix)
 	assertLiveRoundReport(t, filepath.Join(published, "round-report.json"))
+}
+
+func TestSearchBenchLiveEvaluateN(t *testing.T) {
+	if os.Getenv(liveconfig.RunLiveE2EEnvKey()) != "1" {
+		t.Skipf("set %s=1", liveconfig.RunLiveE2EEnvKey())
+	}
+	if liveconfig.LiveModeFromEnv() != liveconfig.ModeEvaluateN {
+		t.Skip("set SEARCHBENCH_LIVE_MODE=evaluate_n")
+	}
+	requireLiveSecrets(t)
+	// Live multi-attempt runs share the smoke path with attempt env configured by Buck.
+	TestSearchBenchLiveICVsJCodeMunchE2E(t)
+}
+
+func TestSearchBenchLiveStabilityProbe(t *testing.T) {
+	if os.Getenv(liveconfig.RunLiveE2EEnvKey()) != "1" {
+		t.Skipf("set %s=1", liveconfig.RunLiveE2EEnvKey())
+	}
+	if liveconfig.LiveModeFromEnv() != liveconfig.ModeStabilityProbe {
+		t.Skip("set SEARCHBENCH_LIVE_MODE=stability_probe")
+	}
+	requireLiveSecrets(t)
+	TestSearchBenchLiveICVsJCodeMunchE2E(t)
+}
+
+func requireLiveSecrets(t *testing.T) {
+	t.Helper()
+	for _, kv := range []struct {
+		env, label string
+	}{
+		{envCerebrasAPIKey, "CEREBRAS_API_KEY"},
+		{envSearchBenchJCodeMunchCommand, "SEARCHBENCH_JCODEMUNCH_COMMAND"},
+		{envSearchBenchIterativeContextCommand, "SEARCHBENCH_ITERATIVE_CONTEXT_COMMAND"},
+	} {
+		if strings.TrimSpace(os.Getenv(kv.env)) == "" {
+			t.Skipf("live run requires %s (set in repo-root .env)", kv.label)
+		}
+	}
 }
 
 func runLiveRoundCLI(
@@ -358,7 +361,6 @@ func exportLCADatasetFromHuggingFace(tb testing.TB, manifestDir string) string {
 		return path
 	}
 
-	script := filepath.Join(reporoot.MonorepoRoot(tb), "tooling", "lca_hf_export.py")
 	maxItems := defaultLCAHFMaxItems
 	if raw := strings.TrimSpace(os.Getenv(envLCAHFMaxItems)); raw != "" {
 		n, err := strconv.Atoi(raw)
@@ -367,38 +369,26 @@ func exportLCADatasetFromHuggingFace(tb testing.TB, manifestDir string) string {
 		}
 		maxItems = n
 	}
-
-	args := []string{
-		script,
-		"--config", envOrDefault(envLCAHFConfig, defaultLCAHFConfig),
-		"--split", envOrDefault(envLCAHFSplit, defaultLCAHFSplit),
-		"--max-items", strconv.Itoa(maxItems),
-		"--output-dir", manifestDir,
-	}
+	skip := liveconfig.Default(reporoot.MonorepoRoot(tb)).LCASkip
 	if raw := strings.TrimSpace(os.Getenv(envLCAHFSkip)); raw != "" {
-		skip, err := strconv.Atoi(raw)
-		if err != nil || skip < 0 {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
 			tb.Fatalf("invalid %s=%q", envLCAHFSkip, raw)
 		}
-		args = append(args, "--skip", strconv.Itoa(skip))
+		skip = n
 	}
-	cmd := exec.Command("python3", args...)
-	cmd.Dir = reporoot.MonorepoRoot(tb)
-	out, err := cmd.CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	path, err := lca.ExportFromHuggingFace(ctx, lca.ExportOptions{
+		ManifestDir: manifestDir,
+		Config:      envOrDefault(envLCAHFConfig, defaultLCAHFConfig),
+		Split:       envOrDefault(envLCAHFSplit, defaultLCAHFSplit),
+		MaxItems:    maxItems,
+		Skip:        skip,
+	})
 	if err != nil {
-		tb.Fatalf("Hugging Face export failed: %v\n%s", err, out)
+		tb.Fatalf("Hugging Face export failed: %v", err)
 	}
-	tb.Logf("lca_hf_export: %s", strings.TrimSpace(string(out)))
-
-	config := envOrDefault(envLCAHFConfig, defaultLCAHFConfig)
-	split := envOrDefault(envLCAHFSplit, defaultLCAHFSplit)
-	path := filepath.Join(
-		manifestDir,
-		"datasets",
-		"JetBrains-Research_lca-bug-localization",
-		config,
-		split+".jsonl",
-	)
 	assertExportedLCARow(tb, path)
 	return path
 }
@@ -435,27 +425,8 @@ func envOrDefault(key, fallback string) string {
 
 func loadSearchbenchDotEnv(tb testing.TB) {
 	tb.Helper()
-	path := filepath.Join(reporoot.MonorepoRoot(tb), "src", "searchbench", ".env")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, val, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		val = strings.Trim(strings.TrimSpace(val), `"`)
-		if key == "" || os.Getenv(key) != "" {
-			continue
-		}
-		tb.Setenv(key, val)
-	}
+	liveconfig.LoadSecretsOnly(reporoot.MonorepoRoot(tb))
+	liveconfig.LoadDevOverrides(reporoot.MonorepoRoot(tb))
 }
 
 func assertLiveRoundReport(tb testing.TB, path string) {

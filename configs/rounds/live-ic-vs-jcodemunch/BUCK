@@ -1,0 +1,71 @@
+load("//build_defs:searchbench_round.bzl", "searchbench_round_evaluate_n", "searchbench_round_live_smoke", "searchbench_round_materialize_dataset", "searchbench_round_run", "searchbench_round_stability_probe", "searchbench_round_validate", "searchbench_round_validate_bundle")
+load("@prelude//:rules.bzl", "sh_test")
+
+# Repo-owned live round — Buck is the supported run/eval interface (#75, #77, #91).
+# Secrets: repo-root `.env` (e.g. CEREBRAS_API_KEY). Non-secrets: attrs below.
+
+_REPO_ROOT = "root"
+_MANIFEST = "configs/rounds/live-ic-vs-jcodemunch/round.pkl"
+_MANIFEST_DIR = "configs/rounds/live-ic-vs-jcodemunch"
+_ARTIFACT_ROOT = "configs/rounds/live-ic-vs-jcodemunch/artifacts"
+_BUNDLE_PATH = "configs/rounds/live-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/live-ic-vs-jcodemunch-001"
+
+searchbench_round_validate(
+    name = "validate",
+    repo_root = _REPO_ROOT,
+    manifest = _MANIFEST,
+)
+
+searchbench_round_validate_bundle(
+    name = "validate_bundle",
+    repo_root = _REPO_ROOT,
+    bundle_path = _BUNDLE_PATH,
+)
+
+searchbench_round_live_smoke(
+    name = "live_smoke",
+    repo_root = _REPO_ROOT,
+    manifest = _MANIFEST,
+    artifact_root = _ARTIFACT_ROOT,
+    bundle_path = _BUNDLE_PATH,
+)
+
+searchbench_round_run(
+    name = "run",
+    repo_root = _REPO_ROOT,
+    manifest = _MANIFEST,
+    artifact_root = _ARTIFACT_ROOT,
+)
+
+searchbench_round_materialize_dataset(
+    name = "materialize_dataset",
+    repo_root = _REPO_ROOT,
+    manifest_dir = _MANIFEST_DIR,
+)
+
+searchbench_round_evaluate_n(
+    name = "evaluate_n",
+    repo_root = _REPO_ROOT,
+    manifest = _MANIFEST,
+    artifact_root = _ARTIFACT_ROOT,
+    bundle_path = _BUNDLE_PATH,
+    attempts = 3,
+)
+
+searchbench_round_stability_probe(
+    name = "stability_probe",
+    repo_root = _REPO_ROOT,
+    manifest = _MANIFEST,
+    artifact_root = _ARTIFACT_ROOT,
+    bundle_path = _BUNDLE_PATH,
+    attempts = 5,
+)
+
+# Deprecated alias: fresh live smoke (no archive fallback).
+searchbench_round_live_smoke(
+    name = "e2e",
+    repo_root = _REPO_ROOT,
+    manifest = _MANIFEST,
+    artifact_root = _ARTIFACT_ROOT,
+    bundle_path = _BUNDLE_PATH,
+)
