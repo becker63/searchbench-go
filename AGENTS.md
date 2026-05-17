@@ -42,9 +42,15 @@ Or **`git commit`** (`buck2 test //:check`) and **`git push`** (`buck2 test //:c
 
 Targeted checks: `buck2 test //src/searchbench-go:check`, `buck2 test //src/iterative-context:check_full`, `buck2 test //docs:check`.
 
+Per-package Go: `buck2 test //src/searchbench-go/internal/pure/domain:domain_test` (see [src/searchbench-go/BUCK_MIGRATION.md](src/searchbench-go/BUCK_MIGRATION.md)).
+
 Pkl schema change: `buck2 build //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`.
 
-Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `npm`, and `pkl` are debugging fallbacks only.
+Go deps change: `go mod vendor` in `src/searchbench-go`, then `python3 tools/generate_vendor_buck.py` and `python3 tools/generate_go_buck.py` (see [docs/development.md](docs/development.md)).
+
+IC lock change: `uv lock` in `src/iterative-context`, refresh `uv.lock.toml` symlink and Elk platform tags (see [docs/development.md](docs/development.md)).
+
+Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `uv run`, `npm`, and `pkl` are debugging fallbacks only.
 
 **Repo-owned runs:** Buck is the **only** supported public interface. The Go binary is private Buck plumbing — do not document or use direct `searchbench` CLI commands as normal workflows. Live round targets: `configs/rounds/live-ic-vs-jcodemunch/BUCK` ([README](configs/rounds/live-ic-vs-jcodemunch/README.md)). After a run, inspect bundle **`report.json`** first. Secrets: repo-root `.env` (`CEREBRAS_API_KEY`, optional `HF_TOKEN`) only. See [docs/reference/run-entrypoints.md](docs/reference/run-entrypoints.md).
 
