@@ -1,71 +1,36 @@
-load("//build_defs:searchbench_round.bzl", "searchbench_round_evaluate_n", "searchbench_round_live_smoke", "searchbench_round_materialize_dataset", "searchbench_round_run", "searchbench_round_stability_probe", "searchbench_round_validate", "searchbench_round_validate_bundle")
-load("@prelude//:rules.bzl", "sh_test")
+load("//build_defs:searchbench_round.bzl", "searchbench_round")
 
 # Repo-owned live round — Buck is the supported run/eval interface (#75, #77, #91).
-# Secrets: repo-root `.env` (e.g. CEREBRAS_API_KEY). Non-secrets: attrs below.
+# Secrets: repo-root `.env` (e.g. CEREBRAS_API_KEY). Non-secrets live here.
 
-_REPO_ROOT = "root"
-_MANIFEST = "configs/rounds/live-ic-vs-jcodemunch/round.pkl"
-_MANIFEST_DIR = "configs/rounds/live-ic-vs-jcodemunch"
-_ARTIFACT_ROOT = "configs/rounds/live-ic-vs-jcodemunch/artifacts"
-_BUNDLE_PATH = "configs/rounds/live-ic-vs-jcodemunch/artifacts/games/code-localization/rounds/live-ic-vs-jcodemunch-001"
+_ROUND = "live-ic-vs-jcodemunch"
+_ROUND_ID = "live-ic-vs-jcodemunch-001"
+_ROUND_DIR = "configs/rounds/live-ic-vs-jcodemunch"
+_GAME = "code-localization"
 
-searchbench_round_validate(
-    name = "validate",
-    repo_root = _REPO_ROOT,
+_MANIFEST = _ROUND_DIR + "/round.pkl"
+_MANIFEST_DIR = _ROUND_DIR
+_ARTIFACT_ROOT = _ROUND_DIR + "/artifacts"
+_BUNDLE_PATH = _ARTIFACT_ROOT + "/games/" + _GAME + "/rounds/" + _ROUND_ID
+
+_DATASET_CONFIG = "py"
+_DATASET_SPLIT = "dev"
+_DATASET_MAX_ITEMS = 1
+_DATASET_SKIP = 50
+
+_EVALUATE_ATTEMPTS = 3
+_STABILITY_ATTEMPTS = 5
+
+searchbench_round(
+    name_prefix = "live_ic_vs_jcodemunch",
     manifest = _MANIFEST,
-)
-
-searchbench_round_validate_bundle(
-    name = "validate_bundle",
-    repo_root = _REPO_ROOT,
-    bundle_path = _BUNDLE_PATH,
-)
-
-searchbench_round_live_smoke(
-    name = "live_smoke",
-    repo_root = _REPO_ROOT,
-    manifest = _MANIFEST,
-    artifact_root = _ARTIFACT_ROOT,
-    bundle_path = _BUNDLE_PATH,
-)
-
-searchbench_round_run(
-    name = "run",
-    repo_root = _REPO_ROOT,
-    manifest = _MANIFEST,
-    artifact_root = _ARTIFACT_ROOT,
-)
-
-searchbench_round_materialize_dataset(
-    name = "materialize_dataset",
-    repo_root = _REPO_ROOT,
     manifest_dir = _MANIFEST_DIR,
-)
-
-searchbench_round_evaluate_n(
-    name = "evaluate_n",
-    repo_root = _REPO_ROOT,
-    manifest = _MANIFEST,
     artifact_root = _ARTIFACT_ROOT,
     bundle_path = _BUNDLE_PATH,
-    attempts = 3,
-)
-
-searchbench_round_stability_probe(
-    name = "stability_probe",
-    repo_root = _REPO_ROOT,
-    manifest = _MANIFEST,
-    artifact_root = _ARTIFACT_ROOT,
-    bundle_path = _BUNDLE_PATH,
-    attempts = 5,
-)
-
-# Deprecated alias: fresh live smoke (no archive fallback).
-searchbench_round_live_smoke(
-    name = "e2e",
-    repo_root = _REPO_ROOT,
-    manifest = _MANIFEST,
-    artifact_root = _ARTIFACT_ROOT,
-    bundle_path = _BUNDLE_PATH,
+    dataset_config = _DATASET_CONFIG,
+    dataset_split = _DATASET_SPLIT,
+    dataset_max_items = _DATASET_MAX_ITEMS,
+    dataset_skip = _DATASET_SKIP,
+    evaluate_attempts = _EVALUATE_ATTEMPTS,
+    stability_probe_attempts = _STABILITY_ATTEMPTS,
 )
