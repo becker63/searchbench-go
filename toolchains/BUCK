@@ -74,3 +74,22 @@ flake.package(
     target_compatible_with = _TARGET_MAPPING,
     visibility = ["PUBLIC"],
 )
+
+flake.package(
+    name = "git",
+    binary = "git",
+    package = "git",
+    path = ".",
+    target_compatible_with = _TARGET_MAPPING,
+    visibility = ["PUBLIC"],
+)
+
+flake.package(
+    name = "npm",
+    binary = "npm",
+    package = "nodejs",
+    path = ".",
+    target_compatible_with = _TARGET_MAPPING,
+    binaries = ["node", "npm"],
+    visibility = ["PUBLIC"],
+)

@@ -34,4 +34,6 @@ Round README: [configs/rounds/live-ic-vs-jcodemunch/README.md](../../configs/rou
 
 ## Implementation details (not public)
 
-Buck targets may build and invoke the Go binary internally. That executable and its flags are not a stable user-facing API. Raw `go test`, `go build`, and `./searchbench` remain debugging fallbacks for harness developers only.
+Buck targets are declared as Starlark rules/macros (`searchbench_round_op`, `go_module_test`, `uv_project_test`, etc.) that invoke toolchain executables directly. There are no repo-owned `.sh` operation entrypoints.
+
+The Go binary and its flags are not a stable user-facing API. Raw `go test`, `go build`, and `./searchbench` remain debugging fallbacks for harness developers only.

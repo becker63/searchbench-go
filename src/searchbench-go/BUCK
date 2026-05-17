@@ -1,24 +1,26 @@
-load("@prelude//:rules.bzl", "sh_test", "test_suite")
+load("//build_defs:tool_ops.bzl", "go_module_test", "pkl_go_types_check", "pkl_go_types_gen")
+load("@prelude//:rules.bzl", "test_suite")
 
-sh_test(
+go_module_test(
     name = "go_tests",
-    test = "go_tests.sh",
+    module_dir = "src/searchbench-go",
+    argv = ["test", "./..."],
 )
 
-sh_test(
+go_module_test(
     name = "go_cli_build",
-    test = "cli_build.sh",
+    module_dir = "src/searchbench-go",
+    argv = ["build", "-o", "/dev/null", "./cmd/searchbench"],
 )
 
 # Regenerate Go bindings from configs/schema/SearchBenchRound.pkl (mutating).
-sh_test(
+pkl_go_types_gen(
     name = "pkl_go_types",
-    test = "pkl_go_types.sh",
+    schema_path = "configs/schema/SearchBenchRound.pkl",
 )
 
-sh_test(
+pkl_go_types_check(
     name = "pkl_go_types_check",
-    test = "pkl_go_types_check.sh",
 )
 
 test_suite(

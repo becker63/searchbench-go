@@ -25,11 +25,13 @@
           default = pkgs.mkShell {
             packages = [
               pkgs.go
+              pkgs.git
               pkgs.pkl
               pkgs.ruff
               pkgs.uv
               pkgs.buck2
               pkgs.python3
+              pkgs.nodejs
             ];
             shellHook = ''
               _root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
@@ -52,10 +54,12 @@
         {
           inherit (pkgs)
             go
+            git
             pkl
             ruff
             uv
             python3
+            nodejs
             ;
         }
       );

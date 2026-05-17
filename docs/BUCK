@@ -1,11 +1,11 @@
-load("@prelude//:rules.bzl", "sh_test")
+load("//build_defs:tool_ops.bzl", "npm_project_run", "npm_project_test")
 
-sh_test(
+npm_project_test(
     name = "check",
-    test = "docs_check.sh",
+    npm_script = "docs:build",
 )
 
-sh_test(
+npm_project_run(
     name = "site",
-    test = "docs_build.sh",
+    npm_script = "docs:build",
 )
