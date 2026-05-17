@@ -16,9 +16,6 @@
 /buck-out/
 /.buckconfig.d/
 /searchbench
-/src/searchbench/.env
-/src/old-searchbench/.venv/
-/src/old-searchbench/**/__pycache__/
 /coverage.out
 /*.test
 # Local optional `go mod vendor`; not committed
