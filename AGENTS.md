@@ -50,7 +50,7 @@ Targeted checks:
 
 Pkl schema change: `buck2 run //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`.
 
-**Go deps:** after `go.mod` changes, run `go mod vendor` and gobuckify (see [docs/development.md](docs/development.md)) — not repo generator scripts. Commit generated `vendor/**/BUCK` files.
+**Go deps:** `vendor/` is a generated local projection (gitignored). After `go.mod`, `go.sum`, or `gobuckify.json` changes, run `nix run .#project-go-deps` (see [docs/development.md](docs/development.md)). Buck does not regenerate deps during tests.
 
 **Python/IC:** `uv lock` / `uv sync` in `src/iterative-context`; Buck runs IC via stable wrapper targets only (no Elk, no per-wheel Buck graph).
 

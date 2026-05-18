@@ -124,11 +124,166 @@
           ]
         );
 
+        projectGoDeps = pkgs.writeShellApplication {
+          name = "project-go-deps";
+          runtimeInputs = with pkgs; [
+            go
+            buck2
+            git
+            coreutils
+            jq
+          ];
+          text = ''
+            set -euo pipefail
+            root="$(git rev-parse --show-toplevel)"
+            cd "$root"
+
+            go_mod="src/searchbench-go/go.mod"
+            go_sum="src/searchbench-go/go.sum"
+            gobuckify_json="src/searchbench-go/gobuckify.json"
+            vendor_dir="src/searchbench-go/vendor"
+            manifest="$vendor_dir/.searchbench-vendor-projection.json"
+
+            for f in "$go_mod" "$gobuckify_json"; do
+              if [[ ! -f "$f" ]]; then
+                echo "error: missing $f" >&2
+                exit 1
+              fi
+            done
+
+            echo "project-go-deps: go mod vendor"
+            (cd src/searchbench-go && go mod vendor)
+
+            echo "project-go-deps: gobuckify"
+            (cd src/searchbench-go && buck2 run prelude//go/tools/gobuckify:gobuckify -- .)
+
+            hash_file() {
+              if [[ -f "$1" ]]; then
+                sha256sum "$1" | awk '{print $1}'
+              else
+                echo "missing"
+              fi
+            }
+
+            mkdir -p "$vendor_dir"
+            jq -n \
+              --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg go_mod "$(hash_file "$go_mod")" \
+              --arg go_sum "$(hash_file "$go_sum")" \
+              --arg gobuckify "$(hash_file "$gobuckify_json")" \
+              --arg flake_lock "$(hash_file flake.lock)" \
+              --arg toolchains_lock "$(hash_file toolchains/flake.lock)" \
+              --arg go_version "$(go version | head -n1)" \
+              --arg buck2_version "$(buck2 --version | head -n1)" \
+              '{
+                generated_at: $generated_at,
+                inputs: {
+                  "src/searchbench-go/go.mod": $go_mod,
+                  "src/searchbench-go/go.sum": $go_sum,
+                  "src/searchbench-go/gobuckify.json": $gobuckify,
+                  "flake.lock": $flake_lock,
+                  "toolchains/flake.lock": $toolchains_lock
+                },
+                tools: {
+                  go: $go_version,
+                  buck2: $buck2_version
+                }
+              }' > "$manifest"
+
+            echo "project-go-deps: wrote $manifest"
+          '';
+        };
+
+        vendorProjectionWarn = pkgs.writeShellApplication {
+          name = "vendor-projection-warn";
+          runtimeInputs = with pkgs; [
+            coreutils
+            jq
+          ];
+          text = ''
+            set -euo pipefail
+            vendor_dir="src/searchbench-go/vendor"
+            manifest="$vendor_dir/.searchbench-vendor-projection.json"
+            gobuckify_json="src/searchbench-go/gobuckify.json"
+
+            warn() {
+              echo ""
+              echo "Go vendor projection is missing or stale."
+              echo ""
+              echo "Run:"
+              echo "  nix run .#project-go-deps"
+              echo ""
+              echo "Buck will not regenerate Go deps during tests."
+              echo ""
+            }
+
+            hash_file() {
+              if [[ -f "$1" ]]; then
+                sha256sum "$1" | awk '{print $1}'
+              else
+                echo "missing"
+              fi
+            }
+
+            if [[ ! -f "$gobuckify_json" ]]; then
+              echo "[warn] missing $gobuckify_json"
+              exit 0
+            fi
+
+            if [[ ! -d "$vendor_dir" ]]; then
+              warn
+              echo "[warn] missing $vendor_dir/"
+              exit 0
+            fi
+
+            if [[ ! -f "$manifest" ]]; then
+              warn
+              echo "[warn] missing $manifest"
+              exit 0
+            fi
+
+            current_go_mod=$(hash_file src/searchbench-go/go.mod)
+            current_go_sum=$(hash_file src/searchbench-go/go.sum)
+            current_gobuckify=$(hash_file "$gobuckify_json")
+            current_flake=$(hash_file flake.lock)
+            current_toolchains=$(hash_file toolchains/flake.lock)
+
+            manifest_go_mod=$(jq -r '.inputs["src/searchbench-go/go.mod"] // empty' "$manifest")
+            manifest_go_sum=$(jq -r '.inputs["src/searchbench-go/go.sum"] // empty' "$manifest")
+            manifest_gobuckify=$(jq -r '.inputs["src/searchbench-go/gobuckify.json"] // empty' "$manifest")
+            manifest_flake=$(jq -r '.inputs["flake.lock"] // empty' "$manifest")
+            manifest_toolchains=$(jq -r '.inputs["toolchains/flake.lock"] // empty' "$manifest")
+
+            stale=false
+            check_stale() {
+              local name="$1" cur="$2" man="$3"
+              if [[ -z "$man" || "$cur" != "$man" ]]; then
+                stale=true
+                echo "[warn] vendor projection stale: $name"
+              fi
+            }
+            check_stale go.mod "$current_go_mod" "$manifest_go_mod"
+            check_stale go.sum "$current_go_sum" "$manifest_go_sum"
+            check_stale gobuckify.json "$current_gobuckify" "$manifest_gobuckify"
+            check_stale flake.lock "$current_flake" "$manifest_flake"
+            check_stale toolchains/flake.lock "$current_toolchains" "$manifest_toolchains"
+
+            if [[ "$stale" == true ]]; then
+              warn
+            fi
+          '';
+        };
+
       in
       {
         formatter = pkgs.nixfmt;
 
         checks.pre-commit-check = preCommitCheck;
+
+        apps.project-go-deps = {
+          type = "app";
+          program = "${projectGoDeps}/bin/project-go-deps";
+        };
 
         devShells.default = pkgs.mkShell {
           packages =
@@ -170,17 +325,12 @@
           ''
           + preCommitDev.shellHook
           + ''
+            ${vendorProjectionWarn}/bin/vendor-projection-warn || true
             echo "searchbench-go: dev shell (pre-commit → Buck2 + hygiene; see AGENTS.md)"
             go version
             echo ""
-            echo "Go dependency projection (explicit; Buck does not run this):"
-            echo "  cd src/searchbench-go && go mod vendor"
-            echo "  buck2 run prelude//go/tools/gobuckify:gobuckify -- ."
-            if [ ! -f src/searchbench-go/gobuckify.json ]; then
-              echo "  [warn] missing src/searchbench-go/gobuckify.json"
-            elif [ ! -d src/searchbench-go/vendor ]; then
-              echo "  [warn] missing src/searchbench-go/vendor — run go mod vendor"
-            fi
+            echo "Go vendor projection (generated locally; not in git):"
+            echo "  nix run .#project-go-deps"
             echo ""
             echo "Python/IC: uv lock && uv sync in src/iterative-context; Buck uses wrapper targets only (no Elk)."
           '';

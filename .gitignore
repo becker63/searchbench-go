@@ -1,9 +1,7 @@
 #iterative-context
 # Local diff exports (blog / notes)
 /git-diff-export.patch
-src/searchbench-go/vendor/**
-!src/searchbench-go/vendor/**/
-!src/searchbench-go/vendor/**/BUCK
+src/searchbench-go/vendor/
 buck-out
 .cache/
 .codex

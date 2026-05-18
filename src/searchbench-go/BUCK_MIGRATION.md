@@ -14,13 +14,13 @@ SearchBench-Go is modeled in Buck with prelude `go_library` / `go_test` / `go_bi
 
 ## Explicit regeneration flows
 
-From `nix develop`:
+From the repo root (`nix develop` recommended):
 
 ```bash
-cd src/searchbench-go
-go mod vendor
-buck2 run prelude//go/tools/gobuckify:gobuckify -- .
+nix run .#project-go-deps
 ```
+
+This runs `go mod vendor` and `gobuckify` under `src/searchbench-go/` and writes `vendor/.searchbench-vendor-projection.json` (input hashes + tool versions). The `vendor/` tree is **not** committed.
 
 ```bash
 buck2 run //src/searchbench-go:pkl_go_types
@@ -35,7 +35,8 @@ Buck tests do not run vendor projection implicitly, and `pkl_go_types_check` dif
 - `.buckconfig` pins `prelude` as a **git external cell** (`buck2-prelude` commit `169c93f58201d1bb62370ba0563b293e139bb2c7`). Buck fetches it on demand; no repo-local `prelude/` tree or symlink is required.
 - The prelude **bundled** inside the Nix `buck2` package is older and still references `prelude.go_unittest` in `gobuckify`; do not switch `[external_cells] prelude` back to `bundled` without upgrading `buck2` first.
 - `src/searchbench-go/gobuckify.json` enables `generate_embed_srcs` so vendored packages using `go:embed` emit valid Buck targets.
-- Generated third-party targets live under `//src/searchbench-go/vendor/...`.
+- Generated third-party targets live under `//src/searchbench-go/vendor/...` after `nix run .#project-go-deps`.
+- `vendor/` is gitignored; refresh when lockfiles or `gobuckify.json` change.
 
 ## Native test runtime (libstdc++)
 

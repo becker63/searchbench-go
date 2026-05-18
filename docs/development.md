@@ -62,21 +62,21 @@ buck2 test //src/searchbench-go:pkl_go_types_check
 
 ### SearchBench-Go (deep Buck modeling)
 
-- **Third-party deps:** projected with **gobuckify** into `vendor/**/BUCK` (see `src/searchbench-go/gobuckify.json`).
+- **Third-party deps:** `go mod vendor` + **gobuckify** into `src/searchbench-go/vendor/` (see `gobuckify.json`). The tree is **generated locally** via `nix run .#project-go-deps`; it is gitignored and not packed by Repomix.
 - **First-party checks:** prelude `go_library` / `go_test` / `go_binary`.
 - **Native fast suite:** `buck2 test //src/searchbench-go:go_native_fast` — deterministic prelude `go_test` targets (see coverage table in [BUCK_MIGRATION.md](../src/searchbench-go/BUCK_MIGRATION.md)).
 - **Native full suite:** `buck2 test //src/searchbench-go:go_native_full` — fast suite plus heavier deterministic targets and `//configs/rounds/live-ic-vs-jcodemunch:validate`.
 - **Buck validates; it does not run `go mod vendor` or gobuckify during `buck2 test`.**
 
-After `go.mod` / `go.sum` changes:
+After `go.mod`, `go.sum`, `gobuckify.json`, `flake.lock`, or `toolchains/flake.lock` changes:
 
 ```bash
-cd src/searchbench-go
-go mod vendor
-buck2 run prelude//go/tools/gobuckify:gobuckify -- .
+nix run .#project-go-deps
 ```
 
-Commit updated `vendor/**/BUCK` files. See [../src/searchbench-go/BUCK_MIGRATION.md](../src/searchbench-go/BUCK_MIGRATION.md).
+`nix develop` warns when `vendor/` or `vendor/.searchbench-vendor-projection.json` is missing or stale. See [../src/searchbench-go/BUCK_MIGRATION.md](../src/searchbench-go/BUCK_MIGRATION.md).
+
+Future direction: a pure Nix derivation in `/nix/store` instead of a writable `vendor/` tree; this pass only pins tools via the Nix app.
 
 Native examples: `buck2 test //src/searchbench-go:go_native_fast`, `buck2 test //src/searchbench-go/internal/pure/domain:domain_test`, `buck2 build //src/searchbench-go/cmd/searchbench:searchbench`.
 
