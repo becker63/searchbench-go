@@ -1,0 +1,36 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "report",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/report",
+    srcs = [
+        "canonical.go",
+        "comparison.go",
+        "decision.go",
+        "doc.go",
+        "evidence.go",
+        "match_execution_record.go",
+        "match_execution_set.go",
+        "regression.go",
+        "report.go",
+        "spec.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/execution:execution",
+        "//src/searchbench-go/internal/pure/score:score",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "report_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":report",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

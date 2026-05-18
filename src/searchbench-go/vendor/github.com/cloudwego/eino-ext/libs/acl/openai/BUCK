@@ -1,0 +1,17 @@
+go_library(
+    name = "openai",
+    package_name = "github.com/cloudwego/eino-ext/libs/acl/openai",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic:sonic",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/callbacks:callbacks",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/embedding:embedding",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/model:model",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/compose:compose",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+        "//src/searchbench-go/vendor/github.com/eino-contrib/jsonschema:jsonschema",
+        "//src/searchbench-go/vendor/github.com/meguminnnnnnnnn/go-openai:go-openai",
+    ],
+    visibility = ["PUBLIC"],
+)

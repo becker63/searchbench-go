@@ -1,0 +1,26 @@
+go_library(
+    name = "encoder",
+    package_name = "github.com/bytedance/sonic/internal/encoder",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/gopkg/lang/dirtmake:dirtmake",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/encoder/alg:alg",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/encoder/ir:ir",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/encoder/vars:vars",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/encoder/vm:vm",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/resolver:resolver",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/rt:rt",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/option:option",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/utf8:utf8",
+    ] + select({
+        "DEFAULT": [],
+        "config//os:linux": select({
+            "DEFAULT": [],
+            "config//cpu:x86_64": [
+                "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/encoder/x86:x86",
+            ],
+        }),
+    }),
+    visibility = ["PUBLIC"],
+)

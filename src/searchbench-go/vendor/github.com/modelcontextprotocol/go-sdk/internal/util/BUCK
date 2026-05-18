@@ -1,0 +1,7 @@
+go_library(
+    name = "util",
+    package_name = "github.com/modelcontextprotocol/go-sdk/internal/util",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

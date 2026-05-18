@@ -1,0 +1,11 @@
+go_library(
+    name = "arm",
+    package_name = "github.com/segmentio/asm/cpu/arm",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/segmentio/asm/cpu/cpuid:cpuid",
+        "//src/searchbench-go/vendor/golang.org/x/sys/cpu:cpu",
+    ],
+    visibility = ["PUBLIC"],
+)

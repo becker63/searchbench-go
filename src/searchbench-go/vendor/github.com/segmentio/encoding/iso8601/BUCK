@@ -1,0 +1,7 @@
+go_library(
+    name = "iso8601",
+    package_name = "github.com/segmentio/encoding/iso8601",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

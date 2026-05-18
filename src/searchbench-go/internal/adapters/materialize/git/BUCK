@@ -1,0 +1,30 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "git",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/materialize/git",
+    srcs = [
+        "cache_key.go",
+        "doc.go",
+        "errors.go",
+        "materialize.go",
+        "runner.go",
+        "types.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "git_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":git",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

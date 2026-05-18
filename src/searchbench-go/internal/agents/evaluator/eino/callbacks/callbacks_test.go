@@ -4,11 +4,11 @@ import (
 	"context"
 	"go/token"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/becker63/searchbench-go/internal/testing/importcheck"
+	"github.com/becker63/searchbench-go/internal/testing/reporoot"
 	einocallbacks "github.com/cloudwego/eino/callbacks"
 )
 
@@ -66,12 +66,7 @@ func TestBuildCallbacksPropagatesFactoryError(t *testing.T) {
 func TestCallbackPackageAvoidsForbiddenImports(t *testing.T) {
 	t.Parallel()
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-
-	dir := filepath.Dir(currentFile)
+	dir := filepath.Join(reporoot.GoModuleRoot(t), "internal", "agents", "evaluator", "eino", "callbacks")
 	fs := token.NewFileSet()
 	// Parse only the non-test Go files in this package and inspect their import
 	// lists directly. This keeps the assertion focused on the production callback

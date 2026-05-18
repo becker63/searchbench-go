@@ -1,0 +1,25 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "liveconfig",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/liveconfig",
+    srcs = [
+        "config.go",
+        "dotenv.go",
+        "fingerprint.go",
+        "manifest.go",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "liveconfig_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":liveconfig",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

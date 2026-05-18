@@ -1,0 +1,7 @@
+go_library(
+    name = "kong",
+    package_name = "github.com/alecthomas/kong",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

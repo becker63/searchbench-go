@@ -1,0 +1,32 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "prompt",
+    package_name = "github.com/becker63/searchbench-go/internal/agents/evaluator/prompt",
+    srcs = [
+        "input.go",
+        "prompt_templ.go",
+        "render.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/vendor/github.com/a-h/templ/runtime:runtime",
+        "//src/searchbench-go/vendor/github.com/a-h/templ:templ",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "prompt_test",
+    srcs = ["prompt_test.go"],
+    target_under_test = ":prompt",
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+    ],
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

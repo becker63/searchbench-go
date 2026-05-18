@@ -1,0 +1,32 @@
+go_library(
+    name = "arch",
+    package_name = "github.com/twitchyliquid64/golang-asm/asm/arch",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+    ] + select({
+        "DEFAULT": [],
+        "config//os:linux": select({
+            "DEFAULT": [],
+            "config//cpu:x86_64": [
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj:obj",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/arm:arm",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/arm64:arm64",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/mips:mips",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/ppc64:ppc64",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/riscv:riscv",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/s390x:s390x",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/wasm:wasm",
+                "//src/searchbench-go/vendor/github.com/twitchyliquid64/golang-asm/obj/x86:x86",
+            ],
+        }),
+    }),
+    target_compatible_with = select({
+        "DEFAULT": ["config//:none"],
+        "config//os:linux": select({
+            "DEFAULT": ["config//:none"],
+            "config//cpu:x86_64": [],
+        }),
+    }),
+    visibility = ["PUBLIC"],
+)

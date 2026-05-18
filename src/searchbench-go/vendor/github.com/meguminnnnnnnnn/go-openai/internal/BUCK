@@ -1,0 +1,11 @@
+go_library(
+    name = "internal",
+    package_name = "github.com/meguminnnnnnnnn/go-openai/internal",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic:sonic",
+        "//src/searchbench-go/vendor/github.com/evanphx/json-patch:json-patch",
+    ],
+    visibility = ["PUBLIC"],
+)

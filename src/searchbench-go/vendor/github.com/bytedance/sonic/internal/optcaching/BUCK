@@ -1,0 +1,13 @@
+go_library(
+    name = "optcaching",
+    package_name = "github.com/bytedance/sonic/internal/optcaching",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/envs:envs",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/native:native",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/resolver:resolver",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/rt:rt",
+    ],
+    visibility = ["PUBLIC"],
+)

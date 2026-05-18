@@ -40,15 +40,19 @@ buck2 test //:check_full
 
 Or **`git commit`** (`buck2 test //:check`) and **`git push`** (`buck2 test //:check_full`) after `nix develop`.
 
-Targeted checks: `buck2 test //src/searchbench-go:check`, `buck2 test //src/iterative-context:check_full`, `buck2 test //docs:check`.
+Targeted checks:
 
-Per-package Go: `buck2 test //src/searchbench-go/internal/pure/domain:domain_test` (see [src/searchbench-go/BUCK_MIGRATION.md](src/searchbench-go/BUCK_MIGRATION.md)).
+- `buck2 test //src/searchbench-go:check`
+- `buck2 test //src/searchbench-go:go_native_full`
+- `buck2 test //src/searchbench-go:go_native_fast` (deterministic prelude `go_test`; requires `nix develop` for `outputs/out/lib`)
+- `buck2 test //src/iterative-context:check_full`
+- `buck2 test //docs:check`
 
-Pkl schema change: `buck2 build //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`.
+Pkl schema change: `buck2 run //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`.
 
-Go deps change: `go mod vendor` in `src/searchbench-go`, then `python3 tools/generate_vendor_buck.py` and `python3 tools/generate_go_buck.py` (see [docs/development.md](docs/development.md)).
+**Go deps:** after `go.mod` changes, run `go mod vendor` and gobuckify (see [docs/development.md](docs/development.md)) — not repo generator scripts. Commit generated `vendor/**/BUCK` files.
 
-IC lock change: `uv lock` in `src/iterative-context`, refresh `uv.lock.toml` symlink and Elk platform tags (see [docs/development.md](docs/development.md)).
+**Python/IC:** `uv lock` / `uv sync` in `src/iterative-context`; Buck runs IC via stable wrapper targets only (no Elk, no per-wheel Buck graph).
 
 Prefer **Buck targets** over raw commands; see [docs/development.md](docs/development.md). Raw `go test`, `uv run`, `npm`, and `pkl` are debugging fallbacks only.
 
@@ -56,7 +60,9 @@ Prefer **Buck targets** over raw commands; see [docs/development.md](docs/develo
 
 ## Non-goals (unless the task explicitly asks)
 
+- Live MCP, LangSmith, provider execution, dataset materialization, visualization UI (unless explicitly running opt-in Buck live targets)
 - Buck as a requirement for public `local_path` round runs (external users may still use `local_path`; repo-owned rounds use `buck_descriptor`)
+- Modeling IC Python wheels in Buck (Elk or similar)
 - Rewriting long research docs when a spine doc update suffices
 
 ## Current examples

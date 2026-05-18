@@ -1,0 +1,7 @@
+go_library(
+    name = "characters",
+    package_name = "github.com/pelletier/go-toml/v2/internal/characters",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

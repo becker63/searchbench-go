@@ -1,0 +1,11 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "dataset",
+    package_name = "github.com/becker63/searchbench-go/internal/ports/dataset",
+    srcs = ["dataset.go"],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+    ],
+    visibility = ["PUBLIC"],
+)

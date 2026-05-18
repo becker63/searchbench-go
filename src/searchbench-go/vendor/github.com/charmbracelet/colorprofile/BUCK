@@ -1,0 +1,13 @@
+go_library(
+    name = "colorprofile",
+    package_name = "github.com/charmbracelet/colorprofile",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/charmbracelet/x/ansi:ansi",
+        "//src/searchbench-go/vendor/github.com/charmbracelet/x/term:term",
+        "//src/searchbench-go/vendor/github.com/lucasb-eyer/go-colorful:go-colorful",
+        "//src/searchbench-go/vendor/github.com/xo/terminfo:terminfo",
+    ],
+    visibility = ["PUBLIC"],
+)

@@ -1,0 +1,28 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "exec",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/pipeline/exec",
+    srcs = [
+        "doc.go",
+        "ic_allowlist.go",
+        "runner.go",
+        "uv_lookup.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/ports/pipeline:pipeline",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "exec_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":exec",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

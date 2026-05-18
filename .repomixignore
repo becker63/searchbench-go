@@ -1,0 +1,13 @@
+# Generated dependency graph.
+/prelude
+src/searchbench-go/vendor/**
+
+# Local Buck/Nix scratch state.
+.buckconfig.d/**
+src/searchbench-go/.buckconfig.d/**
+buck-out/**
+result*
+.tmp/**
+
+# Checked-in example artifacts are useful in-repo but too large for most AI export bundles.
+configs/rounds/**/artifacts/**

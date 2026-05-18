@@ -1,0 +1,12 @@
+go_library(
+    name = "tool",
+    package_name = "github.com/cloudwego/eino/components/tool",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/callbacks:callbacks",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/internal/core:core",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    visibility = ["PUBLIC"],
+)

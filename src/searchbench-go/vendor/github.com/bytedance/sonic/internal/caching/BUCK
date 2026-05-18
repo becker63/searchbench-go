@@ -1,0 +1,10 @@
+go_library(
+    name = "caching",
+    package_name = "github.com/bytedance/sonic/internal/caching",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/rt:rt",
+    ],
+    visibility = ["PUBLIC"],
+)

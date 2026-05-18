@@ -1,0 +1,8 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "nextchallengerevidencekind",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/config/pkl/generated/nextchallengerevidencekind",
+    srcs = ["NextChallengerEvidenceKind.pkl.go"],
+    visibility = ["PUBLIC"],
+)

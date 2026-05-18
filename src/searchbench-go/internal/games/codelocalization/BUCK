@@ -1,0 +1,23 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "codelocalization",
+    package_name = "github.com/becker63/searchbench-go/internal/games/codelocalization",
+    srcs = ["game.go"],
+    deps = [
+        "//src/searchbench-go/internal/pure/game:game",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "codelocalization_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":codelocalization",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

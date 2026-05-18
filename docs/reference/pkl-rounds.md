@@ -9,7 +9,7 @@
 | Go loader + validation | `src/searchbench-go/internal/adapters/config/pkl/` |
 | Round execution | `src/searchbench-go/internal/app/round/` |
 
-**Proves with:** `buck2 test //src/searchbench-go:check` · after schema edits: `buck2 build //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`
+**Proves with:** `buck2 test //src/searchbench-go:check` · after schema edits: `buck2 run //src/searchbench-go:pkl_go_types` then `buck2 test //src/searchbench-go:pkl_go_types_check`
 
 ## From-scratch round
 

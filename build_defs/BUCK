@@ -1,6 +1,1 @@
-load("//build_defs:searchbench_cli.bzl", "searchbench_cli")
-
-searchbench_cli(
-    name = "searchbench_cli",
-    visibility = ["PUBLIC"],
-)
+# build_defs Starlark rules are loaded via //build_defs:*.bzl paths.

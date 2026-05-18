@@ -1,0 +1,14 @@
+go_library(
+    name = "src",
+    package_name = "github.com/twitchyliquid64/golang-asm/src",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    target_compatible_with = select({
+        "DEFAULT": ["config//:none"],
+        "config//os:linux": select({
+            "DEFAULT": ["config//:none"],
+            "config//cpu:x86_64": [],
+        }),
+    }),
+    visibility = ["PUBLIC"],
+)

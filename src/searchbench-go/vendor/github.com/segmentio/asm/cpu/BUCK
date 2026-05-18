@@ -1,0 +1,12 @@
+go_library(
+    name = "cpu",
+    package_name = "github.com/segmentio/asm/cpu",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/segmentio/asm/cpu/arm:arm",
+        "//src/searchbench-go/vendor/github.com/segmentio/asm/cpu/arm64:arm64",
+        "//src/searchbench-go/vendor/github.com/segmentio/asm/cpu/x86:x86",
+    ],
+    visibility = ["PUBLIC"],
+)

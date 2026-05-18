@@ -10,7 +10,7 @@ load("@prelude//decls:toolchains_common.bzl", "toolchains_common")
 load("@prelude//test:inject_test_run_info.bzl", "inject_test_run_info")
 load("@prelude//tests:re_utils.bzl", "get_re_executors_from_props")
 
-_CLI = "//build_defs:searchbench_cli"
+_CLI = "//src/searchbench-go/cmd/searchbench:searchbench"
 _PROJECT_ROOT_LABEL = "buck2_run_from_project_root"
 
 _TEST_MODES = [
@@ -81,12 +81,36 @@ def _operation_command(cli, attrs):
         return _materialize_dataset_command(cli, attrs)
     return _round_command(cli, attrs)
 
+def _cli_executable(ctx):
+    cli = ctx.attrs._cli
+    if RunInfo in cli:
+        return cli[RunInfo]
+    outs = cli[DefaultInfo].default_outputs
+    if not outs:
+        fail("searchbench_round_op: CLI dep %s has no outputs (expected executable artifact)" % cli.label)
+    return cmd_args(outs[0])
+
+
+def _wrap_cli_command(ctx, cli, inner):
+    libdir = ctx.attrs._libdir
+    return cmd_args([
+        "bash",
+        "-ec",
+        cmd_args(
+            cmd_args("export LD_LIBRARY_PATH=$(cat ", libdir, ")"),
+            "&&",
+            inner,
+            delimiter = " ",
+        ),
+    ])
+
+
 def _searchbench_round_op_impl(ctx):
     if ctx.attrs.mode not in _ALL_MODES:
         fail("searchbench_round_op: unknown mode %r" % ctx.attrs.mode)
 
-    cli = ctx.attrs._cli[RunInfo]
-    command = _operation_command(cli, ctx.attrs)
+    cli = _cli_executable(ctx)
+    command = _wrap_cli_command(ctx, cli, _operation_command(cli, ctx.attrs))
     re_executor, executor_overrides = get_re_executors_from_props(ctx)
 
     if ctx.attrs.mode in _TEST_MODES:
@@ -134,8 +158,11 @@ searchbench_round_op = rule(
         "contacts": attrs.list(attrs.string(), default = []),
         "_cli": attrs.dep(
             default = _CLI,
-            providers = [RunInfo],
-            doc = "Private SearchBench CLI built for Buck.",
+            doc = "Private SearchBench CLI (`go_binary` at //src/searchbench-go/cmd/searchbench:searchbench).",
+        ),
+        "_libdir": attrs.source(
+            default = "//tools:libstdcxx_libdir",
+            doc = "One-line file with libstdc++ directory (written by nix develop shellHook).",
         ),
         "_inject_test_env": attrs.default_only(attrs.dep(
             default = "prelude//test/tools:inject_test_env",

@@ -1,0 +1,18 @@
+go_library(
+    name = "mcp",
+    package_name = "github.com/modelcontextprotocol/go-sdk/mcp",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/google/jsonschema-go/jsonschema:jsonschema",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/auth:auth",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/internal/json:json",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/internal/jsonrpc2:jsonrpc2",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/internal/mcpgodebug:mcpgodebug",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/internal/util:util",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/internal/xcontext:xcontext",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/jsonrpc:jsonrpc",
+        "//src/searchbench-go/vendor/github.com/yosida95/uritemplate/v3:v3",
+    ],
+    visibility = ["PUBLIC"],
+)

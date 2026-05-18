@@ -8,8 +8,9 @@
 nix develop
 ```
 
-- Installs Go, Pkl, buck2, node/npm, pre-commit.
+- Installs Go, Buck2, `uv`, Pkl, node/npm, pre-commit. Buck prelude is pinned in `.buckconfig` (git external cell; no local `prelude/` checkout). The shell hook also materializes `outputs/out/lib` symlinks so prelude `go_test` binaries can load `libstdc++.so.6`.
 - Hooks: `git commit` → `buck2 test //:check`; `git push` → `buck2 test //:check_full`.
+- Shell hook prints Go/IC dependency lifecycle reminders (no automatic regen).
 
 ## Canonical workflow
 
@@ -21,13 +22,14 @@ buck2 test //:check_full     # full — same as pre-push
 
 | Target | Proves |
 | --- | --- |
-| `buck2 test //:check` | Go harness + IC smoke |
+| `buck2 test //:check` | Native Go fast suite + deterministic CLI manifest validation + IC smoke |
 | `buck2 test //:check_full` | Above + IC full + docs build + Pkl bindings |
 | `buck2 test //docs:check` | VitePress production build |
-| `buck2 test //src/searchbench-go:check` | Per-package `go test` via Buck (`go_external_package_test`) |
-| `buck2 test //src/iterative-context:check_full` | Elk + pytest + basedpyright (no `uv run` in actions) |
+| `buck2 test //src/searchbench-go:check` | Native Go fast suite + deterministic CLI manifest validation |
+| `buck2 test //src/searchbench-go:go_native_full` | Same as `:check` without IC/docs/Pkl gates |
+| `buck2 test //src/iterative-context:check_full` | `uv sync` + pytest + basedpyright |
 | `buck2 build //src/searchbench-go/cmd/searchbench:searchbench` | CLI binary (`go_binary`) |
-| `buck2 build //src/searchbench-go:pkl_go_types` | Regenerate Go from Pkl schema |
+| `buck2 run //src/searchbench-go:pkl_go_types` | Regenerate Go from Pkl schema |
 | `buck2 test //src/searchbench-go:pkl_go_types_check` | Generated code matches `HEAD` |
 
 ### `//:check` includes
@@ -52,58 +54,56 @@ buck2 test //configs/rounds/live-ic-vs-jcodemunch:live_smoke        # fresh live
 After editing `configs/schema/SearchBenchRound.pkl`:
 
 ```bash
-buck2 build //src/searchbench-go:pkl_go_types
+buck2 run //src/searchbench-go:pkl_go_types
 buck2 test //src/searchbench-go:pkl_go_types_check
 ```
 
-## Example round (local)
+## Dependency lifecycle
 
-Repo-owned rounds use Buck targets under `configs/rounds/<name>/`. For the live round, see [reference/run-entrypoints.md](./reference/run-entrypoints.md) and [configs/rounds/live-ic-vs-jcodemunch/README.md](../configs/rounds/live-ic-vs-jcodemunch/README.md).
+### SearchBench-Go (deep Buck modeling)
 
-Do not use `./searchbench round run` or direct CLI invocation as the normal workflow; Buck invokes the Go binary as private plumbing.
-
-## Docs site
-
-Hosted: [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/).
-**Proves with:** `buck2 test //docs:check`
-
-## Regenerating Buck graphs
-
-### Go (first-party + vendor)
+- **Third-party deps:** projected with **gobuckify** into `vendor/**/BUCK` (see `src/searchbench-go/gobuckify.json`).
+- **First-party checks:** prelude `go_library` / `go_test` / `go_binary`.
+- **Native fast suite:** `buck2 test //src/searchbench-go:go_native_fast` — deterministic prelude `go_test` targets (see coverage table in [BUCK_MIGRATION.md](../src/searchbench-go/BUCK_MIGRATION.md)).
+- **Native full suite:** `buck2 test //src/searchbench-go:go_native_full` — fast suite plus heavier deterministic targets and `//configs/rounds/live-ic-vs-jcodemunch:validate`.
+- **Buck validates; it does not run `go mod vendor` or gobuckify during `buck2 test`.**
 
 After `go.mod` / `go.sum` changes:
 
 ```bash
 cd src/searchbench-go
 go mod vendor
-python3 ../../tools/generate_vendor_buck.py
-python3 ../../tools/generate_go_buck.py
-nix develop -c python3 ../../tools/generate_go_check_tests.py
+buck2 run prelude//go/tools/gobuckify:gobuckify -- .
 ```
 
-Vendor labels: `//src/searchbench-go/vendor/<import/path>:<name>`. Details: [../src/searchbench-go/BUCK_MIGRATION.md](../src/searchbench-go/BUCK_MIGRATION.md).
+Commit updated `vendor/**/BUCK` files. See [../src/searchbench-go/BUCK_MIGRATION.md](../src/searchbench-go/BUCK_MIGRATION.md).
 
-`gobuckify` via `buck2 run prelude//go/tools/gobuckify:gobuckify` is optional; this repo uses `tools/generate_vendor_buck.py` for the same layout.
+Native examples: `buck2 test //src/searchbench-go:go_native_fast`, `buck2 test //src/searchbench-go/internal/pure/domain:domain_test`, `buck2 build //src/searchbench-go/cmd/searchbench:searchbench`.
 
-### Iterative-context (Elk)
+### iterative-context (Python runtime wrappers)
 
-After `pyproject.toml` / lock changes:
+- **Not modeled in Buck.** No Elk, no per-wheel `prebuilt_python_library` graph.
+- Dependencies: `uv lock` / `uv sync` in `src/iterative-context` (Nix provides `uv`).
+- Buck exposes stable targets: `import_smoke`, `pytest_all`, `basedpyright_check`, `check`, `check_full`.
+
+After `pyproject.toml` changes:
 
 ```bash
 cd src/iterative-context
 uv lock
-ln -sf uv.lock uv.lock.toml   # if missing
-python3 ../../tools/generate_ic_elk_deps.py
+uv sync --locked
 ```
 
-Regenerate platform tags when lock adds wheels with platform-specific variants (see Elk docs). Elk pulls large ML wheels (torch, faiss); first `buck2 test //src/iterative-context:import_smoke` downloads artifacts for the host platform.
+## Example round (local)
 
-### Per-package Go tests
+Repo-owned rounds use Buck targets under `configs/rounds/<name>/`. For the live round, see [reference/run-entrypoints.md](./reference/run-entrypoints.md) and [configs/rounds/live-ic-vs-jcodemunch/README.md](../configs/rounds/live-ic-vs-jcodemunch/README.md).
 
-```bash
-buck2 test //src/searchbench-go/internal/pure/domain:domain_test
-buck2 test //src/searchbench-go/internal/surface/cli:cli_test
-```
+Do not use `./searchbench round run` or direct CLI invocation as the normal workflow; Buck invokes the native Go binary as private plumbing.
+
+## Docs site
+
+Hosted: [becker63.github.io/searchbench-go](https://becker63.github.io/searchbench-go/).
+**Proves with:** `buck2 test //docs:check`
 
 ## Debugging fallbacks
 

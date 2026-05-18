@@ -1,4 +1,4 @@
-package jcodemunch_test
+package jcodemunch
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/becker63/searchbench-go/internal/adapters/backend/jcodemunch"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
 )
 
@@ -55,8 +54,8 @@ func TestScriptedMCPToolSurface(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = clientSession.Close() })
 
-	rt := jcodemunch.NewRuntime(clientSession)
-	factory := jcodemunch.EvaluatorToolFactory(rt)
+	rt := NewRuntime(clientSession)
+	factory := EvaluatorToolFactory(rt)
 	tools, err := factory(run.Spec{})
 	if err != nil {
 		t.Fatalf("tool factory: %v", err)
@@ -102,12 +101,12 @@ func TestCallToolSurfacesMCPResultErrors(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = clientSession.Close() })
 
-	rt := jcodemunch.NewRuntime(clientSession)
+	rt := NewRuntime(clientSession)
 	_, err = rt.CallTool(ctx, "broken", []byte(`{}`))
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !jcodemunch.IsToolCall(err) {
+	if !IsToolCall(err) {
 		t.Fatalf("expected tool-call error, got %v", err)
 	}
 }
@@ -116,13 +115,13 @@ func TestOpenCommandFailsSetup(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, err := jcodemunch.OpenCommand(ctx, jcodemunch.CommandConfig{
+	_, err := OpenCommand(ctx, CommandConfig{
 		Command: exec.Command("false"),
 	})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !jcodemunch.IsSetup(err) {
+	if !IsSetup(err) {
 		t.Fatalf("expected setup error, got %v", err)
 	}
 }

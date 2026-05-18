@@ -1,0 +1,41 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "modeltest",
+    package_name = "github.com/becker63/searchbench-go/internal/testing/modeltest",
+    srcs = [
+        "doc.go",
+        "fixtures.go",
+        "openai_server.go",
+        "scripted_model.go",
+    ],
+    deps = [
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/model:model",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    embed_srcs = [
+        "testdata/chat_completion_error.json",
+        "testdata/chat_completion_success.json",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "modeltest_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":modeltest",
+    embed_srcs = [
+        "testdata/chat_completion_error.json",
+        "testdata/chat_completion_success.json",
+    ],
+    deps = [
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino-ext/components/model/openai:openai",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    labels = [
+        "deterministic",
+        "full",
+        "integration",
+        "no-cgo",
+    ],
+)

@@ -1,0 +1,21 @@
+go_library(
+    name = "optdec",
+    package_name = "github.com/bytedance/sonic/internal/decoder/optdec",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/caching:caching",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/decoder/consts:consts",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/decoder/errors:errors",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/envs:envs",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/native:native",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/native/types:types",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/optcaching:optcaching",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/resolver:resolver",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/rt:rt",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/utils:utils",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/option:option",
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/utf8:utf8",
+    ],
+    visibility = ["PUBLIC"],
+)

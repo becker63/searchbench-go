@@ -1,0 +1,32 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "usage",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/usage",
+    srcs = [
+        "collector.go",
+        "doc.go",
+        "hash_registry.go",
+        "record.go",
+        "summary.go",
+        "tokenizer.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/testing/importcheck:importcheck",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+# Unit tests only; collector_test.go walks package source and remains outside the native fast gate.
+go_test(
+    name = "usage_unit_test",
+    srcs = ["hash_registry_test.go"],
+    target_under_test = ":usage",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

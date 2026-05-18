@@ -1,4 +1,4 @@
-package localpath_test
+package localpath
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 	"github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -16,7 +15,7 @@ func TestLocalPathProviderPrepareSeed(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "pyproject.toml"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p := localpath.Provider{Source: src}
+	p := Provider{Source: src}
 	seed, err := p.PrepareSeed(context.Background())
 	if err != nil {
 		t.Fatal(err)

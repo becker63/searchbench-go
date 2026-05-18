@@ -15,14 +15,23 @@
   buck = none
 
 [external_cells]
-  prelude = bundled
+  prelude = git
   nix = git
 
+[external_cell_prelude]
+  git_origin = https://github.com/facebook/buck2-prelude
+  commit_hash = 169c93f58201d1bb62370ba0563b293e139bb2c7
+
 [parser]
-  target_platform_detector_spec = target:root//...->prelude//platforms:default
+  target_platform_detector_spec = target:root//...->prelude//platforms:default \
+    target:prelude//...->prelude//platforms:default \
+    target:toolchains//...->prelude//platforms:default
 
 [project]
   ignore = .git, buck-out, result, result-*, .direnv, .venv, node_modules, repomix-output.xml, src/iterative-context/.venv, src/iterative-context/.pytest_cache, src/iterative-context/.ruff_cache
+
+[build]
+  execution_platforms = prelude//platforms:default
 
 [buck2]
   materializations = deferred

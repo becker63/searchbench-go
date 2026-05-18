@@ -1,0 +1,40 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "eino",
+    package_name = "github.com/becker63/searchbench-go/internal/agents/optimizer/eino",
+    srcs = [
+        "doc.go",
+        "optimizer.go",
+        "optimizer_finalizer.go",
+        "optimizer_retry.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/agents/optimizer/policy:policy",
+        "//src/searchbench-go/internal/agents/optimizer/prompt:prompt",
+        "//src/searchbench-go/internal/ports/pipeline:pipeline",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/model:model",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "eino_test",
+    srcs = ["optimizer_test.go"],
+    target_under_test = ":eino",
+    deps = [
+        "//src/searchbench-go/internal/ports/pipeline:pipeline",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+        "//src/searchbench-go/internal/testing/modeltest:modeltest",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    labels = [
+        "deterministic",
+        "full",
+        "integration",
+        "no-cgo",
+    ],
+)

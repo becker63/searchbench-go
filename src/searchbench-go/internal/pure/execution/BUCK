@@ -1,0 +1,17 @@
+load("@prelude//:rules.bzl", "go_library")
+
+go_library(
+    name = "execution",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/execution",
+    srcs = [
+        "doc.go",
+        "failure.go",
+        "phases.go",
+        "record.go",
+        "spec.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+    ],
+    visibility = ["PUBLIC"],
+)

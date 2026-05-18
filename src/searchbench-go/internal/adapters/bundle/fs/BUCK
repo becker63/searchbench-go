@@ -1,0 +1,27 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "fs",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/bundle/fs",
+    srcs = [
+        "bundle.go",
+        "canonical_write.go",
+        "continuation.go",
+        "continuation_pkl.go",
+        "errors.go",
+        "evidence_pkl.go",
+        "metadata.go",
+        "serialize.go",
+        "validate.go",
+        "writer.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/adapters/report/text:text",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/execution:execution",
+        "//src/searchbench-go/internal/pure/report:report",
+        "//src/searchbench-go/internal/pure/round:round",
+        "//src/searchbench-go/internal/pure/score:score",
+    ],
+    visibility = ["PUBLIC"],
+)

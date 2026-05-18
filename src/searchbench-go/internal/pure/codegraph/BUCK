@@ -1,0 +1,33 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "codegraph",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/codegraph",
+    srcs = [
+        "builder.go",
+        "doc.go",
+        "edge.go",
+        "graph.go",
+        "localdistance.go",
+        "node.go",
+        "path.go",
+        "store.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/vendor/github.com/hmdsefi/gograph:gograph",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "codegraph_test",
+    srcs = ["localdistance_test.go"],
+    target_under_test = ":codegraph",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

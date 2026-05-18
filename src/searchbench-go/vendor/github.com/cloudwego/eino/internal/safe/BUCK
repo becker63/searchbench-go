@@ -1,0 +1,7 @@
+go_library(
+    name = "safe",
+    package_name = "github.com/cloudwego/eino/internal/safe",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

@@ -5,9 +5,10 @@ import (
 	"go/token"
 	"math"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/becker63/searchbench-go/internal/testing/reporoot"
 )
 
 func TestObjectiveResultValidateAcceptsFuturePklShapedResult(t *testing.T) {
@@ -240,14 +241,8 @@ func TestObjectiveResultRejectsMalformedEvidenceRefs(t *testing.T) {
 func TestObjectivePackageAvoidsForbiddenImports(t *testing.T) {
 	t.Parallel()
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-
-	dir := filepath.Dir(currentFile)
 	fs := token.NewFileSet()
-	path := filepath.Join(dir, "objective.go")
+	path := filepath.Join(reporoot.GoModuleRoot(t), "internal", "pure", "score", "objective.go")
 	file, err := parser.ParseFile(fs, path, nil, parser.ImportsOnly)
 	if err != nil {
 		t.Fatalf("parser.ParseFile(%q) error = %v", path, err)

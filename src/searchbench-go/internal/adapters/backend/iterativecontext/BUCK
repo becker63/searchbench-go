@@ -1,0 +1,26 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "iterativecontext",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext",
+    srcs = [
+        "candidate_launch.go",
+        "doc.go",
+        "errors.go",
+        "factory.go",
+        "normalize.go",
+        "runtime.go",
+        "session.go",
+        "toolinfo.go",
+        "uri.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/execution:execution",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/tool:tool",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+        "//src/searchbench-go/vendor/github.com/eino-contrib/jsonschema:jsonschema",
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/mcp:mcp",
+    ],
+    visibility = ["PUBLIC"],
+)

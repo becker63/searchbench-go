@@ -1,0 +1,14 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "workspace",
+    package_name = "github.com/becker63/searchbench-go/internal/ports/workspace",
+    srcs = [
+        "doc.go",
+        "provider.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    visibility = ["PUBLIC"],
+)

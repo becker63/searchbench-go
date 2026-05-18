@@ -1,0 +1,10 @@
+go_library(
+    name = "json-patch",
+    package_name = "github.com/evanphx/json-patch",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/pkg/errors:errors",
+    ],
+    visibility = ["PUBLIC"],
+)

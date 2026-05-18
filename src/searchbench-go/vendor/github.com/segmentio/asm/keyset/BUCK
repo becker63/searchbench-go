@@ -1,0 +1,12 @@
+go_library(
+    name = "keyset",
+    package_name = "github.com/segmentio/asm/keyset",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/segmentio/asm/cpu:cpu",
+        "//src/searchbench-go/vendor/github.com/segmentio/asm/cpu/arm64:arm64",
+        "//src/searchbench-go/vendor/github.com/segmentio/asm/cpu/x86:x86",
+    ],
+    visibility = ["PUBLIC"],
+)

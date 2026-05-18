@@ -1,0 +1,11 @@
+go_library(
+    name = "auth",
+    package_name = "github.com/modelcontextprotocol/go-sdk/auth",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/modelcontextprotocol/go-sdk/oauthex:oauthex",
+        "//src/searchbench-go/vendor/golang.org/x/oauth2:oauth2",
+    ],
+    visibility = ["PUBLIC"],
+)

@@ -1,0 +1,12 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "bundle",
+    package_name = "github.com/becker63/searchbench-go/internal/agents/optimizer/bundle",
+    srcs = ["write.go"],
+    deps = [
+        "//src/searchbench-go/internal/ports/pipeline:pipeline",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    visibility = ["PUBLIC"],
+)

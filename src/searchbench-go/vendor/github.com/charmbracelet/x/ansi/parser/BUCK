@@ -1,0 +1,7 @@
+go_library(
+    name = "parser",
+    package_name = "github.com/charmbracelet/x/ansi/parser",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

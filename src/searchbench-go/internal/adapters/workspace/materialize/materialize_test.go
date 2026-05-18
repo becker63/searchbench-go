@@ -1,11 +1,10 @@
-package materialize_test
+package materialize
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
 	"github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -18,7 +17,7 @@ func TestMaterializeCopiesAndExcludes(t *testing.T) {
 	mustMkdir(t, filepath.Join(src, "__pycache__"))
 	mustWrite(t, filepath.Join(src, "repomix-output.xml"), "<xml/>")
 
-	digest, err := materialize.DigestTree(src)
+	digest, err := DigestTree(src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +31,7 @@ func TestMaterializeCopiesAndExcludes(t *testing.T) {
 			Sha256:   digest,
 		},
 	}
-	mat := materialize.CandidateMaterializer{}
+	mat := CandidateMaterializer{}
 	ws, cleanup, err := mat.Materialize(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +78,7 @@ func TestMaterializeCleanupRemovesWorkspace(t *testing.T) {
 			Sha256:   "abc",
 		},
 	}
-	mat := materialize.CandidateMaterializer{}
+	mat := CandidateMaterializer{}
 	ws, cleanup, err := mat.Materialize(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +106,7 @@ func TestMaterializeUniqueWorkspaceIDsPerMaterialization(t *testing.T) {
 			Sha256:   "abc",
 		},
 	}
-	mat := materialize.CandidateMaterializer{}
+	mat := CandidateMaterializer{}
 	ws1, cleanup1, err := mat.Materialize(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +145,7 @@ func TestMaterializePreservesExecutableFileMode(t *testing.T) {
 			Sha256:   "abc",
 		},
 	}
-	mat := materialize.CandidateMaterializer{}
+	mat := CandidateMaterializer{}
 	ws, cleanup, err := mat.Materialize(seed)
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +174,7 @@ func TestMaterializeKeepPreservesWorkspace(t *testing.T) {
 			Sha256:   "abc",
 		},
 	}
-	mat := materialize.CandidateMaterializer{Opts: materialize.Options{Keep: true}}
+	mat := CandidateMaterializer{Opts: Options{Keep: true}}
 	ws, cleanup, err := mat.Materialize(seed)
 	if err != nil {
 		t.Fatal(err)

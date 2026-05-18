@@ -1,11 +1,10 @@
-package architecture_test
+package architecture
 
 import (
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -172,12 +171,29 @@ func TestArchitectureImportBoundaries(t *testing.T) {
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
-
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", ".."))
+	root := walkUpToFile(t, wd, filepath.Join("src", "searchbench-go", "go.mod"))
+	return filepath.Join(root, "src", "searchbench-go")
+}
+
+func walkUpToFile(t *testing.T, startDir, rel string) string {
+	t.Helper()
+
+	dir := filepath.Clean(startDir)
+	for {
+		candidate := filepath.Join(dir, rel)
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("walk-up: %q not found from %q", rel, startDir)
+		}
+		dir = parent
+	}
 }
 
 func hasAnyPrefix(value string, prefixes ...string) bool {

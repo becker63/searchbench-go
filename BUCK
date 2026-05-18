@@ -1,4 +1,14 @@
-load("@prelude//:rules.bzl", "test_suite")
+load("@prelude//:rules.bzl", "filegroup", "test_suite")
+
+filegroup(
+    name = "searchbench_go_test_resources",
+    srcs = glob([
+        "configs/schema/**/*.pkl",
+        "configs/rounds/local-ic-vs-jcodemunch/**/*.pkl",
+        "configs/rounds/optimize-ic/**/*.pkl",
+    ]),
+    visibility = ["PUBLIC"],
+)
 
 # Fast gate: Go + IC smoke (pre-commit runs //:check).
 test_suite(

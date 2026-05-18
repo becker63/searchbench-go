@@ -4,9 +4,10 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/becker63/searchbench-go/internal/testing/reporoot"
 )
 
 func TestNewMetricEvidencePreservesDirectionAndFlags(t *testing.T) {
@@ -67,14 +68,8 @@ func TestExtractLocalizationDistanceProjectsNamedMetrics(t *testing.T) {
 func TestRoundEvidencePackageAvoidsForbiddenImports(t *testing.T) {
 	t.Parallel()
 
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-
-	dir := filepath.Dir(currentFile)
 	fs := token.NewFileSet()
-	path := filepath.Join(dir, "evidence.go")
+	path := filepath.Join(reporoot.GoModuleRoot(t), "internal", "pure", "score", "evidence.go")
 	file, err := parser.ParseFile(fs, path, nil, parser.ImportsOnly)
 	if err != nil {
 		t.Fatalf("parser.ParseFile(%q) error = %v", path, err)

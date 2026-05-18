@@ -1,0 +1,42 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "logging",
+    package_name = "github.com/becker63/searchbench-go/internal/surface/logging",
+    srcs = [
+        "attrs.go",
+        "dev_renderer.go",
+        "doc.go",
+        "events.go",
+        "format.go",
+        "logger.go",
+        "mode.go",
+        "styles.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/execution:execution",
+        "//src/searchbench-go/internal/pure/report:report",
+        "//src/searchbench-go/internal/pure/score:score",
+        "//src/searchbench-go/vendor/github.com/charmbracelet/lipgloss:lipgloss",
+        "//src/searchbench-go/vendor/go.uber.org/zap/zapcore:zapcore",
+        "//src/searchbench-go/vendor/go.uber.org/zap:zap",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "logging_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":logging",
+    deps = [
+        "//src/searchbench-go/internal/pure/report:report",
+        "//src/searchbench-go/internal/pure/score:score",
+    ],
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

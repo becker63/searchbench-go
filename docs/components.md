@@ -33,7 +33,7 @@ SearchBench is a small monorepo. Each top-level tree is a **component** with con
 | Optimizer validation | `internal/agents/optimizer/policy/` |
 | CLI | `cmd/searchbench/` |
 
-**Proves with:** `buck2 test //src/searchbench-go:check` · Pkl regen: `buck2 build //src/searchbench-go:pkl_go_types`
+**Proves with:** `buck2 test //src/searchbench-go:check` · Pkl regen: `buck2 run //src/searchbench-go:pkl_go_types`
 
 ---
 

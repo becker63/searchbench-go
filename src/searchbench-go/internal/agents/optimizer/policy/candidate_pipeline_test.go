@@ -1,4 +1,4 @@
-package policy_test
+package policy
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/localpath"
 	"github.com/becker63/searchbench-go/internal/adapters/workspace/materialize"
-	"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	"github.com/becker63/searchbench-go/internal/pure/domain"
 	"github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
@@ -47,7 +46,7 @@ func TestValidateProposalInWorkspaceUsesSuppliedRoot(t *testing.T) {
 		InterfaceID:  "iface",
 		Code:         "def score_fn():\n    return 1\n",
 	}
-	res, fail := policy.ValidateProposalInWorkspace(context.Background(), ws, proposal)
+	res, fail := ValidateProposalInWorkspace(context.Background(), ws, proposal)
 	if fail != nil && fail.Kind == optimizer.FailureKindPolicyPipelineInfrastructure {
 		t.Skip("uv/ic toolchain not available")
 	}

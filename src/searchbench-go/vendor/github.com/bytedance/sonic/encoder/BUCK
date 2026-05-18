@@ -1,0 +1,10 @@
+go_library(
+    name = "encoder",
+    package_name = "github.com/bytedance/sonic/encoder",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/encoder:encoder",
+    ],
+    visibility = ["PUBLIC"],
+)

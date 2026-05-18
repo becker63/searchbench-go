@@ -1,0 +1,7 @@
+go_library(
+    name = "unix",
+    package_name = "golang.org/x/sys/unix",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

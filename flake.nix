@@ -123,6 +123,7 @@
             huggingface-hub
           ]
         );
+
       in
       {
         formatter = pkgs.nixfmt;
@@ -132,6 +133,9 @@
         devShells.default = pkgs.mkShell {
           packages =
             (with pkgs; [
+              clang
+              lld
+              stdenv.cc.cc
               go
               gopls
               gotools
@@ -150,6 +154,13 @@
             ++ preCommitDev.enabledPackages;
 
           shellHook = ''
+            export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            echo "${pkgs.stdenv.cc.cc.lib}/lib" > tools/libstdcxx_libdir
+            # Prelude go_test binaries use RUNPATH $PROJECT_ROOT/outputs/out/lib for libstdc++.
+            mkdir -p outputs/out/lib
+            for lib in libstdc++.so.6 libgcc_s.so.1; do
+              ln -sfn "${pkgs.stdenv.cc.cc.lib}/lib/$lib" "outputs/out/lib/$lib"
+            done
             mkdir -p .buckconfig.d
             cat >.buckconfig.d/buck2-nix.config <<EOS
             [external_cell_nix]
@@ -161,6 +172,17 @@
           + ''
             echo "searchbench-go: dev shell (pre-commit → Buck2 + hygiene; see AGENTS.md)"
             go version
+            echo ""
+            echo "Go dependency projection (explicit; Buck does not run this):"
+            echo "  cd src/searchbench-go && go mod vendor"
+            echo "  buck2 run prelude//go/tools/gobuckify:gobuckify -- ."
+            if [ ! -f src/searchbench-go/gobuckify.json ]; then
+              echo "  [warn] missing src/searchbench-go/gobuckify.json"
+            elif [ ! -d src/searchbench-go/vendor ]; then
+              echo "  [warn] missing src/searchbench-go/vendor — run go mod vendor"
+            fi
+            echo ""
+            echo "Python/IC: uv lock && uv sync in src/iterative-context; Buck uses wrapper targets only (no Elk)."
           '';
         };
       }

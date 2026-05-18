@@ -1,0 +1,12 @@
+go_library(
+    name = "callbacks",
+    package_name = "github.com/cloudwego/eino/callbacks",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components:components",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/internal/callbacks:callbacks",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    visibility = ["PUBLIC"],
+)

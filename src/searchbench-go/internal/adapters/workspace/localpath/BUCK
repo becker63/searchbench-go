@@ -1,0 +1,27 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "localpath",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/workspace/localpath",
+    srcs = ["provider.go"],
+    deps = [
+        "//src/searchbench-go/internal/adapters/workspace/materialize:materialize",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "localpath_test",
+    srcs = ["provider_test.go"],
+    target_under_test = ":localpath",
+    deps = [
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

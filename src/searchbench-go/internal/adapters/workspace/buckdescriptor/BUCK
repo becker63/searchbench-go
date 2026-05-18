@@ -1,0 +1,30 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "buckdescriptor",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor",
+    srcs = [
+        "descriptor.go",
+        "provider.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/adapters/workspace/materialize:materialize",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "buckdescriptor_test",
+    srcs = ["descriptor_test.go"],
+    target_under_test = ":buckdescriptor",
+    deps = [
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

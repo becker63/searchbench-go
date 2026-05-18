@@ -1,0 +1,51 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "eino",
+    package_name = "github.com/becker63/searchbench-go/internal/agents/evaluator/eino",
+    srcs = [
+        "doc.go",
+        "errors.go",
+        "evaluator.go",
+        "finalizer.go",
+        "phases.go",
+        "retry.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/agents/evaluator/eino/callbacks:callbacks",
+        "//src/searchbench-go/internal/agents/evaluator/prompt:prompt",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/execution:execution",
+        "//src/searchbench-go/internal/pure/usage:usage",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/adk:adk",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/callbacks:callbacks",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/model:model",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/tool:tool",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/compose:compose",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "eino_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":eino",
+    deps = [
+        "//src/searchbench-go/internal/agents/evaluator/eino/callbacks:callbacks",
+        "//src/searchbench-go/internal/agents/evaluator/prompt:prompt",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/execution:execution",
+        "//src/searchbench-go/internal/pure/usage:usage",
+        "//src/searchbench-go/internal/testing/modeltest:modeltest",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/callbacks:callbacks",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/tool:tool",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    labels = [
+        "deterministic",
+        "full",
+        "integration",
+        "no-cgo",
+    ],
+)

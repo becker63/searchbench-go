@@ -24,6 +24,8 @@
         {
           default = pkgs.mkShell {
             packages = [
+              pkgs.clang
+              pkgs.lld
               pkgs.go
               pkgs.git
               pkgs.pkl
@@ -53,6 +55,7 @@
         in
         {
           inherit (pkgs)
+            clang
             go
             git
             pkl

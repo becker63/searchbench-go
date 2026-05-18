@@ -1,0 +1,13 @@
+go_library(
+    name = "v2",
+    package_name = "github.com/pelletier/go-toml/v2",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/pelletier/go-toml/v2/internal/characters:characters",
+        "//src/searchbench-go/vendor/github.com/pelletier/go-toml/v2/internal/danger:danger",
+        "//src/searchbench-go/vendor/github.com/pelletier/go-toml/v2/internal/tracker:tracker",
+        "//src/searchbench-go/vendor/github.com/pelletier/go-toml/v2/unstable:unstable",
+    ],
+    visibility = ["PUBLIC"],
+)

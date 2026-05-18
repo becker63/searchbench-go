@@ -1,8 +1,11 @@
 load("@nix//:flake.bzl", "flake")
-load("@nix//toolchains:python.bzl", "nix_python_bootstrap_toolchain")
 load("@prelude//tests:test_toolchain.bzl", "noop_test_toolchain")
+load("@prelude//toolchains:cxx.bzl", "system_cxx_toolchain")
 load("@prelude//toolchains:genrule.bzl", "system_genrule_toolchain")
+load("@prelude//toolchains:python.bzl", "remote_python_toolchain", "system_python_wheel_toolchain")
 load("@prelude//toolchains:remote_test_execution.bzl", "remote_test_execution_toolchain")
+load("@prelude//toolchains/go:system_go_bootstrap_toolchain.bzl", "system_go_bootstrap_toolchain")
+load("@prelude//toolchains/go:system_go_toolchain.bzl", "system_go_toolchain")
 
 _TARGET_MAPPING = [
     select({k: k for k in ["config//os:linux", "config//os:macos"]}),
@@ -25,22 +28,46 @@ system_genrule_toolchain(
     visibility = ["PUBLIC"],
 )
 
-flake.package(
+system_cxx_toolchain(
+    name = "cxx",
+    compiler_type = "clang",
+    visibility = ["PUBLIC"],
+)
+
+# Prelude Go rules use PATH `go` from nix develop (copies GOROOT at build time).
+system_go_bootstrap_toolchain(
+    name = "go_bootstrap",
+    visibility = ["PUBLIC"],
+)
+
+system_go_toolchain(
+    name = "go",
+    visibility = ["PUBLIC"],
+)
+
+# Hermetic CPython 3.13 (matches IC uv.lock cp313; IC checks use uv wrappers, not prelude python_*).
+remote_python_toolchain(
     name = "python",
+    visibility = ["PUBLIC"],
+)
+
+system_python_wheel_toolchain(
+    name = "python_wheel",
+    visibility = ["PUBLIC"],
+)
+
+# Nix-backed executables for custom rules (pkl, uv, npm, git) and developer workflows.
+flake.package(
+    name = "python_nix",
     binary = "python3",
     package = "python3",
     path = ".",
     target_compatible_with = _TARGET_MAPPING,
-)
-
-nix_python_bootstrap_toolchain(
-    name = "python_bootstrap",
-    python = ":python",
     visibility = ["PUBLIC"],
 )
 
 flake.package(
-    name = "go",
+    name = "go_nix",
     binary = "go",
     package = "go",
     path = ".",

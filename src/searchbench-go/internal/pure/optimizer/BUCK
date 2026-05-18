@@ -1,0 +1,29 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "optimizer",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/optimizer",
+    srcs = [
+        "doc.go",
+        "types.go",
+        "workspace.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/ports/pipeline:pipeline",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/score:score",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "optimizer_test",
+    srcs = ["workspace_test.go"],
+    target_under_test = ":optimizer",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

@@ -1,0 +1,48 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "policy",
+    package_name = "github.com/becker63/searchbench-go/internal/agents/optimizer/policy",
+    srcs = [
+        "candidate_pipeline.go",
+        "canonical.go",
+        "ic_root.go",
+        "pipeline_validation.go",
+        "validate.go",
+        "validate_ic.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/adapters/pipeline/exec:exec",
+        "//src/searchbench-go/internal/adapters/workspace/buckdescriptor:buckdescriptor",
+        "//src/searchbench-go/internal/adapters/workspace/localpath:localpath",
+        "//src/searchbench-go/internal/adapters/workspace/materialize:materialize",
+        "//src/searchbench-go/internal/ports/pipeline:pipeline",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "policy_test",
+    srcs = [
+        "candidate_pipeline_test.go",
+        "pipeline_validation_test.go",
+        "validate_router_test.go",
+    ],
+    target_under_test = ":policy",
+    deps = [
+        "//src/searchbench-go/internal/adapters/pipeline/exec:exec",
+        "//src/searchbench-go/internal/adapters/workspace/buckdescriptor:buckdescriptor",
+        "//src/searchbench-go/internal/adapters/workspace/localpath:localpath",
+        "//src/searchbench-go/internal/adapters/workspace/materialize:materialize",
+        "//src/searchbench-go/internal/ports/pipeline:pipeline",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    labels = [
+        "deterministic",
+        "full",
+        "integration",
+        "no-cgo",
+    ],
+)

@@ -1,4 +1,4 @@
-package iterativecontext_test
+package iterativecontext
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
 	run "github.com/becker63/searchbench-go/internal/pure/execution"
 )
 
@@ -51,8 +50,8 @@ func TestEvaluatorToolListHidesAdminTools(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = clientSession.Close() })
 
-	rt := iterativecontext.NewRuntime(clientSession)
-	factory := iterativecontext.EvaluatorToolFactory(rt)
+	rt := NewRuntime(clientSession)
+	factory := EvaluatorToolFactory(rt)
 	tools, err := factory(run.Spec{})
 	if err != nil {
 		t.Fatalf("tool factory: %v", err)
@@ -130,27 +129,27 @@ func TestPrepareScoreInstallBeforeVerify(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = clientSession.Close() })
 
-	rt := iterativecontext.NewRuntime(clientSession)
+	rt := NewRuntime(clientSession)
 
 	if err := rt.VerifyScore(ctx, "pol-1"); err == nil {
 		t.Fatal("verify before install: expected error")
-	} else if !iterativecontext.IsVerify(err) {
+	} else if !IsVerify(err) {
 		t.Fatalf("expected verify error kind, got %v", err)
 	}
 
-	if err := iterativecontext.PrepareScore(ctx, rt, iterativecontext.ScoreInstallParams{
+	if err := PrepareScore(ctx, rt, ScoreInstallParams{
 		PolicyPath: "/tmp/fake_policy.py",
 		PolicyID:   "pol-1",
 	}); err != nil {
 		t.Fatalf("PrepareScore: %v", err)
 	}
 
-	factory := iterativecontext.EvaluatorToolFactory(rt)
+	factory := EvaluatorToolFactory(rt)
 	_, ferr := factory(run.Spec{})
 	if ferr == nil {
 		t.Fatal("expected error: no evaluator tools registered on fake server")
 	}
-	if !iterativecontext.IsToolSetup(ferr) {
+	if !IsToolSetup(ferr) {
 		t.Fatalf("expected tool_setup error, got %v", ferr)
 	}
 }
@@ -180,12 +179,12 @@ func TestInstallScoreSurfacesJSONErrorKind(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = clientSession.Close() })
 
-	rt := iterativecontext.NewRuntime(clientSession)
-	err = rt.InstallScore(ctx, iterativecontext.ScoreInstallParams{PolicyPath: "/x", PolicyID: "p"})
+	rt := NewRuntime(clientSession)
+	err = rt.InstallScore(ctx, ScoreInstallParams{PolicyPath: "/x", PolicyID: "p"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !iterativecontext.IsInstall(err) {
+	if !IsInstall(err) {
 		t.Fatalf("expected install error kind, got %v", err)
 	}
 }
@@ -218,12 +217,12 @@ func TestCallToolEvaluatorSurfacesToolKind(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = clientSession.Close() })
 
-	rt := iterativecontext.NewRuntime(clientSession)
+	rt := NewRuntime(clientSession)
 	_, err = rt.CallTool(ctx, "resolve", []byte(`{}`))
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !iterativecontext.IsToolCall(err) {
+	if !IsToolCall(err) {
 		t.Fatalf("expected tool-call error, got %v", err)
 	}
 }
@@ -232,13 +231,13 @@ func TestOpenCommandFailsSession(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, err := iterativecontext.OpenCommand(ctx, iterativecontext.CommandConfig{
+	_, err := OpenCommand(ctx, CommandConfig{
 		Command: exec.Command("false"),
 	})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !iterativecontext.IsSession(err) {
+	if !IsSession(err) {
 		t.Fatalf("expected session error, got %v", err)
 	}
 }

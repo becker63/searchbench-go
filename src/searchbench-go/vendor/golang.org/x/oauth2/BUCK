@@ -1,0 +1,10 @@
+go_library(
+    name = "oauth2",
+    package_name = "golang.org/x/oauth2",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/golang.org/x/oauth2/internal:internal",
+    ],
+    visibility = ["PUBLIC"],
+)

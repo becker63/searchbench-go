@@ -1,0 +1,10 @@
+go_library(
+    name = "logrus",
+    package_name = "github.com/sirupsen/logrus",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/golang.org/x/sys/unix:unix",
+    ],
+    visibility = ["PUBLIC"],
+)

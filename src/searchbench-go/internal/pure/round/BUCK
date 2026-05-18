@@ -1,0 +1,17 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "round",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/round",
+    srcs = [
+        "continuation.go",
+        "round.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/game:game",
+        "//src/searchbench-go/internal/pure/report:report",
+        "//src/searchbench-go/internal/pure/score:score",
+    ],
+    visibility = ["PUBLIC"],
+)

@@ -1,0 +1,10 @@
+go_library(
+    name = "loaders",
+    package_name = "github.com/nikolalohinski/gonja/loaders",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/pkg/errors:errors",
+    ],
+    visibility = ["PUBLIC"],
+)

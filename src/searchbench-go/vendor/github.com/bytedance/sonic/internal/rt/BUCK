@@ -1,0 +1,19 @@
+go_library(
+    name = "rt",
+    package_name = "github.com/bytedance/sonic/internal/rt",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/option:option",
+        "//src/searchbench-go/vendor/golang.org/x/arch/x86/x86asm:x86asm",
+    ] + select({
+        "DEFAULT": [],
+        "config//os:linux": select({
+            "DEFAULT": [],
+            "config//cpu:x86_64": [
+                "//src/searchbench-go/vendor/github.com/cloudwego/base64x:base64x",
+            ],
+        }),
+    }),
+    visibility = ["PUBLIC"],
+)

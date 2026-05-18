@@ -1,0 +1,10 @@
+go_library(
+    name = "jwriter",
+    package_name = "github.com/mailru/easyjson/jwriter",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/mailru/easyjson/buffer:buffer",
+    ],
+    visibility = ["PUBLIC"],
+)

@@ -21,11 +21,17 @@ func MonorepoRoot(tb testing.TB) string {
 // GoModuleRoot is the directory containing go.mod for the SearchBench Go module.
 func GoModuleRoot(tb testing.TB) string {
 	tb.Helper()
-	return walkUpToFile(tb, callerDir(tb), "go.mod")
+	if root, ok := walkUpToFileMaybe(callerDir(tb), "go.mod"); ok {
+		return root
+	}
+	return filepath.Join(walkUpToFile(tb, callerDir(tb), filepath.Join("src", "searchbench-go", "go.mod")), "src", "searchbench-go")
 }
 
 func callerDir(tb testing.TB) string {
 	tb.Helper()
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
 	_, file, _, ok := runtime.Caller(2)
 	if !ok {
 		tb.Fatal("runtime.Caller failed")
@@ -35,15 +41,23 @@ func callerDir(tb testing.TB) string {
 
 func walkUpToFile(tb testing.TB, startDir, rel string) string {
 	tb.Helper()
+	if root, ok := walkUpToFileMaybe(startDir, rel); ok {
+		return root
+	}
+	tb.Fatalf("walk-up: %q not found from %q", rel, startDir)
+	return ""
+}
+
+func walkUpToFileMaybe(startDir, rel string) (string, bool) {
 	dir := filepath.Clean(startDir)
 	for {
 		candidate := filepath.Join(dir, rel)
 		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
-			return dir
+			return dir, true
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			tb.Fatalf("walk-up: %q not found from %q", rel, startDir)
+			return "", false
 		}
 		dir = parent
 	}

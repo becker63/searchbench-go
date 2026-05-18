@@ -1,0 +1,12 @@
+go_library(
+    name = "stacktrace",
+    package_name = "go.uber.org/zap/internal/stacktrace",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/go.uber.org/zap/buffer:buffer",
+        "//src/searchbench-go/vendor/go.uber.org/zap/internal/bufferpool:bufferpool",
+        "//src/searchbench-go/vendor/go.uber.org/zap/internal/pool:pool",
+    ],
+    visibility = ["PUBLIC"],
+)

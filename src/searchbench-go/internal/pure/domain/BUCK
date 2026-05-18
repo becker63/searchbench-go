@@ -1,0 +1,32 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "domain",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/domain",
+    srcs = [
+        "artifact.go",
+        "doc.go",
+        "ids.go",
+        "localization.go",
+        "match.go",
+        "nonempty.go",
+        "pair.go",
+        "prediction.go",
+        "repo.go",
+        "system.go",
+        "usage.go",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "domain_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":domain",
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

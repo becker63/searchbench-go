@@ -1,0 +1,34 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "lca",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/dataset/lca",
+    srcs = [
+        "export.go",
+        "load.go",
+        "names.go",
+        "source.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/adapters/materialize/git:git",
+        "//src/searchbench-go/internal/ports/dataset:dataset",
+        "//src/searchbench-go/internal/pure/domain:domain",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "lca_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":lca",
+    deps = [
+        "//src/searchbench-go/internal/ports/dataset:dataset",
+        "//src/searchbench-go/internal/pure/domain:domain",
+    ],
+    labels = [
+        "deterministic",
+        "full",
+        "integration",
+        "no-cgo",
+    ],
+)

@@ -1,0 +1,10 @@
+go_library(
+    name = "json",
+    package_name = "github.com/modelcontextprotocol/go-sdk/internal/json",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/segmentio/encoding/json:json",
+    ],
+    visibility = ["PUBLIC"],
+)

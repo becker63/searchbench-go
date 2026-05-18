@@ -1,0 +1,15 @@
+go_library(
+    name = "zap",
+    package_name = "go.uber.org/zap",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/go.uber.org/multierr:multierr",
+        "//src/searchbench-go/vendor/go.uber.org/zap/internal:internal",
+        "//src/searchbench-go/vendor/go.uber.org/zap/internal/bufferpool:bufferpool",
+        "//src/searchbench-go/vendor/go.uber.org/zap/internal/pool:pool",
+        "//src/searchbench-go/vendor/go.uber.org/zap/internal/stacktrace:stacktrace",
+        "//src/searchbench-go/vendor/go.uber.org/zap/zapcore:zapcore",
+    ],
+    visibility = ["PUBLIC"],
+)

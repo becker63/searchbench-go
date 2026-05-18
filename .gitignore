@@ -1,7 +1,10 @@
 #iterative-context
 # Local diff exports (blog / notes)
 /git-diff-export.patch
-
+src/searchbench-go/vendor/**
+!src/searchbench-go/vendor/**/
+!src/searchbench-go/vendor/**/BUCK
+buck-out
 .cache/
 .codex
 .tmp/
@@ -14,7 +17,11 @@
 /result-*
 /.direnv
 /buck-out/
+/outputs/
+/tools/libstdcxx_libdir
 /.buckconfig.d/
+/prelude
+/src/searchbench-go/.buckconfig.d/
 /searchbench
 /coverage.out
 /*.test

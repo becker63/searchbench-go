@@ -1,0 +1,7 @@
+go_library(
+    name = "reflect2",
+    package_name = "github.com/modern-go/reflect2",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

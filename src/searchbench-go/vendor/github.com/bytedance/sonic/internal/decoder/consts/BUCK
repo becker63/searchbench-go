@@ -1,0 +1,10 @@
+go_library(
+    name = "consts",
+    package_name = "github.com/bytedance/sonic/internal/decoder/consts",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bytedance/sonic/internal/native/types:types",
+    ],
+    visibility = ["PUBLIC"],
+)

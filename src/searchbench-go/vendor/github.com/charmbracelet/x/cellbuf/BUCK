@@ -1,0 +1,14 @@
+go_library(
+    name = "cellbuf",
+    package_name = "github.com/charmbracelet/x/cellbuf",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/charmbracelet/colorprofile:colorprofile",
+        "//src/searchbench-go/vendor/github.com/charmbracelet/x/ansi:ansi",
+        "//src/searchbench-go/vendor/github.com/charmbracelet/x/term:term",
+        "//src/searchbench-go/vendor/github.com/mattn/go-runewidth:go-runewidth",
+        "//src/searchbench-go/vendor/github.com/rivo/uniseg:uniseg",
+    ],
+    visibility = ["PUBLIC"],
+)

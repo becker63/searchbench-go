@@ -1,9 +1,8 @@
-package policy_test
+package policy
 
 import (
 	"testing"
 
-	"github.com/becker63/searchbench-go/internal/agents/optimizer/policy"
 	"github.com/becker63/searchbench-go/internal/ports/pipeline"
 )
 
@@ -13,7 +12,7 @@ func TestPipelineValidationFromPortSteps(t *testing.T) {
 		{Name: "stage_policy", Passed: true, CWD: "/ws", Command: []string{}},
 		{Name: "pytest", Passed: false, CWD: "/ws", Command: []string{"uv", "run", "pytest"}, ExitCode: 1},
 	}
-	out := policy.PipelineValidationFromPortSteps(results)
+	out := PipelineValidationFromPortSteps(results)
 	if out.OK {
 		t.Fatal("expected validation not ok")
 	}

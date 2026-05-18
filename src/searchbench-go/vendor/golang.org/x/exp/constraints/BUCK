@@ -1,0 +1,7 @@
+go_library(
+    name = "constraints",
+    package_name = "golang.org/x/exp/constraints",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)

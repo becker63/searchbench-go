@@ -1,9 +1,8 @@
-package iterativecontext_test
+package iterativecontext
 
 import (
 	"testing"
 
-	ic "github.com/becker63/searchbench-go/internal/adapters/backend/iterativecontext"
 	"github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -31,7 +30,7 @@ func TestLaunchCWDMismatchErrors(t *testing.T) {
 			Argv: []string{"uv", "run", "python", "-m", "iterative_context.server"},
 		},
 	}
-	if err := ic.ValidateAcceptedLaunch(accepted); err == nil {
+	if err := ValidateAcceptedLaunch(accepted); err == nil {
 		t.Fatal("expected cwd mismatch error")
 	}
 }
@@ -40,10 +39,10 @@ func TestRuntimeIdentityLocalPath(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	accepted := acceptedCandidate(root, optimizer.SeedProviderLocalPath, "/repo/src/iterative-context")
-	if err := ic.ValidateAcceptedLaunch(accepted); err != nil {
+	if err := ValidateAcceptedLaunch(accepted); err != nil {
 		t.Fatal(err)
 	}
-	id := ic.RuntimeIdentityFromAccepted(accepted, true)
+	id := RuntimeIdentityFromAccepted(accepted, true)
 	if id.SeedIdentity.Provider != optimizer.SeedProviderLocalPath {
 		t.Fatalf("provider: %s", id.SeedIdentity.Provider)
 	}
@@ -53,10 +52,10 @@ func TestRuntimeIdentityBuckDescriptor(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	accepted := acceptedCandidate(root, optimizer.SeedProviderBuckDescriptor, "//src/iterative-context:optimizable_backend")
-	if err := ic.ValidateAcceptedLaunch(accepted); err != nil {
+	if err := ValidateAcceptedLaunch(accepted); err != nil {
 		t.Fatal(err)
 	}
-	id := ic.RuntimeIdentityFromAccepted(accepted, true)
+	id := RuntimeIdentityFromAccepted(accepted, true)
 	if id.SeedIdentity.Provider != optimizer.SeedProviderBuckDescriptor {
 		t.Fatalf("provider: %s", id.SeedIdentity.Provider)
 	}

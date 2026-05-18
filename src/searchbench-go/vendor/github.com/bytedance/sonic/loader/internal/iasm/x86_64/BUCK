@@ -1,0 +1,24 @@
+go_library(
+    name = "x86_64",
+    package_name = "github.com/bytedance/sonic/loader/internal/iasm/x86_64",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+    ] + select({
+        "DEFAULT": [],
+        "config//os:linux": select({
+            "DEFAULT": [],
+            "config//cpu:x86_64": [
+                "//src/searchbench-go/vendor/github.com/bytedance/sonic/loader/internal/iasm/expr:expr",
+            ],
+        }),
+    }),
+    target_compatible_with = select({
+        "DEFAULT": ["config//:none"],
+        "config//os:linux": select({
+            "DEFAULT": ["config//:none"],
+            "config//cpu:x86_64": [],
+        }),
+    }),
+    visibility = ["PUBLIC"],
+)

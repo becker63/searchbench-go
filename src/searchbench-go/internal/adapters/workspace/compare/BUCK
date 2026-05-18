@@ -1,0 +1,19 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_test(
+    name = "compare_test",
+    srcs = ["compare_test.go"],
+    deps = [
+        "//src/searchbench-go/internal/adapters/workspace/buckdescriptor:buckdescriptor",
+        "//src/searchbench-go/internal/adapters/workspace/localpath:localpath",
+        "//src/searchbench-go/internal/adapters/workspace/materialize:materialize",
+        "//src/searchbench-go/internal/agents/optimizer/policy:policy",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    labels = [
+        "deterministic",
+        "fast",
+        "integration",
+        "no-cgo",
+    ],
+)

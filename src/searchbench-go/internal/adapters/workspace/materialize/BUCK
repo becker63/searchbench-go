@@ -1,0 +1,30 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "materialize",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/workspace/materialize",
+    srcs = [
+        "digest.go",
+        "exclude.go",
+        "materialize.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "materialize_test",
+    srcs = ["materialize_test.go"],
+    target_under_test = ":materialize",
+    deps = [
+        "//src/searchbench-go/internal/pure/optimizer:optimizer",
+    ],
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

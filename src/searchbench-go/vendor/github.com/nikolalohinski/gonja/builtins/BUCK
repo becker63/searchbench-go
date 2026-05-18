@@ -1,0 +1,19 @@
+go_library(
+    name = "builtins",
+    package_name = "github.com/nikolalohinski/gonja/builtins",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/dustin/go-humanize:go-humanize",
+        "//src/searchbench-go/vendor/github.com/json-iterator/go:go",
+        "//src/searchbench-go/vendor/github.com/nikolalohinski/gonja/builtins/statements:statements",
+        "//src/searchbench-go/vendor/github.com/nikolalohinski/gonja/exec:exec",
+        "//src/searchbench-go/vendor/github.com/nikolalohinski/gonja/utils:utils",
+        "//src/searchbench-go/vendor/github.com/pelletier/go-toml/v2:v2",
+        "//src/searchbench-go/vendor/github.com/pkg/errors:errors",
+        "//src/searchbench-go/vendor/github.com/yargevad/filepathx:filepathx",
+        "//src/searchbench-go/vendor/golang.org/x/exp/slices:slices",
+        "//src/searchbench-go/vendor/gopkg.in/yaml.v3:yaml.v3",
+    ],
+    visibility = ["PUBLIC"],
+)

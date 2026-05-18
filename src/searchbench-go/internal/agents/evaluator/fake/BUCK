@@ -1,0 +1,25 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "fake",
+    package_name = "github.com/becker63/searchbench-go/internal/agents/evaluator/fake",
+    srcs = [
+        "backend.go",
+        "dataset.go",
+        "doc.go",
+        "graph.go",
+        "scorer.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/ports/dataset:dataset",
+        "//src/searchbench-go/internal/pure/codegraph:codegraph",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/execution:execution",
+        "//src/searchbench-go/internal/pure/report:report",
+        "//src/searchbench-go/internal/pure/score:score",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/model:model",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/components/tool:tool",
+        "//src/searchbench-go/vendor/github.com/cloudwego/eino/schema:schema",
+    ],
+    visibility = ["PUBLIC"],
+)

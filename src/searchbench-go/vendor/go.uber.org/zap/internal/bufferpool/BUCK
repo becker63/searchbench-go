@@ -1,0 +1,10 @@
+go_library(
+    name = "bufferpool",
+    package_name = "go.uber.org/zap/internal/bufferpool",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/go.uber.org/zap/buffer:buffer",
+    ],
+    visibility = ["PUBLIC"],
+)

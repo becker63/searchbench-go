@@ -1,0 +1,38 @@
+load("@prelude//:rules.bzl", "go_library", "go_test")
+
+go_library(
+    name = "score",
+    package_name = "github.com/becker63/searchbench-go/internal/pure/score",
+    srcs = [
+        "comparison.go",
+        "direction.go",
+        "doc.go",
+        "evidence.go",
+        "input.go",
+        "metric.go",
+        "objective.go",
+        "scored_run.go",
+        "scoreset.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/pure/codegraph:codegraph",
+        "//src/searchbench-go/internal/pure/domain:domain",
+        "//src/searchbench-go/internal/pure/execution:execution",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "score_test",
+    srcs = glob(["*_test.go"]),
+    target_under_test = ":score",
+    deps = [
+        "//src/searchbench-go/internal/testing/reporoot:reporoot",
+    ],
+    labels = [
+        "deterministic",
+        "fast",
+        "no-cgo",
+        "unit",
+    ],
+)

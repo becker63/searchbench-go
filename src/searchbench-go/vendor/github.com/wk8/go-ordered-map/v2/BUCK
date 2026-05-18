@@ -1,0 +1,13 @@
+go_library(
+    name = "v2",
+    package_name = "github.com/wk8/go-ordered-map/v2",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/github.com/bahlo/generic-list-go:generic-list-go",
+        "//src/searchbench-go/vendor/github.com/buger/jsonparser:jsonparser",
+        "//src/searchbench-go/vendor/github.com/mailru/easyjson/jwriter:jwriter",
+        "//src/searchbench-go/vendor/gopkg.in/yaml.v3:yaml.v3",
+    ],
+    visibility = ["PUBLIC"],
+)

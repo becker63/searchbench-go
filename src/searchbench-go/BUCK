@@ -1,19 +1,27 @@
-load("//build_defs:tool_ops.bzl", "go_module_test", "pkl_go_types_check", "pkl_go_types_gen")
-load("@prelude//:rules.bzl", "test_suite")
+load("//build_defs:tool_ops.bzl", "pkl_go_types_check", "pkl_go_types_gen")
 
-go_module_test(
-    name = "go_tests",
-    module_dir = "src/searchbench-go",
-    argv = ["test", "./..."],
+load("@prelude//:rules.bzl", "alias", "filegroup", "test_suite")
+
+filegroup(
+    name = "module_sources",
+    srcs = glob(
+        [
+            "**/*.go",
+            "go.mod",
+            "go.sum",
+        ],
+        exclude = ["vendor/**"],
+    ),
+    visibility = ["PUBLIC"],
 )
 
-go_module_test(
-    name = "go_cli_build",
-    module_dir = "src/searchbench-go",
-    argv = ["build", "-o", "/dev/null", "./cmd/searchbench"],
+# Native CLI artifact.
+alias(
+    name = "searchbench",
+    actual = "//src/searchbench-go/cmd/searchbench:searchbench",
+    visibility = ["PUBLIC"],
 )
 
-# Regenerate Go bindings from configs/schema/SearchBenchRound.pkl (mutating).
 pkl_go_types_gen(
     name = "pkl_go_types",
     schema_path = "configs/schema/SearchBenchRound.pkl",
@@ -23,10 +31,54 @@ pkl_go_types_check(
     name = "pkl_go_types_check",
 )
 
+# Prelude go_test targets with no missing vendor labels (see BUCK_MIGRATION.md).
+test_suite(
+    name = "go_native_fast",
+    tests = [
+        "//src/searchbench-go/internal/adapters/trace/langsmith:langsmith_test",
+        "//src/searchbench-go/internal/adapters/workspace/buckdescriptor:buckdescriptor_test",
+        "//src/searchbench-go/internal/adapters/workspace/compare:compare_test",
+        "//src/searchbench-go/internal/adapters/workspace/localpath:localpath_test",
+        "//src/searchbench-go/internal/adapters/workspace/materialize:materialize_test",
+        "//src/searchbench-go/internal/adapters/materialize/git:git_test",
+        "//src/searchbench-go/internal/adapters/pipeline/exec:exec_test",
+        "//src/searchbench-go/internal/agents/evaluator/eino/callbacks:callbacks_test",
+        "//src/searchbench-go/internal/agents/evaluator/policy:policy_test",
+        "//src/searchbench-go/internal/agents/evaluator/prompt:prompt_test",
+        "//src/searchbench-go/internal/agents/optimizer/prompt:prompt_test",
+        "//src/searchbench-go/internal/architecture:imports_boundary_test",
+        "//src/searchbench-go/internal/games/codelocalization:codelocalization_test",
+        "//src/searchbench-go/internal/ports/pipeline:pipeline_test",
+        "//src/searchbench-go/internal/pure/codegraph:codegraph_test",
+        "//src/searchbench-go/internal/pure/domain:domain_test",
+        "//src/searchbench-go/internal/pure/liveconfig:liveconfig_test",
+        "//src/searchbench-go/internal/pure/optimizer:optimizer_test",
+        "//src/searchbench-go/internal/pure/report:report_test",
+        "//src/searchbench-go/internal/pure/score:score_test",
+        "//src/searchbench-go/internal/pure/usage:usage_unit_test",
+        "//src/searchbench-go/internal/surface/logging:logging_test",
+        "//src/searchbench-go/internal/adapters/report/text:text_test",
+    ],
+)
+
+test_suite(
+    name = "go_native_full",
+    tests = [
+        ":go_native_fast",
+        "//src/searchbench-go/internal/adapters/dataset/lca:lca_test",
+        "//src/searchbench-go/internal/adapters/config/pkl:pkl_test",
+        "//src/searchbench-go/internal/adapters/providers/evaluatormodel:evaluatormodel_test",
+        "//src/searchbench-go/internal/agents/evaluator/eino:eino_test",
+        "//src/searchbench-go/internal/agents/optimizer/eino:eino_test",
+        "//src/searchbench-go/internal/agents/optimizer/policy:policy_test",
+        "//src/searchbench-go/internal/testing/modeltest:modeltest_test",
+        "//configs/rounds/live-ic-vs-jcodemunch:validate",
+    ],
+)
+
 test_suite(
     name = "check",
     tests = [
-        ":go_tests",
-        ":go_cli_build",
+        ":go_native_full",
     ],
 )

@@ -1,4 +1,4 @@
-package buckdescriptor_test
+package buckdescriptor
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/becker63/searchbench-go/internal/adapters/workspace/buckdescriptor"
 	"github.com/becker63/searchbench-go/internal/pure/optimizer"
 )
 
@@ -37,7 +36,7 @@ const sampleDescriptor = `{
 func TestParseDescriptorRejectsRepoChecks(t *testing.T) {
 	t.Parallel()
 	bad := sampleDescriptor[:len(sampleDescriptor)-1] + `,"repo_checks":{"fast":"//src/iterative-context:check"}}`
-	_, err := buckdescriptor.ParseDescriptorJSON([]byte(bad))
+	_, err := ParseDescriptorJSON([]byte(bad))
 	if err == nil {
 		t.Fatal("expected repo_checks rejection")
 	}
@@ -45,7 +44,7 @@ func TestParseDescriptorRejectsRepoChecks(t *testing.T) {
 
 func TestParseDescriptorOK(t *testing.T) {
 	t.Parallel()
-	desc, err := buckdescriptor.ParseDescriptorJSON([]byte(sampleDescriptor))
+	desc, err := ParseDescriptorJSON([]byte(sampleDescriptor))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +67,7 @@ func TestBuckProviderMapsDescriptorToSeed(t *testing.T) {
 	if err := os.WriteFile(descPath, []byte(sampleDescriptor), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p := buckdescriptor.Provider{DescriptorPath: descPath, RepoRoot: repo}
+	p := Provider{DescriptorPath: descPath, RepoRoot: repo}
 	seed, err := p.PrepareSeed(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -95,7 +94,7 @@ func TestLoadCommittedDescriptor(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		candidate := filepath.Join(repo, "src", "iterative-context", "optimizable_backend.json")
 		if _, statErr := os.Stat(candidate); statErr == nil {
-			desc, err := buckdescriptor.LoadDescriptorFile(candidate)
+			desc, err := LoadDescriptorFile(candidate)
 			if err != nil {
 				t.Fatal(err)
 			}

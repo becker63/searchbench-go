@@ -34,6 +34,6 @@ Round README: [configs/rounds/live-ic-vs-jcodemunch/README.md](../../configs/rou
 
 ## Implementation details (not public)
 
-Buck targets are declared as Starlark rules/macros (`searchbench_round_op`, `go_external_package_test`, `python_module_test`, etc.) that invoke toolchain executables directly. Round operations use the `go_binary` at `//src/searchbench-go/cmd/searchbench:searchbench`. There are no repo-owned `.sh` operation entrypoints.
+Buck targets use prelude Go rules (`go_library`, `go_test`, `go_binary`) plus thin wrappers (`searchbench_round_op`, `uv_project_test`). Round operations use the native CLI artifact at `//src/searchbench-go/cmd/searchbench:searchbench`. iterative-context checks use `uv` wrappers, not a Buck Python wheel graph. There are no repo-owned `.sh` operation entrypoints.
 
 The Go binary and its flags are not a stable user-facing API. Raw `go test`, `go build`, and `./searchbench` remain debugging fallbacks for harness developers only.

@@ -1,0 +1,46 @@
+load("@prelude//:rules.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "pkl",
+    package_name = "github.com/becker63/searchbench-go/internal/adapters/config/pkl",
+    srcs = [
+        "doc.go",
+        "load.go",
+        "round_spec.go",
+        "validate.go",
+        "workspace_seed.go",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/adapters/config/pkl/generated/backend:backend",
+        "//src/searchbench-go/internal/adapters/config/pkl/generated/nextchallengerevidencekind:nextchallengerevidencekind",
+        "//src/searchbench-go/internal/adapters/config/pkl/generated/optimizerdeniedevidencekind:optimizerdeniedevidencekind",
+        "//src/searchbench-go/internal/adapters/config/pkl/generated/provider:provider",
+        "//src/searchbench-go/internal/adapters/config/pkl/generated/reportformat:reportformat",
+        "//src/searchbench-go/internal/adapters/config/pkl/generated:generated",
+    ],
+    visibility = ["PUBLIC"],
+)
+
+go_test(
+    name = "pkl_test",
+    srcs = [
+        "load_test.go",
+        "validate_test.go",
+        "workspace_seed_test.go",
+    ],
+    target_under_test = ":pkl",
+    resources = [
+        "//:searchbench_go_test_resources",
+        "//src/searchbench-go:module_sources",
+    ],
+    deps = [
+        "//src/searchbench-go/internal/testing/importcheck:importcheck",
+        "//src/searchbench-go/internal/testing/reporoot:reporoot",
+    ],
+    labels = [
+        "deterministic",
+        "full",
+        "integration",
+        "no-cgo",
+    ],
+)

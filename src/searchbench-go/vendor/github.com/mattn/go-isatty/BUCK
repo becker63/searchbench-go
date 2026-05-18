@@ -1,0 +1,10 @@
+go_library(
+    name = "go-isatty",
+    package_name = "github.com/mattn/go-isatty",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    deps = [
+        "//src/searchbench-go/vendor/golang.org/x/sys/unix:unix",
+    ],
+    visibility = ["PUBLIC"],
+)

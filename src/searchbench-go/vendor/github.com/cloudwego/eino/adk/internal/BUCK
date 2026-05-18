@@ -1,0 +1,7 @@
+go_library(
+    name = "internal",
+    package_name = "github.com/cloudwego/eino/adk/internal",
+    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
+    header_namespace = "",
+    visibility = ["PUBLIC"],
+)
