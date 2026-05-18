@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "searchbench.bxl_target_summary.v1",
+  "type": "object",
+  "required": ["kind", "target", "resolved"],
+  "properties": {
+    "kind": { "const": "searchbench.bxl_target_summary.v1" },
+    "target": { "type": "string" },
+    "resolved": { "type": "boolean" },
+    "metadata": { "type": "object" },
+    "error": { "type": "string" }
+  }
+}

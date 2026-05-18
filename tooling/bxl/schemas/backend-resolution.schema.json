@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "searchbench.backend_resolution.v1",
+  "type": "object",
+  "required": ["kind", "target", "resolved"],
+  "properties": {
+    "kind": { "const": "searchbench.backend_resolution.v1" },
+    "target": { "type": "string" },
+    "resolved": { "type": "boolean" },
+    "descriptor": { "type": "string" },
+    "source": { "type": "object" },
+    "launcher": { "type": "object" },
+    "candidate_validator": { "type": "object" },
+    "runtime_admin": { "type": "object" },
+    "metadata": { "type": "object" },
+    "error": { "type": "string" }
+  }
+}

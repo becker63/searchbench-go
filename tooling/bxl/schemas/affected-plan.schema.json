@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "searchbench.affected_plan.v1",
+  "type": "object",
+  "required": ["kind", "changed_files"],
+  "properties": {
+    "kind": { "const": "searchbench.affected_plan.v1" },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "affected_backends": { "type": "array", "items": { "type": "string" } },
+    "affected_rounds": { "type": "array", "items": { "type": "string" } },
+    "proof_targets": { "type": "array", "items": { "type": "string" } },
+    "fallback_targets": { "type": "array", "items": { "type": "string" } },
+    "possibly_affected_docs": { "type": "array", "items": { "type": "string" } },
+    "heuristic": { "type": "boolean" }
+  }
+}

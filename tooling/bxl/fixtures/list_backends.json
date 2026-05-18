@@ -1,0 +1,11 @@
+{
+  "kind": "searchbench.backend_inventory.v1",
+  "backends": [
+    {
+      "target": "//src/iterative-context:optimizable_backend",
+      "backend_kind": "mcp_stdio",
+      "game": "code-localization",
+      "descriptor": "src/iterative-context/optimizable_backend.json"
+    }
+  ]
+}

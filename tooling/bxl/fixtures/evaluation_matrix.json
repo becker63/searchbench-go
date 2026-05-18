@@ -1,0 +1,25 @@
+{
+  "kind": "searchbench.evaluation_matrix.v1",
+  "rounds": [
+    "//configs/rounds/local-ic-vs-jcodemunch:round",
+    "//configs/rounds/optimize-ic:round",
+    "//configs/rounds/live-ic-vs-jcodemunch:round"
+  ],
+  "backends": [
+    "//src/iterative-context:optimizable_backend"
+  ],
+  "comparisons": [
+    {
+      "round": "//configs/rounds/local-ic-vs-jcodemunch:round",
+      "incumbent": "//src/jcodemunch:optimizable_backend",
+      "challenger": "//src/iterative-context:optimizable_backend",
+      "note": "jCodeMunch optimizable_backend target not modeled yet; incumbent label is aspirational"
+    },
+    {
+      "round": "//configs/rounds/live-ic-vs-jcodemunch:round",
+      "incumbent": null,
+      "challenger": "//src/iterative-context:optimizable_backend",
+      "note": "live round uses IC challenger via buck_descriptor in round.pkl"
+    }
+  ]
+}

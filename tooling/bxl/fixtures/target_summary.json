@@ -1,0 +1,9 @@
+{
+  "kind": "searchbench.bxl_target_summary.v1",
+  "target": "//src/iterative-context:optimizable_backend",
+  "resolved": true,
+  "metadata": {
+    "label": "//src/iterative-context:optimizable_backend",
+    "kind": "optimizable_backend"
+  }
+}

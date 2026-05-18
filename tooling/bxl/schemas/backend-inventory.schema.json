@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "searchbench.backend_inventory.v1",
+  "type": "object",
+  "required": ["kind", "backends"],
+  "properties": {
+    "kind": { "const": "searchbench.backend_inventory.v1" },
+    "backends": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["target", "backend_kind", "game"],
+        "properties": {
+          "target": { "type": "string" },
+          "backend_kind": { "type": "string" },
+          "game": { "type": "string" },
+          "descriptor": { "type": "string" }
+        }
+      }
+    }
+  }
+}

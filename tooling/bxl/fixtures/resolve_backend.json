@@ -1,0 +1,26 @@
+{
+  "kind": "searchbench.backend_resolution.v1",
+  "target": "//src/iterative-context:optimizable_backend",
+  "resolved": true,
+  "descriptor": "src/iterative-context/optimizable_backend.json",
+  "source": {
+    "kind": "local_path",
+    "path": "src/iterative-context"
+  },
+  "launcher": {
+    "kind": "mcp_stdio",
+    "cwd_mode": "candidate_workspace"
+  },
+  "candidate_validator": {
+    "kind": "ic_policy_pipeline"
+  },
+  "runtime_admin": {
+    "install_tool": "install_score",
+    "verify_tool": "verify_score",
+    "hidden_from_evaluator": true
+  },
+  "metadata": {
+    "backend_kind": "mcp_stdio",
+    "game": "code-localization"
+  }
+}

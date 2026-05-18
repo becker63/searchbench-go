@@ -1,0 +1,83 @@
+# SearchBench work-graph BXL planners (#94). Emit JSON plans only; no evaluation or Git mutation.
+load("//tooling/bxl:planner.bzl", "affected_plan_doc", "backend_inventory_doc", "evaluation_matrix_doc", "proof_plan_doc", "resolve_backend_doc", "target_summary_doc")
+
+def _emit(ctx, doc):
+    ctx.output.print_json(doc)
+
+def _resolve_backend_impl(ctx):
+    target = ctx.cli_args.backend
+    _emit(ctx, resolve_backend_doc(target))
+
+resolve_backend = bxl_main(
+    impl = _resolve_backend_impl,
+    cli_args = {
+        "backend": cli_args.string(
+            doc = "Optimizable backend label, e.g. //src/iterative-context:optimizable_backend",
+        ),
+    },
+)
+
+def _list_backends_impl(ctx):
+    _emit(ctx, backend_inventory_doc())
+
+list_backends = bxl_main(
+    impl = _list_backends_impl,
+    cli_args = {},
+)
+
+def _proof_plan_impl(ctx):
+    _emit(ctx, proof_plan_doc(ctx.cli_args.target))
+
+proof_plan = bxl_main(
+    impl = _proof_plan_impl,
+    cli_args = {
+        "target": cli_args.string(
+            doc = "Round or gate label, e.g. //configs/rounds/optimize-ic:round",
+        ),
+    },
+)
+
+def _affected_plan_impl(ctx):
+    lines = []
+    for path in ctx.cli_args.changed_file:
+        lines.append(path)
+    if ctx.cli_args.changed_files_text:
+        for line in ctx.cli_args.changed_files_text.splitlines():
+            line = line.strip()
+            if line:
+                lines.append(line)
+    _emit(ctx, affected_plan_doc("\n".join(lines)))
+
+affected_plan = bxl_main(
+    impl = _affected_plan_impl,
+    cli_args = {
+        "changed-file": cli_args.list(
+            cli_args.string(),
+            doc = "Changed project-relative path (repeatable)",
+        ),
+        "changed-files-text": cli_args.option(
+            cli_args.string(),
+            doc = "Newline-separated changed paths (alternative to repeating --changed-file)",
+        ),
+    },
+)
+
+def _evaluation_matrix_impl(ctx):
+    _emit(ctx, evaluation_matrix_doc())
+
+evaluation_matrix = bxl_main(
+    impl = _evaluation_matrix_impl,
+    cli_args = {},
+)
+
+def _target_summary_impl(ctx):
+    _emit(ctx, target_summary_doc(ctx.cli_args.target))
+
+target_summary = bxl_main(
+    impl = _target_summary_impl,
+    cli_args = {
+        "target": cli_args.string(
+            doc = "Buck target label to summarize",
+        ),
+    },
+)

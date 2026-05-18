@@ -1,0 +1,4 @@
+{"event":"round_started","round":"//configs/rounds/optimize-ic:round","ts":"2026-05-17T12:00:00Z"}
+{"event":"backend_resolved","target":"//src/iterative-context:optimizable_backend","descriptor":"src/iterative-context/optimizable_backend.json"}
+{"event":"proof_plan","minimal_targets":["//configs/rounds/live-ic-vs-jcodemunch:validate"],"acceptable_targets":["//:check"]}
+{"event":"affected_plan","changed_files":["configs/rounds/optimize-ic/round.pkl"],"proof_targets":["//configs/rounds/live-ic-vs-jcodemunch:validate"]}

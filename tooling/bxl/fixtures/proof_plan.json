@@ -1,0 +1,23 @@
+{
+  "kind": "searchbench.proof_plan.v1",
+  "goal": "validate round manifest at configs/rounds/optimize-ic/round.pkl",
+  "target": "//configs/rounds/optimize-ic:round",
+  "manifest": "configs/rounds/optimize-ic/round.pkl",
+  "minimal_targets": [
+    "//configs/rounds/live-ic-vs-jcodemunch:validate"
+  ],
+  "acceptable_targets": [
+    "//configs/rounds/live-ic-vs-jcodemunch:validate",
+    "//src/searchbench-go:check",
+    "//:check",
+    "//:check_full"
+  ],
+  "fallback_targets": [
+    "//:check_full"
+  ],
+  "too_live_for_default_gate": [
+    "//configs/rounds/live-ic-vs-jcodemunch:live_smoke",
+    "//configs/rounds/live-ic-vs-jcodemunch:run",
+    "//configs/rounds/live-ic-vs-jcodemunch:evaluate_n"
+  ]
+}

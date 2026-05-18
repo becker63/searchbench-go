@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "searchbench.evaluation_matrix.v1",
+  "type": "object",
+  "required": ["kind", "rounds", "backends", "comparisons"],
+  "properties": {
+    "kind": { "const": "searchbench.evaluation_matrix.v1" },
+    "rounds": { "type": "array", "items": { "type": "string" } },
+    "backends": { "type": "array", "items": { "type": "string" } },
+    "comparisons": { "type": "array" }
+  }
+}

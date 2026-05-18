@@ -1,0 +1,24 @@
+{
+  "kind": "searchbench.affected_plan.v1",
+  "changed_files": [
+    "configs/rounds/optimize-ic/round.pkl",
+    "src/iterative-context/src/iterative_context/policy.py"
+  ],
+  "affected_backends": [
+    "//src/iterative-context:optimizable_backend"
+  ],
+  "affected_rounds": [
+    "//configs/rounds/optimize-ic:round"
+  ],
+  "proof_targets": [
+    "//configs/rounds/live-ic-vs-jcodemunch:validate",
+    "//:check",
+    "//src/iterative-context:check",
+    "//src/iterative-context:check_full"
+  ],
+  "fallback_targets": [
+    "//:check_full"
+  ],
+  "possibly_affected_docs": [],
+  "heuristic": true
+}

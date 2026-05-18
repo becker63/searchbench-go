@@ -39,6 +39,7 @@ export default defineConfig({
           { text: "Bundles", link: "/reference/bundles" },
           { text: "Live MCP e2e", link: "/reference/live-e2e" },
           { text: "Optimizer policy validation", link: "/reference/optimizer-policy-validation" },
+          { text: "Buck work graph (BXL)", link: "/reference/buck-work-graph" },
         ],
       },
       {

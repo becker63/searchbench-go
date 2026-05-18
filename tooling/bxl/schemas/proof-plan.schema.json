@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "searchbench.proof_plan.v1",
+  "type": "object",
+  "required": ["kind", "target", "minimal_targets", "acceptable_targets"],
+  "properties": {
+    "kind": { "const": "searchbench.proof_plan.v1" },
+    "goal": { "type": "string" },
+    "target": { "type": "string" },
+    "manifest": { "type": "string" },
+    "minimal_targets": { "type": "array", "items": { "type": "string" } },
+    "acceptable_targets": { "type": "array", "items": { "type": "string" } },
+    "fallback_targets": { "type": "array", "items": { "type": "string" } },
+    "too_live_for_default_gate": { "type": "array", "items": { "type": "string" } },
+    "note": { "type": "string" }
+  }
+}
