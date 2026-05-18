@@ -1,7 +1,0 @@
-go_library(
-    name = "cpu",
-    package_name = "golang.org/x/sys/cpu",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

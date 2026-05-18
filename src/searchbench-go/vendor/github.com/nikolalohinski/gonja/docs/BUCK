@@ -1,7 +1,0 @@
-go_library(
-    name = "docs",
-    package_name = "github.com/nikolalohinski/gonja/docs",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

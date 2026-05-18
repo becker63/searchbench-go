@@ -1,7 +1,0 @@
-go_library(
-    name = "xcontext",
-    package_name = "github.com/modelcontextprotocol/go-sdk/internal/xcontext",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

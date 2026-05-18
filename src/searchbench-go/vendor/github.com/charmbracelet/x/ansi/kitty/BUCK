@@ -1,7 +1,0 @@
-go_library(
-    name = "kitty",
-    package_name = "github.com/charmbracelet/x/ansi/kitty",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

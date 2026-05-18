@@ -1,7 +1,0 @@
-go_library(
-    name = "internal",
-    package_name = "github.com/vmihailenco/tagparser/v2/internal",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

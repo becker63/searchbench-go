@@ -1,7 +1,0 @@
-go_library(
-    name = "jsonschema",
-    package_name = "github.com/google/jsonschema-go/jsonschema",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

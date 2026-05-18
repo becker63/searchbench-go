@@ -1,7 +1,0 @@
-go_library(
-    name = "unsafebytes",
-    package_name = "github.com/segmentio/asm/internal/unsafebytes",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

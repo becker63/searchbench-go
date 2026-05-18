@@ -1,7 +1,0 @@
-go_library(
-    name = "jsonparser",
-    package_name = "github.com/buger/jsonparser",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)

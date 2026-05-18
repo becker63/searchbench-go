@@ -1,7 +1,0 @@
-go_library(
-    name = "terminfo",
-    package_name = "github.com/xo/terminfo",
-    srcs = native.glob(["*.go", "*.s", "*.h", "*.c", "*.cc", "*.cpp", "*.S"]),
-    header_namespace = "",
-    visibility = ["PUBLIC"],
-)
