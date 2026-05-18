@@ -3,8 +3,7 @@ filegroup(
     name = "bxl_sources",
     srcs = [
         "searchbench.bxl",
-        "planner.bzl",
-        "registry.bzl",
+        "graph.bzl",
         "README.md",
     ],
     visibility = ["PUBLIC"],

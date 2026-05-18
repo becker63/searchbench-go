@@ -45,10 +45,15 @@ buck2 bxl //tooling/bxl/searchbench.bxl:list_backends
 
 Full command list: [tooling/bxl/README.md](../../tooling/bxl/README.md).
 
-## Current catalog limits
+## Graph traversal (not a static registry)
 
-- Only `//src/iterative-context:optimizable_backend` is fully modeled in `BACKEND_CATALOG`.
-- Round entries are keyed by logical labels (`//configs/rounds/...:round`); some rounds exist as Pkl only without a matching BUCK package.
-- `affected_plan` uses prefix rules in `registry.bzl`, not Buck’s dependency graph.
+Planners query the Buck graph via BXL `uquery` and configured target attributes:
+
+- **Backends:** `attrfilter(name, optimizable_backend, //...)`
+- **Rounds with Buck ops:** `kind(searchbench_round_op, //...)` + `manifest` / `manifest_dir` attrs
+- **Pkl-only rounds:** `//:searchbench_go_test_resources` configured `srcs` (expanded artifacts)
+- **Affected proof targets:** `owner` / `targets_in_buildfile` seeds → `rdeps` on gate `test_suite` targets; `go_test` `resources` scanning for filegroup deps
+
+`rdeps` universes are limited to gate suites because traversing arbitrary `go_test` / `searchbench_round_op` deps can fail on `toolchains//:cxx_no_default_deps` in this workspace.
 
 Research context: [bxl-meta-harness.md](../research/bxl-meta-harness.md).

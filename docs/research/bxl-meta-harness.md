@@ -37,6 +37,8 @@ Work graph:  lookahead over action   ← tooling/bxl (first slice)
 | `affected_plan` | `searchbench.affected_plan.v1` |
 | `evaluation_matrix` | `searchbench.evaluation_matrix.v1` |
 
+Plans are built with **Buck graph traversal** (`uquery`, `rdeps`, `owner`, configured attrs)—not a static Starlark registry.
+
 Reference: [buck-work-graph.md](../reference/buck-work-graph.md). Commands: [tooling/bxl/README.md](../../tooling/bxl/README.md).
 
 ## Pattern (target)

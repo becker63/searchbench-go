@@ -20,7 +20,7 @@
     "hidden_from_evaluator": true
   },
   "metadata": {
-    "backend_kind": "mcp_stdio",
-    "game": "code-localization"
+    "rule_type": "genrule",
+    "graph_discovered": true
   }
 }

@@ -1,12 +1,244 @@
-# SearchBench work-graph BXL planners (#94). Emit JSON plans only; no evaluation or Git mutation.
-load("//tooling/bxl:planner.bzl", "affected_plan_doc", "backend_inventory_doc", "evaluation_matrix_doc", "proof_plan_doc", "resolve_backend_doc", "target_summary_doc")
+# SearchBench work-graph BXL planners (#94). Plans come from Buck uquery/cquery graph traversal.
+load(
+    "//tooling/bxl:graph.bzl",
+    "backends_for_seeds",
+    "canonical_label",
+    "classify_round_ops",
+    "dedupe_preserve",
+    "descriptor_path_for_backend",
+    "discover_backends",
+    "discover_round_ops",
+    "go_tests_referencing_label",
+    "logical_round_label",
+    "all_logical_rounds",
+    "any_path_prefix",
+    "logical_rounds_from_test_resources",
+    "logical_rounds_in_graph",
+    "manifest_dir_from_path",
+    "manifest_only_rounds",
+    "proof_gate_suites",
+    "proof_targets_from_rdeps",
+    "round_op_attrs",
+    "round_ops_for_changed_paths",
+    "round_ops_for_manifest",
+    "round_ops_for_manifest_dir",
+    "seeds_for_changed_paths",
+    "suites_containing_tests",
+)
 
 def _emit(ctx, doc):
     ctx.output.print_json(doc)
 
+def _parse_changed_paths(raw):
+    changed = []
+    if raw:
+        for line in raw.splitlines():
+            line = line.strip()
+            if line:
+                changed.append(line)
+    return changed
+
+def _target_exists(q, ctx, label):
+    if label.startswith("//"):
+        pattern = label
+    else:
+        pattern = "//{}".format(label)
+    matches = q.kind(".*", ctx.unconfigured_targets([pattern]))
+    return len(matches) > 0
+
+def target_summary_from_graph(ctx, target):
+    q = ctx.uquery()
+    exists = _target_exists(q, ctx, target)
+    kind = "unknown"
+    if exists:
+        nodes = ctx.unconfigured_targets([target if target.startswith("//") else "//{}".format(target)])
+        if len(nodes) > 0:
+            kind = nodes[0].rule_type
+    backends = [canonical_label(b) for b in discover_backends(q, ctx)]
+    if target in backends:
+        kind = "optimizable_backend"
+    elif target.endswith(":round"):
+        kind = "round"
+    elif target in ["//:check", "//:check_full"]:
+        kind = "repo_gate"
+    return {
+        "kind": "searchbench.bxl_target_summary.v1",
+        "target": target,
+        "resolved": exists or target in all_logical_rounds(ctx, q),
+        "metadata": {
+            "label": target,
+            "kind": kind,
+        },
+    }
+
+def resolve_backend_from_graph(ctx, target):
+    q = ctx.uquery()
+    backends = [canonical_label(b) for b in discover_backends(q, ctx)]
+    if target not in backends:
+        return {
+            "kind": "searchbench.backend_resolution.v1",
+            "target": target,
+            "resolved": False,
+            "error": "target not in graph optimizable_backend set (uquery attrfilter name=optimizable_backend)",
+        }
+    descriptor = descriptor_path_for_backend(q, ctx, target)
+    pkg = target.split(":")[0]
+    source_path = pkg.lstrip("/") if pkg.startswith("//") else pkg
+    return {
+        "kind": "searchbench.backend_resolution.v1",
+        "target": target,
+        "resolved": True,
+        "descriptor": descriptor,
+        "source": {
+            "kind": "local_path",
+            "path": source_path,
+        },
+        "launcher": {
+            "kind": "mcp_stdio",
+            "cwd_mode": "candidate_workspace",
+        },
+        "candidate_validator": {
+            "kind": "ic_policy_pipeline",
+        },
+        "runtime_admin": {
+            "install_tool": "install_score",
+            "verify_tool": "verify_score",
+            "hidden_from_evaluator": True,
+        },
+        "metadata": {
+            "rule_type": "genrule",
+            "graph_discovered": True,
+        },
+    }
+
+def backend_inventory_from_graph(ctx):
+    q = ctx.uquery()
+    backends = []
+    for node in discover_backends(q, ctx):
+        label = canonical_label(node)
+        descriptor = descriptor_path_for_backend(q, ctx, label)
+        backends.append({
+            "target": label,
+            "backend_kind": "mcp_stdio",
+            "game": "code-localization",
+            "descriptor": descriptor,
+        })
+    return {
+        "kind": "searchbench.backend_inventory.v1",
+        "backends": backends,
+    }
+
+def proof_plan_from_graph(ctx, target):
+    q = ctx.uquery()
+    manifests, manifest_dirs = round_op_attrs(ctx, q)
+
+    round_ops = []
+    manifest = None
+    if target.endswith(":round"):
+        md = target[2:-len(":round")] if target.startswith("//") else target.split(":")[0]
+        round_ops = round_ops_for_manifest_dir(q, ctx, md)
+        manifest = md + "/round.pkl" if md else None
+    elif _target_exists(q, ctx, target):
+        round_ops = [op for op in discover_round_ops(q, ctx) if canonical_label(op) == target]
+        if len(round_ops) > 0:
+            configured = ctx.configured_targets([round_ops[0]])
+            if len(configured) > 0:
+                manifest = str(configured[0].get_attr("manifest") or "")
+    else:
+        round_ops = round_ops_for_manifest(q, ctx, target)
+
+    minimal, acceptable, too_live = classify_round_ops(round_ops)
+    if len(minimal) == 0 and manifest != None:
+        pkl_tests = go_tests_referencing_label(ctx, "searchbench_go_test_resources")
+        minimal = [canonical_label(t) for t in pkl_tests]
+        minimal.extend(suites_containing_tests(ctx, pkl_tests))
+    if len(minimal) == 0:
+        minimal = [canonical_label(s) for s in proof_gate_suites(ctx)[:1]]
+    if len(acceptable) == 0:
+        acceptable = [canonical_label(s) for s in proof_gate_suites(ctx)]
+
+    return {
+        "kind": "searchbench.proof_plan.v1",
+        "goal": "validate {}".format(manifest or target),
+        "target": target,
+        "manifest": manifest,
+        "minimal_targets": minimal,
+        "acceptable_targets": dedupe_preserve(acceptable + [canonical_label(s) for s in proof_gate_suites(ctx)]),
+        "fallback_targets": ["//:check_full"],
+        "too_live_for_default_gate": too_live,
+        "graph_traversal": True,
+    }
+
+def affected_plan_from_graph(ctx, changed_files_raw):
+    q = ctx.uquery()
+    changed = _parse_changed_paths(changed_files_raw)
+    seeds = seeds_for_changed_paths(q, ctx, changed)
+
+    affected_backends = backends_for_seeds(q, ctx, seeds)
+    round_ops = round_ops_for_changed_paths(q, ctx, changed)
+    _, manifest_dirs = round_op_attrs(ctx, q)
+    affected_rounds = manifest_only_rounds(q, ctx, changed)
+    for md in manifest_dirs:
+        if any_path_prefix(changed, md):
+            affected_rounds.append(logical_round_label(md))
+    for p in changed:
+        md = manifest_dir_from_path(p)
+        if md != None:
+            affected_rounds.append(logical_round_label(md))
+    affected_rounds = dedupe_preserve(affected_rounds)
+
+    proof_targets = [canonical_label(t) for t in proof_targets_from_rdeps(q, ctx, seeds)]
+
+    resource_hits = []
+    for seed in seeds:
+        sl = canonical_label(seed)
+        if "searchbench_go_test_resources" in sl:
+            resource_hits.extend(go_tests_referencing_label(ctx, "searchbench_go_test_resources"))
+    if len(resource_hits) > 0:
+        proof_targets.extend([canonical_label(t) for t in resource_hits])
+        proof_targets.extend(suites_containing_tests(ctx, resource_hits))
+
+    for op in round_ops:
+        name = canonical_label(op).split(":")[-1]
+        if name in ["validate", "validate_bundle"]:
+            proof_targets.append(canonical_label(op))
+
+    possibly_docs = [p for p in changed if p.startswith("docs/")]
+
+    return {
+        "kind": "searchbench.affected_plan.v1",
+        "changed_files": changed,
+        "affected_backends": affected_backends,
+        "affected_rounds": affected_rounds,
+        "proof_targets": dedupe_preserve(proof_targets),
+        "fallback_targets": ["//:check_full"],
+        "possibly_affected_docs": dedupe_preserve(possibly_docs),
+        "graph_traversal": True,
+        "heuristic": False,
+    }
+
+def evaluation_matrix_from_graph(ctx):
+    q = ctx.uquery()
+    rounds = all_logical_rounds(ctx, q)
+    backends = [canonical_label(b) for b in discover_backends(q, ctx)]
+    comparisons = []
+    for round_label in rounds:
+        comparisons.append({
+            "round": round_label,
+            "incumbent": None,
+            "challenger": backends[0] if len(backends) > 0 else None,
+            "note": "challenger from graph optimizable_backend; incumbent only if declared in graph",
+        })
+    return {
+        "kind": "searchbench.evaluation_matrix.v1",
+        "rounds": rounds,
+        "backends": backends,
+        "comparisons": comparisons,
+        "graph_traversal": True,
+    }
+
 def _resolve_backend_impl(ctx):
-    target = ctx.cli_args.backend
-    _emit(ctx, resolve_backend_doc(target))
+    _emit(ctx, resolve_backend_from_graph(ctx, ctx.cli_args.backend))
 
 resolve_backend = bxl_main(
     impl = _resolve_backend_impl,
@@ -18,7 +250,7 @@ resolve_backend = bxl_main(
 )
 
 def _list_backends_impl(ctx):
-    _emit(ctx, backend_inventory_doc())
+    _emit(ctx, backend_inventory_from_graph(ctx))
 
 list_backends = bxl_main(
     impl = _list_backends_impl,
@@ -26,7 +258,7 @@ list_backends = bxl_main(
 )
 
 def _proof_plan_impl(ctx):
-    _emit(ctx, proof_plan_doc(ctx.cli_args.target))
+    _emit(ctx, proof_plan_from_graph(ctx, ctx.cli_args.target))
 
 proof_plan = bxl_main(
     impl = _proof_plan_impl,
@@ -46,7 +278,7 @@ def _affected_plan_impl(ctx):
             line = line.strip()
             if line:
                 lines.append(line)
-    _emit(ctx, affected_plan_doc("\n".join(lines)))
+    _emit(ctx, affected_plan_from_graph(ctx, "\n".join(lines)))
 
 affected_plan = bxl_main(
     impl = _affected_plan_impl,
@@ -63,7 +295,7 @@ affected_plan = bxl_main(
 )
 
 def _evaluation_matrix_impl(ctx):
-    _emit(ctx, evaluation_matrix_doc())
+    _emit(ctx, evaluation_matrix_from_graph(ctx))
 
 evaluation_matrix = bxl_main(
     impl = _evaluation_matrix_impl,
@@ -71,7 +303,7 @@ evaluation_matrix = bxl_main(
 )
 
 def _target_summary_impl(ctx):
-    _emit(ctx, target_summary_doc(ctx.cli_args.target))
+    _emit(ctx, target_summary_from_graph(ctx, ctx.cli_args.target))
 
 target_summary = bxl_main(
     impl = _target_summary_impl,

@@ -11,14 +11,15 @@
     "//configs/rounds/optimize-ic:round"
   ],
   "proof_targets": [
-    "//configs/rounds/live-ic-vs-jcodemunch:validate",
-    "//:check",
+    "//src/iterative-context:check_full",
     "//src/iterative-context:check",
-    "//src/iterative-context:check_full"
+    "//src/searchbench-go/internal/adapters/config/pkl:pkl_test",
+    "//src/searchbench-go:go_native_full"
   ],
   "fallback_targets": [
     "//:check_full"
   ],
   "possibly_affected_docs": [],
-  "heuristic": true
+  "graph_traversal": true,
+  "heuristic": false
 }
